@@ -128,16 +128,17 @@ def automatisations() -> list[dict]:
     ex = base.lire("executions", "select=tache,debut,fin,ok,resume,erreur&order=debut.desc&limit=50")
     noms = {"application": "App refresh (GitHub)", "alertes": "Latest Dealabs check", "actions_semaine": "Monday action list", "collecte": "Daily data refresh"}
     for tache, nom in noms.items():
-        e = next((x for x in ex if x["tache"] == tache), None)
+        # Le rafraîchissement de l'appli tourne pendant ce calcul : on montre son dernier passage terminé
+        e = next((x for x in ex if x["tache"] == tache and (x["fin"] or tache != "application")), None)
         if not e:
             continue
         etat = "ok" if e["ok"] else ("erreur" if e["fin"] else "attention")
         detail = e["resume"] or e["erreur"] or ""
         for fr, en in [("nouveaux deals", "new deals"), ("achète", "buy"), ("à regarder", "take a look"), (" non", " skip")]:
             detail = detail.replace(fr, en)
-        detail = detail.replace(" geste(s) appliqué(s)", " button action(s) applied").replace(" geste", " button action").replace("en erreur", "failed")
+        detail = detail.replace("0 geste", "no button tapped").replace(" geste(s) appliqué(s)", " button action(s) applied").replace("en erreur", "failed")
         if tache == "application":
-            detail = "Every 5 min and on each new deal · " + detail
+            detail = "Every 5 min and on each new deal" + (" · " + detail if detail else "")
         out.append({"nom": nom, "etat": etat, "detail": detail.rstrip(" :"), "quand": e["fin"] or e["debut"]})
     if "actions_semaine" not in {x["tache"] for x in ex}:
         d = lundi().get("date")
