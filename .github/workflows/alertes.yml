@@ -47,10 +47,17 @@ jobs:
       - name: Vérifier Dealabs toutes les 30 secondes et rafraîchir l'application
         working-directory: code
         run: |
-          # Application LEGO HQ (GitHub Pages) : recalculée dès qu'un deal arrive,
-          # sinon toutes les 5 minutes. Une erreur de l'application ne bloque jamais les alertes.
+          # Application LEGO HQ (GitHub Pages) : recalculée dès qu'un deal arrive ou qu'un
+          # bouton est touché dans l'appli (vérifié toutes les 5 s), sinon toutes les 5 minutes.
+          # Une erreur de l'application ne bloque jamais les alertes.
+          appli() {
+            [ -e /tmp/appli.encours ] && return
+            touch /tmp/appli.encours
+            ( timeout 240 python3 app_github.py > /tmp/appli.log 2>&1 || { echo "application en erreur (détail dans la base)"; python3 prive.py journal application < /tmp/appli.log; }; rm -f /tmp/appli.encours ) &
+            prochaine=$(( $(date +%s) + 300 ))
+          }
           fin=$(( $(date +%s) + 20700 ))
-          appli=0
+          prochaine=0
           while [ "$(date +%s)" -lt "$fin" ]; do
             # Journal public réduit aux compteurs : le détail d'une erreur va dans la base privée
             if sortie=$(python3 alertes.py 2>&1); then
@@ -59,13 +66,13 @@ jobs:
               echo "passage en erreur (détail dans la base), on continue"
               echo "$sortie" | python3 prive.py journal alertes || true
             fi
-            # En arrière-plan : le calcul de l'application ne retarde jamais la vérification suivante
-            if [ ! -e /tmp/appli.encours ] && { echo "$sortie" | grep -qE "^[1-9][0-9]* nouveaux deals" || [ "$(date +%s)" -ge "$appli" ]; }; then
-              touch /tmp/appli.encours
-              ( timeout 240 python3 app_github.py > /tmp/appli.log 2>&1 || { echo "application en erreur (détail dans la base)"; python3 prive.py journal application < /tmp/appli.log; }; rm -f /tmp/appli.encours ) &
-              appli=$(( $(date +%s) + 300 ))
+            if echo "$sortie" | grep -qE "^[1-9][0-9]* nouveaux deals" || [ "$(date +%s)" -ge "$prochaine" ]; then
+              appli
             fi
-            sleep 30
+            for i in 1 2 3 4 5 6; do
+              sleep 5
+              [ ! -e /tmp/appli.encours ] && python3 gestes_attente.py && appli
+            done
           done
       - uses: actions/cache/save@v4
         if: always()

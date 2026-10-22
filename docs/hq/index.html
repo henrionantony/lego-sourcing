@@ -638,13 +638,15 @@ dialog.confirmer::backdrop{background:rgba(0,0,0,.45)} dialog.confirmer p{margin
     if (ch.length || !e.premier) { e.premier = true; e.cb({ docChanges: () => ch }); }
   }
   let minuterie = null;
+  let rapide = 0;                   // après un geste : on regarde toutes les 5 s pendant 90 s
+
   function relancer(ms) { clearTimeout(minuterie); minuterie = setTimeout(boucle, ms); }
-  async function boucle() { try { await sonder(); } catch (e) { console.warn(e); } relancer(document.hidden ? 120000 : 20000); }
+  async function boucle() { try { await sonder(); } catch (e) { console.warn(e); } relancer(document.hidden ? 120000 : Date.now() < rapide ? 5000 : 20000); }
   document.addEventListener("visibilitychange", () => { if (!document.hidden) relancer(0); });
   const db = {
     doc(chemin) {
       return {
-        async set(data) { await rest("POST", "app_docs", [{ chemin, data }], "resolution=merge-duplicates,return=minimal"); cache.set(chemin, { maj: new Date().toISOString(), data }); relancer(500); },
+        async set(data) { await rest("POST", "app_docs", [{ chemin, data }], "resolution=merge-duplicates,return=minimal"); cache.set(chemin, { maj: new Date().toISOString(), data }); rapide = Date.now() + 90000; relancer(500); },
         async delete() { await rest("DELETE", "app_docs?chemin=eq." + encodeURIComponent(chemin)); cache.delete(chemin); relancer(500); },
         onSnapshot(cb, err) { const e = { type: "doc", cle: chemin, cb, vu: new Map() }; ecoutes.add(e); relancer(0); return () => ecoutes.delete(e); },
       };
