@@ -15,6 +15,7 @@ Usage :
                                       « à traiter » (colis reçus d'abord), puis jusqu'à
                                       N autres sets en stock sans nom (défaut 0)
   python3 noms_fr.py ecrire SET "Nom" enregistre le nom officiel trouvé
+  python3 noms_fr.py introuvable SET… pas de page lego.com/fr-fr : ne plus chercher
 """
 import csv
 import datetime as dt
@@ -78,8 +79,10 @@ def construire() -> dict:
 
 def demandes(n_stock: int = 0) -> list[str]:
     noms = json.loads(SORTIE.read_text()) if SORTIE.exists() else construire()
-    att = [x["chemin"].split("/", 1)[1] for x in base.docs("noms_fr/") or []
-           if (x.get("data") or {}).get("demande") and not (x.get("data") or {}).get("nom")]
+    d = {x["chemin"].split("/", 1)[1]: x.get("data") or {} for x in base.docs("noms_fr/") or []}
+    # Déjà cherché sans page lego.com/fr-fr : on ne recherche plus (le vendeur le tape dans l'appli)
+    noms = {**noms, **{k: v for k, v in d.items() if v.get("introuvable")}}
+    att = [k for k, v in d.items() if v.get("demande") and not v.get("nom") and not v.get("introuvable")]
     # Articles « à traiter » (pas encore en vente) : colis reçus d'abord, puis en livraison
     arts = base.lire("articles", "select=id_set,livre&statut=eq.%C3%A0%20traiter&categorie=eq.SET&order=livre.desc,id.desc") or []
     for x in arts:
@@ -107,6 +110,10 @@ if __name__ == "__main__":
         print(len(construire()), "noms français")
     elif a[0] == "demandes":
         print("\n".join(demandes(int(a[1]) if len(a) > 1 else 0)))
+    elif a[0] == "introuvable" and len(a) >= 2:
+        for x in a[1:]:
+            base.doc_ecrire("noms_fr/" + x, {"introuvable": True, "le": dt.datetime.now(dt.timezone.utc).isoformat()})
+        print(len(a) - 1, "marqués introuvables")
     elif a[0] == "ecrire" and len(a) >= 3:
         ecrire(a[1], a[2], a[3] if len(a) > 3 else "lego.com")
     else:

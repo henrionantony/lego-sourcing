@@ -1679,7 +1679,8 @@ function rendreNad(){
   const attente = !o.fr && nomsLive[o.s]?.demande;
   const srcTxt = o.frSaisi ? "typed by you, tap Save to keep it"
     : o.source === "annonce" ? "from your Vinted ad" : o.source === "toi" ? "saved by you"
-    : o.source === "lego.com" ? "official LEGO.com France name" : "";
+    : o.source === "lego.com" ? "official LEGO.com France name"
+    : nomsLive[o.s]?.introuvable ? "No French name on LEGO.com France. Type it and tap Save." : "";
   const v = { t: titreNad(o), d: texteNad(o) };
   const lb = { t: lbcTitre(v), d: lbc(v) };
   el.innerHTML = `<article class="nad">
