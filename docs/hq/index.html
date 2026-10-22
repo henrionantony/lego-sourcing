@@ -171,6 +171,7 @@ h2.sec:first-child{margin-top:4px}
 .chip[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
 .chip span{opacity:.7;margin-left:4px;font-variant-numeric:tabular-nums}
 .find{display:grid;grid-template-columns:1fr minmax(0,38%);gap:8px}
+#pq-w{grid-template-columns:1fr;margin:10px 0}
 .find input,.find select{width:100%;min-width:0;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;height:42px;padding:0 10px;font:16px var(--body)}
 #list{display:grid;gap:10px;padding-top:12px;grid-template-columns:repeat(auto-fill,minmax(min(100%,400px),1fr))}
 .grp{grid-column:1/-1;font:600 12px var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:8px 0 0}
@@ -493,6 +494,7 @@ dialog.confirmer::backdrop{background:rgba(0,0,0,.45)} dialog.confirmer p{margin
 
 <section class="view" id="v-ads" hidden>
   <div class="seg pseg" role="group" aria-label="Show" id="pseg"><button type="button" data-p="actions" aria-pressed="true">Actions<span id="pf-n"></span></button><button type="button" data-p="listes" aria-pressed="false">My listings</button></div>
+  <div class="find" id="pq-w"><input id="pq" type="search" placeholder="Find a set: name or number" autocomplete="off" enterkeyhint="search" aria-label="Find a set"></div>
   <div id="p-actions" aria-live="polite"></div>
   <div id="p-listes" hidden>
   <div class="tools">
@@ -1860,13 +1862,15 @@ function rendrePlateformes(){
   $("#pf-n").textContent = n ? " (" + n + ")" : "";
   $("#b-pf").textContent = n || "";
   document.querySelectorAll("#pseg button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.p === pvue));
-  $("#p-actions").hidden = pvue !== "actions"; $("#p-listes").hidden = pvue !== "listes";
+  $("#p-actions").hidden = $("#pq-w").hidden = pvue !== "actions"; $("#p-listes").hidden = pvue !== "listes";
   if (pvue !== "actions") return;
-  if (!L.length){ $("#p-actions").innerHTML = `<p class="empty">Nothing to do on the platforms. 🎉</p>`; return; }
-  const x = L.find((y) => y.k === pcourant) || L[0];
+  const q = sansAccent($("#pq").value.trim());
+  const Lf = q ? L.filter((y) => sansAccent([y.titre, y.a?.t, y.a?.n, y.it?.s, y.it?.t].join(" ")).includes(q)) : L;
+  if (!Lf.length){ $("#p-actions").innerHTML = q ? `<p class="empty">No action for “${esc($("#pq").value.trim())}”. All your listings, with their Vinted and Leboncoin texts, are in My listings.</p>` : `<p class="empty">Nothing to do on the platforms. 🎉</p>`; return; }
+  const x = Lf.find((y) => y.k === pcourant) || Lf[0];
   pcourant = x.k;
-  const autres = L.filter((y) => y !== x), vus = autres.slice(0, pmax);
-  const compte = {}; for (const y of L) compte[y.type] = (compte[y.type] || 0) + 1;
+  const autres = Lf.filter((y) => y !== x), vus = autres.slice(0, pmax);
+  const compte = {}; for (const y of Lf) compte[y.type] = (compte[y.type] || 0) + 1;
   $("#p-actions").innerHTML = `<p class="sub pf-resume">${Object.entries(PTYPES).filter(([k]) => compte[k]).map(([k, T]) => `${T.ic} ${compte[k]} ${T.lib.toLowerCase()}`).join(" · ")}</p>
     ${carteAction(x)}
     ${autres.length ? `<h2 class="sec">Next</h2><div class="pf-file">${vus.map((y) => `<button class="pf-ligne ${PTYPES[y.type].cl}${pfaits[y.k]?.etat === "passe" ? " passe" : ""}" data-k="${esc(y.k)}">
@@ -1890,6 +1894,7 @@ async function marquerPf(x, etat){
     rendrePlateformes(); note("This was not saved. Check your connection and try again.");
   }
 }
+$("#pq").addEventListener("input", () => { pcourant = null; rendrePlateformes(); });
 $("#pseg").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-p]"); if (!b) return;
   pvue = b.dataset.p; try { localStorage.setItem("pvue", pvue); } catch (e2) {}
