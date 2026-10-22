@@ -310,7 +310,11 @@ def scenarios(prix_public, gamme, retrait, cs: dict, aujourdhui=None) -> dict:
             if pd.isna(r):
                 continue  # date de retrait inconnue : on ne parie pas dessus
             delai = max((r - aujourdhui).days, 0) + (delai if delai == delai else JOURS_APRES_RETRAIT)
-        out[nom] = (prix_public * ratio, int(delai))
+        pv = prix_public * ratio
+        if nom == "rapide":  # revendu avant le retrait : sous le prix LEGO, frais compris
+            from regles import plafond_catalogue
+            pv = min(pv, plafond_catalogue(prix_public) or pv)
+        out[nom] = (pv, int(delai))
     return out
 
 

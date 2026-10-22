@@ -107,6 +107,19 @@ def risque(fiabilite: str, chaleur) -> str:
     return "moyen" if froid else "sûr"
 
 
+# Set encore au catalogue : l'acheteur Vinted compare au prix LEGO. Prix affiché
+# + protection acheteur (fixe + % du prix) + port doit rester sous le prix public,
+# sinon l'annonce ne part pas.
+PROTECTION_FIXE, PROTECTION_PCT, PORT_ACHETEUR = 0.70, 0.05, 4.0
+
+
+def plafond_catalogue(prix_public) -> float | None:
+    """Prix d'annonce maximum (à l'euro inférieur) d'un set encore au catalogue."""
+    if not prix_public or prix_public != prix_public:
+        return None
+    return float(max(0, int((float(prix_public) - PROTECTION_FIXE - PORT_ACHETEUR) / (1 + PROTECTION_PCT))))
+
+
 # Trésorerie disponible quand la base ne la donne pas (table « tresorerie »).
 BUDGET = 1000.0
 # Valeurs tirées des ventes réelles : neutres ici, les vraies sont dans le fichier privé.

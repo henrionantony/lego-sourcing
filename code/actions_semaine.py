@@ -9,6 +9,7 @@ Lit l'export des annonces Vinted (extension), la base et le référentiel.
 Usage : python3 actions_semaine.py [export_vinted.csv] [--essai]
 """
 import datetime as dt
+import math
 import re
 import sys
 from pathlib import Path
@@ -18,7 +19,7 @@ import pandas as pd
 import base
 from alertes import euros, telegram
 from referentiel import charger
-from regles import MARGE_BRUTE_PLANCHER, PRELEVEMENTS
+from regles import MARGE_BRUTE_PLANCHER, PRELEVEMENTS, plafond_catalogue
 
 STOCK = Path(__file__).resolve().parent.parent / "stock"
 PALIER, BAISSE = 30, 0.05       # −5 % tous les 30 jours sans vente
@@ -103,6 +104,11 @@ def construire(export: Path):
         nouveau = round(a.prix * (1 - BAISSE))
         if not raison and nouveau < plancher:
             raison = "au plancher"
+        # Encore au catalogue et plus cher que chez LEGO une fois frais et port payés :
+        # on ramène au plafond tout de suite (pas d'attente d'âge ni de mois), sans passer sous le plancher
+        cap = plafond_catalogue(x.get("prix_public")) if x is not None and x.get("statut") == "en vente" else None
+        if cap and a.prix > cap and max(cap, math.ceil(plancher)) < a.prix:
+            nouveau, raison = max(cap, math.ceil(plancher)), None
         ligne = {"Annonce": a.titre, "Set": a.set, "Prix actuel": a.prix, "Nouveau prix": nouveau,
                  "Plancher": round(plancher, 2), "Favoris": a.favoris, "Âge du stock (j)": int(s.age),
                  "Lot remboursé": "oui" if s.rembourse else "non", "Lien": a.url}

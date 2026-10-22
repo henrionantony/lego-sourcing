@@ -2,6 +2,8 @@
 
 Prix = le plus haut entre l'estimation de revente (referentiel.csv) et le
 plancher du lot (coût d'achat × MARGE_BRUTE_PLANCHER, part d'associé comprise).
+Set encore au catalogue : plafonné pour que prix + frais acheteur Vinted + port
+reste sous le prix LEGO (regles.plafond_catalogue), sans descendre sous le plancher.
 Écrit ../stock/app/a_publier.json (privé, jamais dans le dépôt) :
 {set: {prix, estime, cout, etat}} pour l'onglet Platforms de LEGO HQ.
 """
@@ -52,7 +54,12 @@ def main():
         # posé sur un seul article. On garde l'estimation et on le signale.
         douteux = bool(estime) and cout > 2 * estime
         prix = estime if douteux else max(estime, plancher, regles.GWP_DEFAUT if cout == 0 and not estime else 0)
-        out[s] = {"prix": arrondi(prix) if prix else None, "estime": round(estime, 2) or None,
+        prix = arrondi(prix) if prix else None
+        # Encore au catalogue : prix + frais acheteur + port sous le prix LEGO, jamais sous le plancher
+        cap = regles.plafond_catalogue(float(r.get("prix_public") or 0)) if r.get("statut") == "en vente" else None
+        if prix and cap and prix > cap:
+            prix = max(cap, float(math.ceil(plancher)))
+        out[s] = {"prix": prix, "estime": round(estime, 2) or None,
                   "cout": round(cout, 2), "etat": c[0][1], **({"douteux": True} if douteux else {})}
     SORTIE.write_text(json.dumps(out, ensure_ascii=False))
     pp = lambda s: float(ref.get(s, {}).get("prix_public") or 0) or None
