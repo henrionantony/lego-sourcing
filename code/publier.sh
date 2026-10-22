@@ -43,6 +43,7 @@ P2
 touch -r "$ICI/../data/referentiel.csv" "$TMP/prix.csv"
 (cd "$ICI" && python3 prive.py envoyer "$TMP/prix.csv" "$ICI/../data/parametres.json")
 rm -rf "$TMP"
+(cd "$ICI" && python3 lbc_mails.py index >/dev/null)
 git -C "$DEPOT" rm -q --ignore-unmatch data/prix.csv.enc data/parametres.json.enc data/vus.json.enc
 cd "$DEPOT"
 # Garde-fou (rien de confidentiel dans le dépôt public) :

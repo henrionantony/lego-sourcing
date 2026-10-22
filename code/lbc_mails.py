@@ -7,7 +7,12 @@ Coche toute seule ce que le vendeur a fait sur Leboncoin, sans bouton « Done »
   - supprimée : la marque est retirée, et l'action « supprimer sur Leboncoin »
     d'un set déjà vendu ailleurs est faite (db plateformes/rm-lbc-<id>).
 
+Données : annonces Vinted et export Leboncoin locaux s'ils existent (session
+Claude), sinon leur résumé partagé dans la base (passage GitHub, mails_imap.py) ;
+`index` le met à jour (lancé par publier.sh).
+
 Usage : python3 lbc_mails.py <set> en_ligne|supprimee "<titre>" [url]
+        python3 lbc_mails.py index
 """
 import datetime as dt
 import json
@@ -25,6 +30,26 @@ def lire(nom, defaut):
     return json.load(open(f)) if f.exists() else defaut
 
 
+def donnees() -> tuple[list[dict], dict]:
+    """(annonces Vinted {id, n, s}, {lien, seules}) : fichiers locaux, sinon résumé partagé."""
+    if (APP / "annonces.json").exists():
+        an = [{"id": a["id"], "n": a.get("n"), "s": a.get("s")} for a in lire("annonces.json", [])]
+        lbc = lire("leboncoin.json", {})
+        return an, {"lien": lbc.get("lien", {}), "seules": [{"id": x["id"], "t": x.get("t"), "vendu": x.get("vendu")} for x in lbc.get("seules", [])]}
+    d = base.doc("fichiers/lbc_index") or {}
+    v = d.get("v") or {}
+    if not v:
+        raise RuntimeError("résumé des annonces absent de la base")
+    return v["annonces"], v["lbc"]
+
+
+def index():
+    an, lbc = donnees()
+    if not base.doc_ecrire("fichiers/lbc_index", {"v": {"annonces": an, "lbc": lbc}}):
+        raise RuntimeError("résumé des annonces non enregistré")
+    print(len(an), "annonces Vinted résumées pour les passages GitHub")
+
+
 def numero(t: str) -> re.Pattern:
     return re.compile(r"(^|\D)" + re.escape(t) + r"(\D|$)")
 
@@ -32,8 +57,8 @@ def numero(t: str) -> re.Pattern:
 def appliquer(s: str, etat: str, titre: str, url: str = ""):
     le = dt.datetime.now(dt.timezone.utc).isoformat()
     on = etat == "en_ligne"
-    annonces = [a for a in lire("annonces.json", []) if a.get("n") == s and a.get("s") in ("en ligne", "masqué")]
-    lbc = lire("leboncoin.json", {})
+    an, lbc = donnees()
+    annonces = [a for a in an if a.get("n") == s and a.get("s") in ("en ligne", "masqué")]
     marques = {x["chemin"].split("/", 1)[1]: x.get("data") or {} for x in base.docs("leboncoin/") or []}
     fait = []
     if annonces:
@@ -52,10 +77,13 @@ def appliquer(s: str, etat: str, titre: str, url: str = ""):
             if x.get("vendu") and n.search(x.get("t") or ""):
                 base.doc_ecrire("plateformes/rm-lbc-" + x["id"], {"etat": "fait", "type": "retirer", "pf": "Leboncoin", "titre": titre[:200], "le": le})
                 fait.append(f"annonce vendue ailleurs {x['id']} supprimée")
-    print(s, etat, "→", "; ".join(fait) or "rien à cocher")
+    return "; ".join(fait) or "rien à cocher"
 
 
 if __name__ == "__main__":
+    if sys.argv[1:] == ["index"]:
+        index()
+        sys.exit()
     if len(sys.argv) < 4 or sys.argv[2] not in ("en_ligne", "supprimee"):
         sys.exit(__doc__)
-    appliquer(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4] if len(sys.argv) > 4 else "")
+    print(sys.argv[1], sys.argv[2], "→", appliquer(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4] if len(sys.argv) > 4 else ""))

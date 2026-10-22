@@ -202,6 +202,29 @@ def newsletter(adresse: str, sujet: str, t: str) -> dict | None:
     return {"pub": enseigne.title(), "lego": True, "op": op}
 
 
+# ---------- Leboncoin : annonce en ligne / supprimée ----------
+
+def leboncoin(adresse: str, sujet: str, t: str, corps: str) -> dict | None:
+    """{"lbc": "en_ligne"|"supprimee", "set", "titre", "url"} ; le pseudo du compte n'est jamais gardé."""
+    if "leboncoin" not in adresse:
+        return None
+    p = plat(t)
+    m = re.search(r"Votre annonce\s*[«\"](.+?)[»\"]\s*(?:vient d.être validée|est en ligne)", sujet + " " + p)
+    if m:
+        etat = "en_ligne"
+    else:
+        m = re.search(r"Votre annonce ((?:(?!Votre annonce).)+?) a bien été supprimée", p)
+        etat = "supprimee"
+    if not m:
+        return None
+    titre = re.sub(r"\s+", " ", m.group(1)).strip(" «»\"")
+    nums = re.findall(r"(?<!\d)(\d{4,7})(?!\d)", titre)
+    if not nums:
+        return None  # sans numéro de set : pour Claude
+    u = re.search(r"https://www\.leboncoin\.fr/ad/[a-z_]+/\d+", corps) if etat == "en_ligne" else None
+    return {"lbc": etat, "set": nums[-1], "titre": titre[:200], **({"url": u.group(0)} if u else {})}
+
+
 # ---------- Entrée d'un mail ----------
 
 def lire(mail_id: str, expediteur: str, sujet: str, corps: str, jour: str, url: str, connus: list[dict]) -> dict | None:
@@ -209,6 +232,9 @@ def lire(mail_id: str, expediteur: str, sujet: str, corps: str, jour: str, url: 
     t = texte(corps)
     adresse = origine(expediteur, sujet, t)
     base = {"mail": mail_id}
+    e = leboncoin(adresse, sujet, t, corps)
+    if e:
+        return {**base, **e, "d": jour}
     if any(k in adresse for k in IGNORES):
         return {**base, "ignore": True}
     if re.search(r"facture|re[çc]u lego", sujet, re.I) and magasin(adresse):
