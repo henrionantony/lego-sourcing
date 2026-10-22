@@ -59,6 +59,9 @@ def main():
                 if mid in lus:
                     continue
                 m = email.message_from_bytes(d[0][1], policy=email.policy.default)
+                # Seuls les mails authentifiés de leboncoin.fr (DMARC) sont appliqués
+                if not re.search(r"dmarc=pass[^;]*header\.from=(?:[\w-]+\.)*leboncoin\.fr", str(m.get("Authentication-Results", ""))):
+                    continue
                 jour = email.utils.parsedate_to_datetime(m["Date"]).date().isoformat()
                 e = mails_regles.lire(mid, entete(m, "From"), entete(m, "Subject"), corps(m), jour, "", [])
                 if not e or "lbc" not in e:

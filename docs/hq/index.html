@@ -2075,7 +2075,7 @@ function photo(it){
   if (p) return `<span class="sp" style="background-image:url(${HQIMG("sprites/s" + p[0] + ".jpg")});background-position:${p[1] / 15 * 100}% ${p[2] / 15 * 100}%"></span>`;
   return `<span class="ref">${esc(it.f || it.s || "?")}</span>`;
 }
-function esc(s){ return String(s).replace(/[&<>"]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
+function esc(s){ return String(s).replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
 function carte(it){
   const c = counts[it.id], n = c && c.n != null ? c.n : null, e = etat(it);
   const prix = it.p ? `<span>${it.p.toLocaleString("fr-FR")} €</span>` : "";
