@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 
 import base
+import figs_sets
 from regles import PRELEVEMENTS
 
 
@@ -277,14 +278,32 @@ def vente_lot(a):
     if n > 1:
         der = base.lire("ventes", "select=commande_id&commande_id=not.is.null&order=commande_id.desc&limit=1")
         cmd = int(der[0]["commande_id"]) + 1 if der else 1
-    base.ajouter("ventes", [{"article_id": int(l["article_id"]) if l.get("article_id") else None, "date_vente": d,
+    faites = base._appel("POST", "ventes", [{"article_id": int(l["article_id"]) if l.get("article_id") else None, "date_vente": d,
                              "plateforme": str(a.get("plateforme") or "").upper()[:40],
                              "produit": "FIGURINE" if (figs or l.get("fig")) else "SET", "id_minifig": l.get("fig") or None,
                              "nom_article": str(l.get("titre") or l.get("set") or l.get("fig") or "")[:300], "quantite": 1,
                              "prix_vente": round(float(l["prix"]), 2),
                              "commande_id": cmd,
-                             "notes": note + ("" if l.get("article_id") else " (origine inconnue)")} for l in lignes])
+                             "notes": note + ("" if l.get("article_id") else " (origine inconnue)")} for l in lignes],
+                         "return=representation") or []
+    for v in faites:
+        figurine_vendue(v)
     caisse(d, total * (1 - PRELEVEMENTS), f"Vente lot ({n}) : " + ", ".join(str(l.get("set") or l.get("fig") or l.get("titre")) for l in lignes))
+
+
+def figurine_vendue(v: dict):
+    """Figurine vendue : la ligne de la table figurines (set découpé, lot) est cochée ;
+    sans origine connue, la vente est rattachée à l'achat de cette figurine."""
+    if not v.get("id_minifig"):
+        return
+    art = figs_sets.vendre(v["id"], v["id_minifig"], v.get("article_id"))
+    if art and not v.get("article_id"):
+        base.modifier("ventes", f"id=eq.{v['id']}", {"article_id": art, "notes": str(v.get("notes") or "").replace(" (origine inconnue)", "")})
+
+
+def figs_lier(a):
+    """« I have them all » de l'onglet Part-out : figurines rattachées à l'article."""
+    figs_sets.lier(int(a["article_id"]), a.get("figs") or [])
 
 
 def vente(a):
@@ -296,6 +315,8 @@ def vente(a):
                                         "prix_vente": float(a["prix"]), "id_minifig": a.get("fig") or None,
                                         "notes": "Saisie depuis l'application" + ("" if art else " (origine inconnue)")}],
                     "return=representation")
+    if v:
+        figurine_vendue(v[0])
     # Encaissé net des prélèvements, mis de côté pour l'URSSAF
     caisse(a.get("date") or a.get("le"), float(a["prix"]) * (1 - PRELEVEMENTS), f"Vente : {a.get('titre') or ''}",
            vente_id=v[0]["id"] if v else None)
@@ -441,7 +462,7 @@ def noter_scan(a):
     base.json_partage_ecrire("scans", SCANS, tout)
 
 
-GESTES = {"perte": perte, "stock_trouve": noter_scan, "expedition": noter_scan, "colis_lien": colis_lien, "recu": recu, "cashback_recu": cashback_recu, "cashback_confirme": cashback_confirme, "achete": achete, "achat_libre": achat_libre, "vente": vente, "vente_lot": vente_lot, "vire": vire, "corrige": corrige, "supprime": supprime}
+GESTES = {"perte": perte, "stock_trouve": noter_scan, "expedition": noter_scan, "colis_lien": colis_lien, "recu": recu, "cashback_recu": cashback_recu, "cashback_confirme": cashback_confirme, "achete": achete, "achat_libre": achat_libre, "vente": vente, "vente_lot": vente_lot, "vire": vire, "corrige": corrige, "supprime": supprime, "figs_lier": figs_lier}
 
 
 def appliquer(liste: list[dict]) -> dict:

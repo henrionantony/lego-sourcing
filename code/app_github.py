@@ -11,6 +11,7 @@ from pathlib import Path
 import appliquer_actions
 import base
 import etat_app
+import figs_sets
 import inventaire
 
 
@@ -49,6 +50,10 @@ def main():
     try:
         resume = gestes()
         comptes()
+        try:
+            figs_sets.main()
+        except Exception as e:  # la liste Part-out attendra le passage suivant
+            print("part-out :", type(e).__name__)
         etat_app.main()
         for nom in ("principal", "historique"):
             f = etat_app.SORTIE if nom == "principal" else etat_app.SORTIE.parent / "historique.json"
