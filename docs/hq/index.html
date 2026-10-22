@@ -106,6 +106,8 @@ h1{font-family:var(--display);font-weight:800;font-size:20px;margin:0;display:fl
 .frout{flex-basis:100%}
 .frout .pos{color:var(--good,#1a7f37)}.frout .neg{color:var(--bad,#b42318)}
 .hbtn{font-size:12.5px;margin-left:6px;padding:0}
+.hdel{color:var(--gap)}
+.hconf{display:grid;gap:8px}.hconf p{margin:0}.hconf .row{display:flex;gap:8px;justify-content:flex-end}.btn.del{background:var(--gap-bg);color:var(--gap);border-color:var(--gap);font-weight:600}
 .htab li.fe{display:block;border-top:0}
 .htab .hedit{margin:6px 0 4px}
 .clamp{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
@@ -2179,7 +2181,14 @@ $("#libre").addEventListener("submit", async (e) => {
 });
 
 /* ---------- History ---------- */
-let HIST = null, hvue = "ventes", hopen = {}, hedit = null;
+let HIST = null, hvue = "ventes", hopen = {}, hedit = null, hconf = null;
+// Suppression demandée (commande annulée) : la ligne disparaît tout de suite, ou montre l'erreur.
+function supp(table, id){
+  for (const a of Object.values(actions)) if (a.type === "supprime" && a.table === table && +a.id_ligne === +id) return a;
+  return null;
+}
+const delBtn = (key) => `<button type="button" class="link hbtn hdel" data-d="${key}" aria-label="Delete">✕ Delete</button>`;
+const confDel = (key, txt) => `<div class="hconf"><p>${txt}</p><div class="row"><button type="button" class="btn" data-x="cancel">Cancel</button><button type="button" class="btn del" data-ok="${key}">Delete</button></div></div>`;
 try { hvue = localStorage.getItem("hvue") || "ventes"; } catch (e) {}
 const HMOIS = (d) => d ? new Date(d + "T00:00:00").toLocaleDateString("en-GB", { month: "long", year: "numeric" }) : "No date";
 const jj = (d) => d ? new Date(d + "T00:00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : "?";
@@ -2196,7 +2205,8 @@ function rendreHist(){
   document.querySelectorAll("#hseg button").forEach((x) => x.setAttribute("aria-pressed", x.dataset.h === hvue));
   if (!HIST){ $("#hist").innerHTML = `<p class="empty">${db ? "Waiting for the first update…" : "Sign in to see your purchases and sales."}</p>`; $("#hsum").textContent = ""; return; }
   const q = $("#hq").value.trim().toLowerCase(), DEP = HIST.depenses || {};
-  const rows = (HIST[hvue] || []).filter((r) => !q || JSON.stringify(r).toLowerCase().includes(q));
+  const tb = hvue === "ventes" ? "ventes" : "achats";
+  const rows = (HIST[hvue] || []).filter((r) => (!q || JSON.stringify(r).toLowerCase().includes(q)) && !(supp(tb, r.id) && !supp(tb, r.id).erreur));
   let html = "", mois = null, tot = 0;
   const t0 = new Date(), auj = `${t0.getFullYear()}-${String(t0.getMonth() + 1).padStart(2, "0")}-${String(t0.getDate()).padStart(2, "0")}`;
   const attente = `<span class="tagc">saving…</span>`;
@@ -2206,7 +2216,8 @@ function rendreHist(){
       const m = HMOIS(v.d); if (m !== mois){ mois = m; html += `<tr class="mois"><td colspan="3">${m}</td></tr>`; }
       tot += +v.px || 0;
       html += `<tr${v.d === auj ? ' class="today"' : ""}><td class="dt">${v.d === auj ? "Today" : jj(v.d)}</td><td>${esc(v.n)}${v.q > 1 ? ` <span class="tagc">×${v.q}</span>` : ""}${v.co ? `<span class="tagc">shared</span>` : ""}${c ? attente : ""}
-        <div class="sub">${esc(v.p)}${v.k ? " · " + esc(v.k) : ""} <span class="rid">#${v.id}</span> ${editBtn("v" + v.id)}</div></td><td class="num">${v.px == null ? "?" : eur(v.px)}</td></tr>`;
+        <div class="sub">${esc(v.p)}${v.k ? " · " + esc(v.k) : ""} <span class="rid">#${v.id}</span> ${editBtn("v" + v.id)}${delBtn("ventes:" + v.id)}</div>${supp("ventes", v.id) ? `<div class="sub alerte-txt">⚠ Not deleted: ${esc(supp("ventes", v.id).erreur)}</div>` : ""}</td><td class="num">${v.px == null ? "?" : eur(v.px)}</td></tr>`;
+      if (hconf === "ventes:" + v.id) html += `<tr class="det"><td colspan="3">${confDel("ventes:" + v.id, `Delete this sale (${esc(v.n)}, ${v.px == null ? "?" : eur(v.px)})? Use it when the sale was cancelled: the line and its money in your cash are removed, and the item counts as in stock again.`)}</td></tr>`;
       if (hedit === "v" + v.id) html += `<tr class="det"><td colspan="3">${formEdit("ventes:" + v.id,
         champ("Date", "date_vente", v.d, "date") + champ("Price (€)", "prix_vente", v.px, "number") + champ("Quantity", "quantite", v.q, "number", 'step="1" min="1"') +
         champ("Platform", "plateforme", v.p) + `<div style="grid-column:1/-1">${champ("Item", "nom_article", v.n)}</div>`)}</td></tr>`;
@@ -2225,7 +2236,8 @@ function rendreHist(){
       const pb = [a.x && !a.x.ok ? "Email: " + a.x.msg : "", a.rg && !actions["vire-" + a.id] ? a.rg : ""].filter(Boolean);
       const etiq = pb.length ? `<div class="sub alerte-txt">⚠ ${esc(pb.join(" · "))}</div>` : "";
       html += `<tr class="ach${a.d === auj ? " today" : ""}${pb.length ? " alerte" : ""}" data-id="${a.id}"><td class="dt">${a.d === auj ? "Today" : jj(a.d)}</td><td><b>${esc(a.l)}</b> · ${n} item${n > 1 ? "s" : ""}${enCours ? attente : ""}
-        <div class="sub">${esc(first)}${it.length > 1 ? ` +${it.length - 1} more` : ""} <span class="rid">Lot ID ${a.id}</span>${a.x && a.x.ok ? `<span class="tagc ok">✓ email</span>` : ""}</div>${etiq}</td><td class="num">${eur(total)}</td></tr>`;
+        <div class="sub">${esc(first)}${it.length > 1 ? ` +${it.length - 1} more` : ""} <span class="rid">Lot ID ${a.id}</span>${a.x && a.x.ok ? `<span class="tagc ok">✓ email</span>` : ""}${delBtn("achats:" + a.id)}</div>${etiq}${supp("achats", a.id) ? `<div class="sub alerte-txt">⚠ Not deleted: ${esc(supp("achats", a.id).erreur)}</div>` : ""}</td><td class="num">${eur(total)}</td></tr>`;
+      if (hconf === "achats:" + a.id) html += `<tr class="det"><td colspan="3">${confDel("achats:" + a.id, `Delete this order (${esc(a.l)}, ${n} item${n > 1 ? "s" : ""}, ${eur(total)})? Use it when the order was cancelled: its items, cagnotte, cashback and cash movements are removed, as if it never happened.`)}</td></tr>`;
       if (hopen[a.id]){
         html += `<tr class="det"><td colspan="3"><ul>${it.map((x) => `<li><span>${x[0] > 1 ? x[0] + " × " : ""}${esc(x[1])}${x[3] && !x[9] ? `<span class="tagc">gift</span>` : ""}${x[4] ? `<span class="tagc">shared</span>` : ""}${x[6] ? `<span class="tagc">cagnotte ${eur(x[6])}</span>` : ""}${x[9] ? `<span class="tagc">${+x[2] > 0 ? "part paid with" : "paid with"} ${x[9]} pts (${eur(Math.round(x[9] / 1.5) / 100)})</span>` : ""}${x[5] ? ` <span class="rid">ID Achat ${x[5]}</span> ` + editBtn("i" + x[5]) : ""}</span><span class="num">${eur(x[2])}</span></li>` +
           (hedit === "i" + x[5] ? `<li class="fe">${formEdit("articles:" + x[5], champ("Quantity", "quantite", x[0], "number", 'step="1" min="1"') + champ("Total paid (€)", "prix_total", x[2], "number") +
@@ -2245,10 +2257,21 @@ $("#hq").addEventListener("input", rendreHist);
 $("#hist").addEventListener("click", (e) => {
   const eb = e.target.closest("[data-e]");
   if (eb){ if (!db){ note("Sign in to correct a line."); return; } hedit = hedit === eb.dataset.e ? null : eb.dataset.e; rendreHist(); return; }
-  if (e.target.closest("[data-x=cancel]")){ hedit = null; rendreHist(); return; }
+  const db_ = e.target.closest("[data-d]");
+  if (db_){ if (!db){ note("Sign in to delete a line."); return; } hconf = hconf === db_.dataset.d ? null : db_.dataset.d; hedit = null; rendreHist(); return; }
+  const ok = e.target.closest("[data-ok]");
+  if (ok){ supprimer(ok.dataset.ok); return; }
+  if (e.target.closest("[data-x=cancel]")){ hedit = null; hconf = null; rendreHist(); return; }
   if (e.target.closest("form")) return;
   const r = e.target.closest("tr.ach"); if (!r) return; hopen[r.dataset.id] = !hopen[r.dataset.id]; rendreHist();
 });
+async function supprimer(cle0){
+  const [table, id] = cle0.split(":"), cle = `supp-${table}-${id}`;
+  const act = { type: "supprime", table, id_ligne: +id, le: new Date().toISOString(), fait: false };
+  hconf = null; actions[cle] = act; rendreHist();
+  try { await db.doc("actions/" + cle).set(act); note(table === "ventes" ? "Sale deleted. Your cash is updated in a few seconds." : "Order deleted with everything linked to it. Your cash is updated in a few seconds."); }
+  catch (err) { delete actions[cle]; rendreHist(); note("Nothing was deleted. Check your connection and try again."); }
+}
 $("#hist").addEventListener("submit", async (e) => {
   e.preventDefault(); if (!db) return;
   const [table, id] = e.target.dataset.k.split(":"), f = new FormData(e.target), valeurs = {};

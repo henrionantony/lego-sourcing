@@ -289,14 +289,16 @@ def vente_lot(a):
 
 def vente(a):
     art = article_de(a)
-    base.ajouter("ventes", [{"article_id": art, "date_vente": str(a.get("date") or a.get("le"))[:10],
-                             "plateforme": str(a.get("plateforme") or "").upper()[:40],
-                             "produit": "FIGURINE" if a.get("fig") else "SET",
-                             "nom_article": str(a.get("titre") or "")[:300], "quantite": 1,
-                             "prix_vente": float(a["prix"]), "id_minifig": a.get("fig") or None,
-                             "notes": "Saisie depuis l'application" + ("" if art else " (origine inconnue)")}])
+    v = base._appel("POST", "ventes", [{"article_id": art, "date_vente": str(a.get("date") or a.get("le"))[:10],
+                                        "plateforme": str(a.get("plateforme") or "").upper()[:40],
+                                        "produit": "FIGURINE" if a.get("fig") else "SET",
+                                        "nom_article": str(a.get("titre") or "")[:300], "quantite": 1,
+                                        "prix_vente": float(a["prix"]), "id_minifig": a.get("fig") or None,
+                                        "notes": "Saisie depuis l'application" + ("" if art else " (origine inconnue)")}],
+                    "return=representation")
     # Encaissé net des prélèvements, mis de côté pour l'URSSAF
-    caisse(a.get("date") or a.get("le"), float(a["prix"]) * (1 - PRELEVEMENTS), f"Vente : {a.get('titre') or ''}")
+    caisse(a.get("date") or a.get("le"), float(a["prix"]) * (1 - PRELEVEMENTS), f"Vente : {a.get('titre') or ''}",
+           vente_id=v[0]["id"] if v else None)
 
 
 # Corrections faites depuis l'onglet History : seuls ces champs sont modifiables.
@@ -375,6 +377,57 @@ def perte(a):
                              "notes": "Perdu ou donné, constaté à l'inventaire" + ("" if art else " (origine inconnue)")}])
 
 
+def supprime(a):
+    """Commande annulée (achat ou vente), effacée depuis l'onglet History comme si elle
+    n'avait jamais eu lieu : avec tout ce qui en dépend (articles, cagnotte, cashback,
+    mouvements de trésorerie, figurines)."""
+    ident = int(a["id_ligne"])
+    if a["table"] == "achats":
+        achat = base.lire("achats", f"select=id,notes&id=eq.{ident}")
+        if not achat:
+            return  # déjà effacé
+        arts = base.lire("articles", f"select=id,id_set&achat_id=eq.{ident}")
+        ids = ",".join(str(x["id"]) for x in arts)
+        # Ventes déjà rattachées à ces exemplaires : rattachées à un autre exemplaire en stock
+        vendus = base.lire("ventes", f"select=id,article_id&article_id=in.({ids})") if ids else []
+        for t, f in (("tresorerie", f"achat_id=eq.{ident}"), ("articles", f"achat_id=eq.{ident}"), ("achats", f"id=eq.{ident}")):
+            if base._appel("DELETE", f"{t}?{f}", prefer="return=minimal") is None:
+                raise RuntimeError(f"{t} : suppression impossible")
+        for v in vendus:
+            num = next((str(x["id_set"] or "").split("-")[0].removesuffix(".0") for x in arts if x["id"] == v["article_id"]), "")
+            base.modifier("ventes", f"id=eq.{v['id']}", {"article_id": article_de({"set": num}) if num else None})
+        # Le deal Dealabs redevient « non acheté »
+        for d in re.findall(r"dealabs\.com/\S*?-(\d{6,})\b", str(achat[0].get("notes") or "")):
+            base.modifier("deals", f"id=eq.{d}", {"achete": False})
+        # Les mails de colis qui pointaient sur cette commande n'y sont plus rattachés
+        import mails
+        tout = mails.tout()
+        if any(c.get("achat_id") == ident for c in tout):
+            for c in tout:
+                if c.get("achat_id") == ident:
+                    c.pop("achat_id")
+            base.json_partage_ecrire("commandes", mails.FICHIER, tout)
+    elif a["table"] == "ventes":
+        v = base.lire("ventes", f"select=*&id=eq.{ident}")
+        if not v:
+            return
+        v = v[0]
+        mouv = base.lire("tresorerie", f"select=id&vente_id=eq.{ident}")
+        if not mouv and str(v.get("date_vente") or "") >= DEBUT_TRESO:
+            # Ventes saisies avant le lien vente_id : le mouvement du même jour, même libellé, même montant
+            net = round(float(v.get("prix_vente") or 0) * (1 - PRELEVEMENTS), 2)
+            mouv = [m for m in base.lire("tresorerie", f"select=id,libelle,montant&le=eq.{v['date_vente']}&type=eq.vente")
+                    if abs(float(m["montant"]) - net) < 0.02 and str(m["libelle"]).startswith("Vente : ")][:1]
+            if not mouv:  # vendu dans un lot : on retire seulement sa part
+                caisse(v["date_vente"], -net, f"Annulation vente {ident} : {v.get('nom_article') or ''}")
+        for m in mouv:
+            base._appel("DELETE", f"tresorerie?id=eq.{m['id']}", prefer="return=minimal")
+        if base._appel("DELETE", f"ventes?id=eq.{ident}", prefer="return=minimal") is None:
+            raise RuntimeError("vente : suppression impossible")
+    else:
+        raise ValueError("table inconnue")
+
+
 SCANS = Path(__file__).resolve().parent.parent / "stock" / "scans.json"
 
 
@@ -388,7 +441,7 @@ def noter_scan(a):
     base.json_partage_ecrire("scans", SCANS, tout)
 
 
-GESTES = {"perte": perte, "stock_trouve": noter_scan, "expedition": noter_scan, "colis_lien": colis_lien, "recu": recu, "cashback_recu": cashback_recu, "cashback_confirme": cashback_confirme, "achete": achete, "achat_libre": achat_libre, "vente": vente, "vente_lot": vente_lot, "vire": vire, "corrige": corrige}
+GESTES = {"perte": perte, "stock_trouve": noter_scan, "expedition": noter_scan, "colis_lien": colis_lien, "recu": recu, "cashback_recu": cashback_recu, "cashback_confirme": cashback_confirme, "achete": achete, "achat_libre": achat_libre, "vente": vente, "vente_lot": vente_lot, "vire": vire, "corrige": corrige, "supprime": supprime}
 
 
 def appliquer(liste: list[dict]) -> dict:
