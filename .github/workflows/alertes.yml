@@ -1,0 +1,76 @@
+name: Alertes Lego
+
+# Un passage dure presque 6 heures (le maximum de GitHub) et vérifie Dealabs
+# toutes les 30 secondes. Le déclenchement horaire n'est qu'un filet : GitHub en
+# saute beaucoup, mais un passage en attente démarre dès que le précédent finit.
+on:
+  schedule:
+    - cron: "7 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: alertes
+  cancel-in-progress: false
+
+# Droits minimum : le passage lit le dépôt, il n'écrit rien dessus.
+permissions:
+  contents: read
+
+jobs:
+  alertes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 358
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      # Facultatifs : avec eux, les alertes voient le stock, la trésorerie et les deals déjà envoyés.
+      # Le destinataire Telegram est dans les réglages privés (Supabase).
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -q pandas pillow
+      # Table des prix et réglages : dans l'espace privé de Supabase, rien dans ce dépôt public
+      - name: Fichiers privés
+        working-directory: code
+        run: python3 prive.py recevoir ../data
+      - name: Deals déjà vus
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            data/cache/alertes_vus.json
+            data/cache/vignettes
+          key: vus-${{ github.run_id }}
+          restore-keys: vus-
+      - name: Vérifier Dealabs toutes les 30 secondes et rafraîchir l'application
+        working-directory: code
+        run: |
+          # Application LEGO HQ (GitHub Pages) : recalculée dès qu'un deal arrive,
+          # sinon toutes les 5 minutes. Une erreur de l'application ne bloque jamais les alertes.
+          fin=$(( $(date +%s) + 20700 ))
+          appli=0
+          while [ "$(date +%s)" -lt "$fin" ]; do
+            # Journal public réduit aux compteurs : le détail d'une erreur va dans la base privée
+            if sortie=$(python3 alertes.py 2>&1); then
+              echo "$sortie" | grep -E "^[0-9]+ nouveaux deals" | sed "s/ (envoy.*//" | tail -n 1
+            else
+              echo "passage en erreur (détail dans la base), on continue"
+              echo "$sortie" | python3 prive.py journal alertes || true
+            fi
+            # En arrière-plan : le calcul de l'application ne retarde jamais la vérification suivante
+            if [ ! -e /tmp/appli.encours ] && { echo "$sortie" | grep -qE "^[1-9][0-9]* nouveaux deals" || [ "$(date +%s)" -ge "$appli" ]; }; then
+              touch /tmp/appli.encours
+              ( timeout 240 python3 app_github.py > /tmp/appli.log 2>&1 || { echo "application en erreur (détail dans la base)"; python3 prive.py journal application < /tmp/appli.log; }; rm -f /tmp/appli.encours ) &
+              appli=$(( $(date +%s) + 300 ))
+            fi
+            sleep 30
+          done
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: |
+            data/cache/alertes_vus.json
+            data/cache/vignettes
+          key: vus-${{ github.run_id }}

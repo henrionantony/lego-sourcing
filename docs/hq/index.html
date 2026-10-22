@@ -1,0 +1,2339 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
+<style>
+/* Phone first: slim top bar, one view at a time, tab bar fixed at the bottom (moves to the top bar on wide screens). */
+:root{
+  --bg:#f3f4f6; --surface:#ffffff; --ink:#16181d; --muted:#5d6472; --line:#dde1e7;
+  --brick:#f5c400; --brick-ink:#1d1a00; --ok:#1f8a4c; --ok-bg:#e3f4ea; --gap:#b4441c; --gap-bg:#fbe9e1; --warn:#a86a00; --warn-bg:#fdf1d6; --chip:#e9ecf1;
+  --display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif; --body:"Figtree",ui-sans-serif,system-ui,sans-serif;
+  --side:max(16px,env(safe-area-inset-left,0px)); --side-r:max(16px,env(safe-area-inset-right,0px));
+  --nav:calc(60px + env(safe-area-inset-bottom,0px));
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#111317; --surface:#1b1e24; --ink:#eef0f3; --muted:#9aa2b1; --line:#2c313a;
+  --ok:#5fd38f; --ok-bg:#16301f; --gap:#ff9a6e; --gap-bg:#3a1f14; --warn:#f2c35b; --warn-bg:#352a10; --chip:#262a32; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111317; --surface:#1b1e24; --ink:#eef0f3; --muted:#9aa2b1; --line:#2c313a;
+  --ok:#5fd38f; --ok-bg:#16301f; --gap:#ff9a6e; --gap-bg:#3a1f14; --warn:#f2c35b; --warn-bg:#352a10; --chip:#262a32; color-scheme:dark}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;margin:0;padding-bottom:var(--nav);overflow-x:hidden}
+button{font-family:inherit;-webkit-tap-highlight-color:transparent}
+button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid var(--brick);outline-offset:2px}
+button:disabled{opacity:.45;cursor:default}
+
+/* Top bar */
+.app{display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:0;z-index:6;background:var(--surface);border-bottom:1px solid var(--line);
+  padding:calc(env(safe-area-inset-top,0px) + 10px) var(--side-r) 10px var(--side)}
+.app-row{display:flex;align-items:center;gap:12px;justify-content:space-between}
+h1{font-family:var(--display);font-weight:800;font-size:20px;margin:0;display:flex;align-items:center;gap:10px}
+.stud{width:20px;height:14px;background:var(--brick);border-radius:4px;position:relative;flex:none;margin-top:4px}
+.stud::before,.stud::after{content:"";position:absolute;top:-5px;width:6px;height:5px;background:var(--brick);border-radius:2px 2px 0 0}
+.stud::before{left:3px}.stud::after{right:3px}
+.fresh{font-size:12px;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
+
+/* Tabs: bottom bar on phones */
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:7;background:var(--surface);border-top:1px solid var(--line);
+  display:grid;grid-template-columns:repeat(6,1fr);padding:0 var(--side-r) env(safe-area-inset-bottom,0px) var(--side)}
+.tab{border:0;background:none;color:var(--muted);height:60px;display:grid;place-items:center;align-content:center;gap:3px;font:600 11.5px var(--body);cursor:pointer;position:relative}
+.tab svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tab[aria-selected="true"]{color:var(--ink)}
+.tab[aria-selected="true"]::before{content:"";position:absolute;top:0;left:28%;right:28%;height:3px;border-radius:0 0 3px 3px;background:var(--brick)}
+.badge{position:absolute;top:7px;left:calc(50% + 6px);min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--gap);color:#fff;font:700 11px/18px var(--body);text-align:center}
+.badge:empty{display:none}
+@media (min-width:760px){
+  body{padding-bottom:0}
+  .app{gap:24px}
+  .app-row{flex:none}
+  .tabs{position:static;border:0;padding:0;display:flex;gap:4px;flex:1;background:none}
+  .tab{height:auto;display:flex;gap:8px;padding:8px 14px;border-radius:999px;font-size:14px}
+  .tab svg{width:18px;height:18px}
+  .tab[aria-selected="true"]{background:var(--chip)}
+  .tab[aria-selected="true"]::before{display:none}
+  .badge{position:static;margin-left:2px}
+  .fresh{margin-left:auto}
+}
+
+.view{padding:14px var(--side-r) 32px var(--side)}
+.view[hidden]{display:none}
+/* History */
+.hist-top{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.hist-top .seg{flex:1;min-width:220px;max-width:360px}
+.hist-top input{flex:1;min-width:160px;min-height:42px;border:1px solid var(--line);border-radius:10px;padding:0 12px;font:15px var(--body);background:var(--surface);color:var(--ink)}
+.hsum{color:var(--muted);font-size:13px;margin:0 0 8px}
+.htab{width:100%;border-collapse:collapse;font-size:14px;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.htab th{text-align:left;font:600 12px var(--body);color:var(--muted);padding:8px 10px;border-bottom:1px solid var(--line);background:var(--chip)}
+.htab td{padding:9px 10px;border-top:1px solid var(--line);vertical-align:top}
+.htab tr.mois td{background:var(--chip);font:600 12.5px var(--body);color:var(--muted);padding:6px 10px}
+.htab .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.htab .dt{white-space:nowrap;color:var(--muted);font-variant-numeric:tabular-nums;width:1%}
+.htab .sub{color:var(--muted);font-size:12.5px;margin-top:2px}
+.htab .rid{color:var(--muted);font-size:11.5px}
+.htab tr.ach{cursor:pointer}
+.htab tr.today td{background:color-mix(in srgb,var(--brick) 16%,var(--surface))}
+.htab tr.today td:first-child{box-shadow:inset 4px 0 0 var(--brick);font-weight:700;color:var(--ink)}
+.htab tr.alerte td{background:var(--gap-bg)}
+.htab tr.alerte td:first-child{box-shadow:inset 4px 0 0 var(--gap);font-weight:700;color:var(--ink)}
+.alerte-txt{color:var(--gap)!important;font-weight:600}
+.tagc.ok{background:var(--ok-bg);color:var(--ok)}
+.task.transfert,.task.ecart{border-left-color:var(--gap)}
+.task ul.tls{list-style:none;padding:0;margin:4px 0 0;display:grid;gap:8px;color:var(--ink);font-size:14px}
+.task .tl{border-top:1px solid var(--line);padding-top:8px}
+.task .tlh{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.task .tlh>span:first-child{flex:1;min-width:0}
+.steps{display:flex;list-style:none;margin:8px 0 2px;padding:0}
+.steps li{flex:1;position:relative;text-align:center;font-size:11px;color:var(--muted);min-width:0}
+.steps li i{display:block;width:10px;height:10px;margin:0 auto 3px;border-radius:50%;background:var(--surface);border:2px solid var(--line);position:relative;z-index:1}
+.steps li+li::before{content:"";position:absolute;top:6px;right:50%;width:100%;height:2px;background:var(--line)}
+.steps li.fait i{background:var(--ok);border-color:var(--ok)} .steps li.fait+li::before{background:var(--ok)}
+.steps li.ici i{background:var(--brick);border-color:var(--brick-ink);width:12px;height:12px;margin-top:-1px}
+.steps li.ici span{color:var(--ink);font-weight:600}
+.task .tl.pret .steps li.ici i{background:var(--warn);border-color:var(--warn)}
+.suivi a{color:inherit}
+.task .tl.pret{background:var(--warn-bg);border-radius:8px;padding:8px;border-top:0}
+.task.ecart{background:var(--gap-bg)}
+.task .row.choix .btn{font-size:13px}
+.task .tl .btn{padding:6px 12px;flex:none}
+.htab tr.det td{padding:0 10px 10px;border-top:0}
+.htab ul{margin:0;padding:0;list-style:none}
+.htab li{display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-top:1px dashed var(--line);font-size:13px}
+.htab li:first-child{border-top:0}
+.frp{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;font-size:13.5px;padding:6px 0 2px}
+.frp a{color:var(--ink);font-weight:600}
+.frp label{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted)}
+.frp input{width:84px;height:36px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);padding:0 8px;font:16px var(--body)}
+.frout{flex-basis:100%}
+.frout .pos{color:var(--good,#1a7f37)}.frout .neg{color:var(--bad,#b42318)}
+.hbtn{font-size:12.5px;margin-left:6px;padding:0}
+.htab li.fe{display:block;border-top:0}
+.htab .hedit{margin:6px 0 4px}
+.clamp{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.tagc{display:inline-block;font-size:11px;font-weight:600;padding:1px 6px;border-radius:6px;background:var(--chip);color:var(--muted);margin-left:4px}
+.note{margin:0 0 12px;padding:10px 12px;border-radius:8px;background:var(--gap-bg);color:var(--ink);font-size:14px}
+.note[hidden]{display:none}
+h2.sec{font:600 12px var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:20px 0 8px}
+h2.sec:first-child{margin-top:4px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px}
+.grid2{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))}
+.empty{color:var(--muted);text-align:center;padding:40px 0;grid-column:1/-1}
+
+/* Home */
+.big{font:800 30px/1.1 var(--display);font-variant-numeric:tabular-nums}
+.big small{font:500 14px var(--body);color:var(--muted)}
+.lbl{font-size:13px;color:var(--muted);margin-bottom:4px}
+.bar{height:8px;background:var(--chip);border-radius:4px;overflow:hidden;margin:10px 0 6px}
+.bar i{display:block;height:100%;background:var(--brick);border-radius:4px}
+.sub{font-size:13px;color:var(--muted);line-height:1.4}
+.auto{display:grid;grid-template-columns:12px 1fr auto;gap:2px 10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.auto:first-child{border-top:0;padding-top:0}
+.auto:last-child{padding-bottom:0}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--ok)}
+.dot.attention{background:var(--warn)} .dot.erreur{background:var(--gap)}
+.auto b{font-weight:600}
+.auto time{font-size:12px;color:var(--muted);white-space:nowrap}
+.auto .sub{grid-column:2/-1}
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px}
+.kpi .big{font-size:24px}
+.link{border:0;background:none;color:var(--ink);text-decoration:underline;padding:0;font:500 13px var(--body);cursor:pointer}
+
+/* To do */
+.todo{display:grid;gap:10px}
+.task{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:grid;gap:6px;border-left:4px solid var(--line)}
+.task.livraison,.task.ventes,.task.inv{border-left-color:var(--gap)}
+.task.cashback,.task.annonces{border-left-color:var(--warn)}
+.task.reglage,.task.decision{border-left-color:var(--muted)}
+.task ul.cbs{list-style:none;padding:0;margin:4px 0;display:grid;gap:6px;color:var(--ink)}
+.cb{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;font-size:13.5px}
+.task.calme{opacity:.85}
+.pill{display:inline-block;font-size:11.5px;padding:1px 7px;border-radius:99px;background:var(--line);color:var(--muted);margin-left:4px}
+.pill.warn{background:var(--warn);color:#fff}
+.task h3{margin:0;font:600 15px/1.3 var(--body)}
+.task ul{margin:2px 0 0;padding-left:18px;font-size:13px;color:var(--muted)}
+.task .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:4px}
+.kind{font:600 11px var(--body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.btn{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;min-height:42px;padding:8px 14px;font:600 14px var(--body);cursor:pointer}
+.btn.yes{background:var(--brick);color:var(--brick-ink);border-color:var(--brick)}
+.sent{font-size:13px;color:var(--ok);font-weight:600}
+
+/* Stock */
+.tools{position:sticky;top:var(--top,52px);z-index:5;background:var(--bg);margin:-14px calc(-1*var(--side-r)) 0 calc(-1*var(--side));padding:10px var(--side-r) 10px var(--side);display:grid;gap:8px;border-bottom:1px solid var(--line)}
+.prog{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.prog b{color:var(--ink)}
+.meter{flex:1;height:5px;background:var(--chip);border-radius:3px;overflow:hidden}
+.meter i{display:block;height:100%;background:var(--brick);width:0;transition:width .3s}
+.filters{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 calc(-1*var(--side-r)) 0 calc(-1*var(--side));padding:0 var(--side-r) 0 var(--side)}
+.filters::-webkit-scrollbar{display:none}
+.chip{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;min-height:36px;padding:6px 12px;font:500 13px var(--body);white-space:nowrap;cursor:pointer;flex:none}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.chip span{opacity:.7;margin-left:4px;font-variant-numeric:tabular-nums}
+.find{display:grid;grid-template-columns:1fr minmax(0,38%);gap:8px}
+.find input,.find select{width:100%;min-width:0;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;height:42px;padding:0 10px;font:16px var(--body)}
+#list{display:grid;gap:10px;padding-top:12px;grid-template-columns:repeat(auto-fill,minmax(min(100%,400px),1fr))}
+.grp{grid-column:1/-1;font:600 12px var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:8px 0 0}
+.grp.set{text-transform:none;letter-spacing:0;font:700 15px var(--display);color:var(--ink);margin-top:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px;display:grid;grid-template-columns:64px minmax(0,1fr);gap:8px 10px;align-items:start}
+.card.ok{border-color:var(--ok);box-shadow:inset 4px 0 0 var(--ok)}
+.card.gap{border-color:var(--gap);box-shadow:inset 4px 0 0 var(--gap)}
+.ph{width:64px;height:64px;border-radius:8px;background:#fff;display:grid;place-items:center;overflow:hidden;border:1px solid var(--line)}
+.sp{display:block;width:100%;height:100%;background-size:1600% 1600%;background-repeat:no-repeat}
+.ph .ref{font:700 12px var(--display);color:#5d6472;text-align:center;padding:4px;word-break:break-all}
+.info{min-width:0;display:grid;gap:3px}
+.t{font-weight:600;line-height:1.25;overflow-wrap:anywhere}
+.fr{font-size:12.5px;color:var(--muted);line-height:1.25;overflow-wrap:anywhere}
+.meta{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12.5px;color:var(--muted);align-items:center;margin-top:2px}
+.tag{border-radius:4px;padding:1px 6px;background:var(--chip);color:var(--ink);font-size:11.5px}
+.meta a{color:var(--muted)}
+.wide{grid-column:1/-1;display:grid;gap:8px}
+.ctl{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:stretch}
+.ctl.sold{grid-template-columns:auto 1fr}
+.cnt{display:flex;align-items:center;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.cnt button{width:42px;height:44px;border:0;background:var(--chip);color:var(--ink);font:600 20px var(--body);cursor:pointer}
+.cnt output{min-width:50px;text-align:center;font:700 17px var(--display);font-variant-numeric:tabular-nums}
+.cnt output small{font:500 12px var(--body);color:var(--muted)}
+.q{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;min-height:44px;padding:8px 12px;font:600 14px var(--body);cursor:pointer;white-space:nowrap}
+.q.yes{background:var(--brick);color:var(--brick-ink);border-color:var(--brick)}
+.state{font-size:12.5px;font-weight:600}
+.state:empty{display:none}
+.ok .state{color:var(--ok)} .gap .state{color:var(--gap)}
+.cut{justify-self:start;font-size:13px;min-height:38px;padding:6px 12px;background:var(--chip);white-space:normal;text-align:left}
+.cut[aria-pressed="true"]{background:var(--surface)}
+.mxs{display:grid;gap:6px}
+.mx{display:grid;grid-template-columns:44px minmax(0,1fr);gap:6px 8px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:6px}
+.mx.ok{border-color:var(--ok);background:var(--ok-bg)} .mx.gap{border-color:var(--gap);background:var(--gap-bg)}
+.mph{width:44px;height:44px;border-radius:6px;background:#fff;display:grid;place-items:center;overflow:hidden}
+.mph .ref{font:700 9px var(--display);color:#5d6472;word-break:break-all;text-align:center}
+.mt{font-size:13px;font-weight:600;line-height:1.25;overflow-wrap:anywhere} .mt em{font-style:normal;font-weight:500;color:var(--muted)}
+.mb{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr auto;gap:6px} .mb .q{min-height:38px;padding:5px 10px;font-size:13px}
+.mb .q:only-child{grid-column:1/-1}
+
+/* Log a sale */
+.logbtn{width:100%;margin-bottom:12px}
+.sale{display:grid;gap:12px;margin-bottom:14px}
+.sale label{display:grid;gap:4px;font-size:13px;color:var(--muted)}
+.sale input,.sale select{width:100%;min-width:0;height:44px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);padding:0 10px;font:16px var(--body)}
+.sale .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{border:0;border-left:1px solid var(--line);background:var(--surface);color:var(--ink);min-height:42px;font:600 13.5px var(--body);cursor:pointer;padding:0 4px}
+.seg button:first-child{border-left:0}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--surface)}
+
+.sale[hidden],.sale [hidden],.logbtn[hidden]{display:none}
+.figrow{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:end;padding:10px 0;border-bottom:1px solid var(--line)}
+.figrow .fr-n,.figrow .fr-o{grid-column:1/-1}
+.figrow .fr-o{margin:0;font-size:12px}
+.figrow .fr-x{height:44px;width:44px;padding:0}
+
+/* Deals */
+.deals{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(min(100%,400px),1fr))}
+.deal{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:grid;gap:6px}
+.dmain{display:flex;gap:10px;align-items:flex-start} .dmain>div{min-width:0;display:grid;gap:4px}
+.dimg{width:64px;height:64px;flex:none;border-radius:8px;background:#fff;object-fit:contain;border:1px solid var(--line)}
+.ad{background:var(--surface);border:1px solid var(--line);border-radius:12px;margin-bottom:8px;overflow:hidden}
+.adhead{width:100%;display:flex;justify-content:space-between;gap:10px;align-items:center;text-align:left;border:0;background:none;color:var(--ink);padding:12px 14px;min-height:52px;font:500 14px/1.3 var(--body);cursor:pointer}
+.adp s{opacity:.55;font-weight:500;margin-right:4px} .drop{background:var(--warn-bg);margin:-4px -4px 0;padding:10px;border-radius:10px}
+.lbcb{display:block;margin-top:4px;font-size:12px;font-weight:600;color:var(--muted,#6b7280)} .lbcb.on{color:var(--ok)}
+.lbcw{border:1px solid var(--gap);background:var(--gap-bg);color:var(--ink);border-radius:10px;padding:10px 12px;font-size:14px} .lbcw summary{cursor:pointer;font-weight:600;color:var(--gap)}
+.lbcw a{display:block;margin-top:8px;color:var(--ink)}
+.adth{flex:none;width:48px;height:64px;border-radius:6px;background:var(--line) no-repeat;background-size:480px auto} .adt{overflow-wrap:anywhere;flex:1} .adp{font-weight:700;white-space:nowrap}
+.adbody{display:grid;gap:12px;padding:0 14px 14px}
+.adf{display:grid;gap:6px} .adl{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.adv{margin:0;white-space:pre-wrap;font:14px/1.45 var(--body);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;max-height:240px;overflow:auto;user-select:text;-webkit-user-select:text}
+.adph{display:grid;grid-template-columns:repeat(3,1fr);gap:6px} .phb{padding:0;border:0;background:var(--line);border-radius:8px;overflow:hidden;aspect-ratio:3/4;cursor:pointer} .phb img{width:100%;height:100%;object-fit:cover;display:block}
+.adbtns{display:flex;gap:8px;flex-wrap:wrap}
+.deal h3{margin:0;font:600 14.5px/1.3 var(--body);overflow-wrap:anywhere}
+.dtop{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.v{border-radius:6px;padding:2px 8px;font:700 12px var(--body)}
+.v.achète{background:var(--ok-bg);color:var(--ok)} .v.regarder{background:var(--warn-bg);color:var(--warn)} .v.non{background:var(--chip);color:var(--muted)}
+.price{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.price b{font:800 20px var(--display);font-variant-numeric:tabular-nums}
+.grade{display:inline-block;border-radius:6px;padding:1px 7px;font:800 12px/1.5 var(--body);vertical-align:1px;white-space:nowrap}
+.gA{background:var(--ok);color:var(--surface)} .gB{background:var(--warn-bg);color:var(--warn)} .gC{background:var(--chip);color:var(--muted)}
+.ret{border-radius:6px;padding:2px 8px;font:600 12px var(--body);white-space:nowrap}
+.ret.soon{background:var(--gap-bg);color:var(--gap)} .ret.old{background:var(--chip);color:var(--ink)} .ret.later{color:var(--muted);padding-left:0}
+.ago{margin-left:auto}
+.kf{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;background:var(--bg);border-radius:10px;padding:8px 10px}
+.kf div{display:grid;gap:1px;min-width:0}
+.kf small{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kf b{font:800 16px var(--display);font-variant-numeric:tabular-nums}
+.kf em{font-style:normal;font-size:11.5px;color:var(--muted)}
+.kf .pos{color:var(--ok)}.kf .gF{color:var(--ok)}.kf .gM{color:var(--warn)}.kf .gW{color:#c0392b}
+.gainp{font:800 15px var(--display);padding:3px 10px;border-radius:999px;color:#fff;font-variant-numeric:tabular-nums;white-space:nowrap}.gainp.gF{background:#1a8f3c}.gainp.gM{background:#c98a00}.gainp.gW{background:#c0392b}
+.reco{font-size:14px;font-weight:700;border-radius:8px;padding:7px 10px}
+.reco.go{background:var(--ok-bg);color:var(--ok)} .reco.stop{background:var(--gap-bg);color:var(--gap)}
+.acts{display:grid;grid-template-columns:1fr 1fr 48px;gap:8px;align-items:center}
+.acts .btn{text-decoration:none;display:inline-grid;place-items:center;padding:8px 6px}
+.acts > :only-child{grid-column:1/-1}
+.btn.ghost{color:var(--muted);padding:0}
+.acts .sent{align-self:center}
+.strat{font-size:13.5px;font-weight:600;line-height:1.35}
+.more summary{font-size:13px;color:var(--muted);cursor:pointer;min-height:32px;display:flex;align-items:center}
+.more summary::before{content:"▸";margin-right:6px} .more[open] summary::before{content:"▾"}
+.more ul{margin:4px 0 6px;padding-left:18px;font-size:13px;line-height:1.4;color:var(--ink)}
+.more li{margin:2px 0}
+.why{font-size:12.5px;color:var(--muted);line-height:1.35;overflow-wrap:anywhere}
+.buy{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px}
+.buy label{display:grid;gap:4px;font-size:12px;color:var(--muted)}
+.buy input{width:100%;height:42px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);padding:0 10px;font:16px var(--body)}
+.buy .row{grid-column:1/-1;display:flex;gap:8px}
+.buy .row .btn{flex:1}
+@media (prefers-reduced-motion:reduce){.meter i{transition:none}}
+
+/* Onglet Scan */
+.tabs{grid-template-columns:repeat(5,1fr)}
+.tab-more{border:0;background:none;color:var(--muted);height:60px;display:grid;place-items:center;align-content:center;gap:3px;font:600 11.5px var(--body);cursor:pointer;position:relative}
+.tab-more svg{width:22px;height:22px;fill:currentColor;stroke:none}
+.tab-more.actif{color:var(--ink)}
+.tab-more.actif::before{content:"";position:absolute;top:0;left:28%;right:28%;height:3px;border-radius:0 0 3px 3px;background:var(--brick)}
+.plus{display:none;position:absolute;right:var(--side-r);bottom:calc(100% + 8px);flex-direction:column;min-width:190px;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:0 8px 28px rgba(0,0,0,.18);padding:6px}
+.tabs.ouvert .plus{display:flex}
+.plus .tab{height:46px;display:flex;align-items:center;justify-content:flex-start;gap:12px;padding:0 12px;font-size:15px;border-radius:10px}
+.plus .tab[aria-selected="true"]{background:var(--chip)}
+.plus .tab[aria-selected="true"]::before{display:none}
+.tab-scan svg{color:var(--brick-ink);background:var(--brick);border-radius:10px;padding:5px;width:34px;height:34px;margin-top:-6px}
+@media (min-width:760px){
+  .tab-more{display:none}
+  .plus{display:contents}
+  .plus .tab{height:auto;font-size:14px;padding:8px 14px;border-radius:999px;gap:8px}
+  .tab-scan svg{width:18px;height:18px;padding:0;margin:0;background:none;color:currentColor}
+}
+#v-scan{padding-bottom:24px}
+.scan-titre{font-family:var(--display);font-size:20px;margin:6px 0}
+.mode{display:flex;align-items:center;gap:14px;width:100%;text-align:left;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:14px;padding:14px;margin:10px 0;font:inherit;cursor:pointer;border-left-width:6px}
+.mode .ic{font-size:26px}
+.mode b{display:block;font-size:17px}
+.mode small{display:block;color:var(--muted);font-size:13px;margin-top:2px}
+.m-delivery{border-left-color:#2f7de1} .m-inventory{border-left-color:#8a55d6} .m-sale{border-left-color:#1f8a4c}
+.scan-bandeau{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;border-radius:12px;color:#fff;margin:4px 0 10px}
+.scan-bandeau.m-delivery{background:#2f7de1} .scan-bandeau.m-inventory{background:#8a55d6} .scan-bandeau.m-sale{background:#1f8a4c}
+.scan-bandeau b{font-size:16px} .scan-bandeau .btn{padding:4px 12px;font-size:13px}
+.cam{position:relative;aspect-ratio:4/3;background:#000;border-radius:14px;overflow:hidden;margin-bottom:8px}
+.cam video{width:100%;height:100%;object-fit:cover;display:none}
+.cam.on video{display:block}
+.cadre{position:absolute;left:8%;right:8%;top:30%;height:40%;border:3px solid rgba(255,255,255,.9);border-radius:12px;box-shadow:0 0 0 999px rgba(0,0,0,.35);transition:border-color .15s,background .15s}
+.cadre.lu{border-color:#3ddc84;background:rgba(61,220,132,.25)}
+.cadre.inconnu{border-color:#ff6b4a;background:rgba(255,107,74,.2)}
+.cam-aide{position:absolute;left:0;right:0;bottom:8px;margin:0;text-align:center;color:#fff;font-size:13px;text-shadow:0 1px 3px #000}
+.scan-in{flex-wrap:wrap;gap:8px}
+.scan-in .btn{cursor:pointer}
+.scan-m{display:flex;gap:6px;margin-top:8px}
+.scan-m input{flex:1;min-width:0;font:inherit;font-size:16px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)}
+.figbox{margin-top:10px;border:1px solid var(--line);border-radius:12px;padding:8px 12px;background:var(--card)}
+.figbox summary{font-weight:600;cursor:pointer}
+.figbox .sub{margin:6px 0}
+.fig-m{display:flex;gap:6px;align-items:flex-end}
+.fig-m textarea{flex:1;min-width:0;font:inherit;font-size:16px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);resize:vertical}
+.scan-msg{margin:10px 0;padding:8px 10px;border-radius:10px;background:var(--chip)}
+.scan-msg.ok{background:var(--ok-bg);color:var(--ok)} .scan-msg.ko{background:var(--gap-bg);color:var(--gap)}
+.scan-cmd{border:1px solid var(--line);border-radius:12px;padding:10px;margin:8px 0;background:var(--surface)}
+.scan-cmd.ok{border-color:var(--ok);background:var(--ok-bg)} .scan-cmd.part{border-color:var(--warn)}
+.scan-cmd .tlh{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.scan-l{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;font-size:14px}
+.scan-l>span:last-child{white-space:nowrap}
+.scan-l small{display:block;color:var(--muted);font-size:12px}
+.scan-l.hors small{color:var(--gap)}
+.scan-l .btn,.scan-ko .btn{padding:2px 8px;font-size:12px}
+.pm{display:inline-flex;gap:6px}.pm .btn{min-width:36px;min-height:32px;padding:2px 0;font-size:17px;font-weight:600}
+.scan-ko{border:1px solid var(--gap);background:var(--gap-bg);color:var(--gap);border-radius:12px;padding:10px;margin:8px 0}
+.resol{margin-top:8px;padding:8px 10px;border-radius:10px;background:var(--gap-bg)}
+.resol .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.resol-f{margin-top:8px;display:grid;gap:8px}
+.resol-f .two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.resol-f label{display:grid;gap:3px;font-size:12px;color:var(--muted)}
+.resol-f input,.resol-f select{font:inherit;font-size:16px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);min-width:0}
+.scan-photo{display:grid;justify-items:center;gap:6px;text-align:center;padding:22px 16px;border:2px dashed var(--line);border-radius:16px;background:var(--surface);cursor:pointer;margin-bottom:8px;transition:background .15s,border-color .15s}
+.scan-photo b{font-size:18px}
+.scan-photo small{color:var(--muted);font-size:13px;max-width:280px}
+.viseur{width:150px;height:70px;border:3px solid var(--ink);border-radius:10px;display:grid;place-items:center}
+.viseur span{width:110px;height:34px;background:repeating-linear-gradient(90deg,var(--ink) 0 2px,transparent 2px 5px,var(--ink) 5px 6px,transparent 6px 9px)}
+.scan-photo.lu{border-color:#2fbf6b;background:var(--ok-bg)} .scan-photo.lu .viseur{border-color:#2fbf6b}
+.scan-photo.inconnu{border-color:var(--gap);background:var(--gap-bg)} .scan-photo.inconnu .viseur{border-color:var(--gap)}
+.pseg{margin-bottom:12px}
+.pf-resume{margin:0 0 10px}
+.pf-top{border-width:2px;margin-bottom:16px}
+.pf-tete{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;font:700 14px var(--body)}
+.pf-pf{font-size:12px;font-weight:700;border:1px solid currentColor;border-radius:99px;padding:2px 8px}
+.t-rm .pf-tete{background:var(--gap-bg);color:var(--gap)} .pf-top.t-rm{border-color:var(--gap)}
+.t-new .pf-tete{background:var(--warn-bg);color:var(--warn)} .pf-top.t-new{border-color:var(--warn)}
+.t-relist .pf-tete,.t-lbc .pf-tete{background:var(--ok-bg);color:var(--ok)} .pf-top.t-relist,.pf-top.t-lbc{border-color:var(--ok)}
+.t-drop .pf-tete{background:var(--chip);color:var(--ink)}
+.pf-top .adbody{padding-top:12px}
+.pf-titre{font:700 16px/1.3 var(--display);overflow-wrap:anywhere}
+.pf-prix{display:flex;align-items:center;gap:10px;font:700 22px var(--display)} .pf-prix s{opacity:.5;font-size:16px}
+.pf-sansph{display:flex;gap:10px;align-items:center;font-size:14px;color:var(--muted)}
+.pf-passer{justify-self:start}
+.pf-file{display:grid;gap:6px;margin-bottom:12px}
+.pf-ligne{display:flex;gap:10px;align-items:center;text-align:left;width:100%;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--ink);font:13.5px/1.3 var(--body);cursor:pointer}
+.pf-ligne.t-rm{border-left-color:var(--gap)} .pf-ligne.t-new{border-left-color:var(--warn)} .pf-ligne.t-relist,.pf-ligne.t-lbc{border-left-color:var(--ok)}
+.pf-ligne.passe{opacity:.6}
+.pf-ic{flex:none;width:22px;text-align:center} .pf-lt{flex:1;min-width:0} .pf-lt span{display:block;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+dialog.confirmer{border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);padding:16px;max-width:min(340px,calc(100vw - 32px));font:15px/1.4 var(--body)}
+dialog.confirmer::backdrop{background:rgba(0,0,0,.45)} dialog.confirmer p{margin:0 0 14px} dialog.confirmer .row{display:flex;gap:8px;justify-content:flex-end}
+.sv{flex:none;width:48px;height:48px;border-radius:6px;overflow:hidden;background:#fff;border:1px solid var(--line);display:flex;align-items:center;justify-content:center}
+.sv .adth{transform:scale(.75);transform-origin:center} .sv .ref{font:700 10px var(--display);color:#5d6472;word-break:break-all;text-align:center}
+.scan-l>span:nth-child(2){flex:1;min-width:0}
+.scan-l em{display:block;font-style:normal;font-weight:600} .ec-ok{color:var(--ok)} .ec-ko{color:var(--warn)}
+.vente-f{display:grid;gap:10px;margin-top:12px} .vente-f label{display:grid;gap:4px;font-size:13px;color:var(--muted)}
+.vente-f input,.vente-f select,.vex{height:42px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);padding:0 10px;font:16px var(--body);width:100%}
+.vex{height:34px;font-size:13px;margin-top:4px} .vente-f .two{display:grid;grid-template-columns:1fr 1fr;gap:8px} .vpart{color:var(--ink)!important;font-weight:600}
+#libre label[hidden]{display:none!important}
+.hsum .dep{display:flex;gap:10px;margin:0 0 8px}.hsum .dep>span{flex:1;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px 12px;display:flex;flex-direction:column}.hsum .dep small{font-size:12px;opacity:.75}.hsum .dep b{font-size:20px;font-variant-numeric:tabular-nums}
+</style>
+</head><body><header class="app" id="app">
+  <div class="app-row"><h1><span class="stud" aria-hidden="true"></span>LEGO HQ</h1></div>
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <button class="tab" role="tab" data-v="home" aria-selected="true"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Home</button>
+    <button class="tab" role="tab" data-v="todo" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/></svg>To do<span class="badge" id="b-todo"></span></button>
+    <button class="tab tab-scan" role="tab" data-v="scan" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 9v6M10 9v6M13 9v6M17 9v6"/></svg>Scan</button>
+    <button class="tab" role="tab" data-v="deals" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M20 12l-8 8-9-9V3h8z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>Deals<span class="badge" id="b-deals"></span></button>
+    <button class="tab-more" type="button" aria-expanded="false" aria-label="More sections"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>More</button>
+    <div class="plus">
+    <button class="tab" role="tab" data-v="stock" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M3 8l9-5 9 5v8l-9 5-9-5zM3 8l9 5 9-5M12 13v8"/></svg>Stock</button>
+    <button class="tab" role="tab" data-v="ads" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM4 15l4-4 4 4 3-3 5 5M15 9h.01"/></svg>Platforms<span class="badge" id="b-pf"></span></button>
+    <button class="tab" role="tab" data-v="hist" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M4 5h16M4 10h16M4 15h16M4 20h10"/></svg>History</button>
+    </div>
+  </nav>
+  <div class="fresh" id="fresh"></div>
+</header>
+<div class="note" id="note" hidden style="margin:12px var(--side-r) 0 var(--side)"></div>
+
+<section class="view" id="v-home">
+  <div id="home"><p class="empty">Loading…</p></div>
+</section>
+
+<section class="view" id="v-todo" hidden>
+  <button class="btn yes logbtn" id="logbtn" type="button">＋ Log a sale</button>
+  <form class="panel sale" id="sale" hidden>
+    <h2 class="sec" style="margin-top:0">Log a sale</h2>
+    <div class="seg" role="group" aria-label="What"><button type="button" data-k="set" aria-pressed="true">Set</button><button type="button" data-k="fig" aria-pressed="false">Minifig</button><button type="button" data-k="other" aria-pressed="false">Other</button></div>
+    <label class="notfig">What did you sell?<input name="titre" list="sale-items" autocomplete="off" placeholder="Name or set number" required></label>
+    <datalist id="sale-items"></datalist>
+    <div class="figonly" hidden>
+      <p class="sub" id="figexp" style="margin:0"></p>
+      <div id="figrows"></div>
+      <button class="btn" type="button" id="figadd" style="width:100%;margin-top:8px"></button>
+      <p class="sub" id="figtot" style="margin:8px 0 0"></p>
+    </div>
+    <div class="two"><label class="notfig">Price (€)<input name="prix" type="number" inputmode="decimal" step="0.01" min="0" required></label>
+      <label>Date<input name="date" type="date" required></label></div>
+    <div class="seg" role="group" aria-label="Where" id="sale-pf"><button type="button" data-p="LEBONCOIN" aria-pressed="true">Leboncoin</button><button type="button" data-p="EN MAIN PROPRE" aria-pressed="false">In person</button><button type="button" data-p="VINTED" aria-pressed="false">Vinted</button><button type="button" data-p="AUTRE" aria-pressed="false">Other</button></div>
+    <div class="row" style="display:flex;gap:8px"><button class="btn" type="button" id="sale-cancel" style="flex:1">Cancel</button><button class="btn yes" type="submit" style="flex:1">Save sale</button></div>
+  </form>
+  <div class="todo" id="todo"><p class="empty">Loading…</p></div>
+</section>
+
+<section class="view" id="v-stock" hidden>
+  <div class="tools">
+    <div class="prog"><span id="prog"><b>0</b> / 0 checked</span><div class="meter" aria-hidden="true"><i id="meter"></i></div></div>
+    <div class="filters" role="group" aria-label="Filter">
+      <button class="chip" data-f="todo" aria-pressed="true">To check<span id="c-todo"></span></button>
+      <button class="chip" data-f="gap" aria-pressed="false">Mismatch<span id="c-gap"></span></button>
+      <button class="chip" data-f="ok" aria-pressed="false">Matching<span id="c-ok"></span></button>
+      <button class="chip" data-f="hid" aria-pressed="false">Hidden on Vinted<span id="c-hid"></span></button>
+      <button class="chip" data-f="cut" aria-pressed="false">Part-out<span id="c-cut"></span></button>
+      <button class="chip" data-f="all" aria-pressed="false">All<span id="c-all"></span></button>
+    </div>
+    <div class="find">
+      <input id="q" type="search" placeholder="Name or set number" autocomplete="off" enterkeyhint="search">
+      <select id="g" aria-label="Theme"><option value="">All themes</option></select>
+    </div>
+  </div>
+  <div id="list" aria-live="polite"><p class="empty">Loading inventory…</p></div>
+</section>
+
+<section class="view" id="v-deals" hidden>
+  <div class="filters" role="group" aria-label="Verdict" id="dfilters" style="margin-bottom:12px">
+    <button class="chip" data-d="achète" aria-pressed="true">Buy<span id="d-achète"></span></button>
+    <button class="chip" data-d="regarder" aria-pressed="false">Take a look<span id="d-regarder"></span></button>
+    <button class="chip" data-d="non" aria-pressed="false">Skip<span id="d-non"></span></button>
+    <button class="chip" data-d="all" aria-pressed="false">All<span id="d-all"></span></button>
+    <button class="chip" data-d="arch" aria-pressed="false">Archived<span id="d-arch"></span></button>
+  </div>
+  <button class="btn" id="libre-ouvrir" type="button" style="width:100%;margin-bottom:12px">+ Log a purchase without a deal</button>
+  <form class="deal buy" id="libre" hidden style="margin-bottom:12px">
+    <h3 style="grid-column:1/-1;margin:0">Purchase without a deal</h3>
+    <div class="seg" role="group" aria-label="What" id="libre-k" style="grid-column:1/-1"><button type="button" data-lk="set" aria-pressed="true">Set</button><button type="button" data-lk="figlot" aria-pressed="false">Minifig lot</button><button type="button" data-lk="autre" aria-pressed="false">Other</button></div>
+    <label class="lk-set">Set number<input name="set" inputmode="numeric" required placeholder="e.g. 75379"></label>
+    <label class="lk-desc" hidden style="grid-column:1/-1">What is it?<input name="desc" autocomplete="off" placeholder="e.g. 23 Ninjago minifigs"></label>
+    <label>Quantity<input name="q" type="number" inputmode="numeric" min="1" value="1"></label>
+    <label>Shelf price each (€)<input name="p" type="number" inputmode="decimal" step="0.01" min="0" required></label>
+    <label>Loyalty credit (%)<input name="cp" type="number" inputmode="decimal" step="0.1" min="0" max="100" placeholder="0"></label>
+    <label class="lk-set" style="grid-column:1/-1">Sales strategy<select name="strat" style="width:100%;height:42px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);padding:0 10px;font:16px var(--body)"><option value="ENTIER">Whole set</option><option value="LOT/DETAILS">Part-out (figs and build sold apart)</option><option value="">To decide</option></select></label>
+    <label>Insiders points used<input name="pts" type="number" inputmode="numeric" step="1" min="0" placeholder="0"></label>
+    <p class="sub pts-v" style="align-self:end;margin:0 0 12px"></p>
+    <p class="sub netline" style="grid-column:1/-1;margin:0"></p>
+    <div id="libre-plus" style="grid-column:1/-1"></div>
+    <button class="btn" type="button" id="libre-add" style="grid-column:1/-1">＋ Add another set to this purchase</button>
+    <p class="sub" id="libre-tot" style="grid-column:1/-1;margin:0"></p>
+    <label>Store<input name="lieu" placeholder="e.g. Leclerc"></label>
+    <label>Date<input name="date" type="date" required></label>
+    <label>iGraal cashback (%)<input name="cb" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0"></label>
+    <label>Insiders points earned<input name="ptsg" type="number" inputmode="numeric" step="1" min="0" placeholder="0"></label>
+    <label style="grid-column:1/-1">Notes<input name="notes" autocomplete="off" maxlength="300" placeholder="e.g. bought by my partner"></label>
+    <label class="lk-rev" hidden style="grid-column:1/-1;display:flex;flex-direction:row;align-items:center;gap:10px;font-size:14px"><input name="rev" type="checkbox" style="width:22px;height:22px;margin:0;flex:none"> I haven't moved this loyalty credit to the LEGO account yet (show it in Money to move)</label>
+    <label style="grid-column:1/-1">Transaction<select name="panier" id="libre-panier" style="width:100%;height:42px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);padding:0 10px;font:16px var(--body)"></select></label>
+    <p class="sub" style="grid-column:1/-1;margin:0" id="libre-nom">Pick “Same basket as…” if you paid it together with a deal you just logged.</p>
+    <div class="row"><button class="btn" type="button" id="libre-annuler">Cancel</button><button class="btn yes" type="submit">Save purchase</button></div>
+  </form>
+  <div class="deals" id="deals"><p class="empty">Loading…</p></div>
+</section>
+
+<section class="view" id="v-ads" hidden>
+  <div class="seg pseg" role="group" aria-label="Show" id="pseg"><button type="button" data-p="actions" aria-pressed="true">Actions<span id="pf-n"></span></button><button type="button" data-p="listes" aria-pressed="false">My listings</button></div>
+  <div id="p-actions" aria-live="polite"></div>
+  <div id="p-listes" hidden>
+  <div class="tools">
+    <div class="filters" role="group" aria-label="Status" id="afilters">
+      <button class="chip" data-a="masqué" aria-pressed="true">Hidden on Vinted<span id="a-masqué"></span></button>
+      <button class="chip" data-a="en ligne" aria-pressed="false">Live on Vinted<span id="a-en ligne"></span></button>
+      <button class="chip" data-a="baisse" aria-pressed="false">Price drops<span id="a-baisse"></span></button>
+      <button class="chip" data-a="all" aria-pressed="false">All<span id="a-all"></span></button>
+    </div>
+    <div class="find"><input id="aq" type="search" placeholder="Name or set number" autocomplete="off" enterkeyhint="search"><select id="ag" aria-label="Theme"><option value="">All themes</option></select></div>
+    <div class="find"><select id="al" aria-label="Leboncoin"></select></div>
+    <div id="lbcalerte"></div>
+    <p class="sub" style="margin:0">Texts ready to paste on Leboncoin or Vinted. Leboncoin versions: “Neuf & Scellé” for sealed boxes, hand delivery first, 3 hashtags.</p>
+  </div>
+  <div id="ads" aria-live="polite"></div>
+  </div>
+</section>
+<section class="view" id="v-hist" hidden>
+  <div class="hist-top">
+    <div class="seg" role="group" aria-label="Show" id="hseg"><button type="button" data-h="ventes" aria-pressed="true">Sales</button><button type="button" data-h="achats" aria-pressed="false">Purchases</button></div>
+    <input type="search" id="hq" placeholder="Search a set, a store, a platform…" aria-label="Search">
+  </div>
+  <p class="hsum" id="hsum"></p>
+  <div id="hist"></div>
+</section>
+
+<section class="view" id="v-scan" hidden>
+  <div id="scan-choix">
+    <h2 class="scan-titre">What are you scanning?</h2>
+    <p class="sub">Pick one first, so nothing lands in the wrong place.</p>
+    <button class="mode m-delivery" data-mode="delivery"><span class="ic">📦</span><span><b>Delivery</b><small>A parcel I just received</small></span></button>
+    <button class="mode m-inventory" data-mode="inventory"><span class="ic">📋</span><span><b>Inventory</b><small>Counting the stock I already have</small></span></button>
+    <button class="mode m-sale" data-mode="sale"><span class="ic">🏷️</span><span><b>Sale</b><small>Items I'm packing to ship</small></span></button>
+  </div>
+  <div id="scan-cmds" hidden></div>
+  <div id="scan-go" hidden>
+    <div class="scan-bandeau" id="scan-bandeau"></div>
+    <label class="scan-photo" id="scan-photo"><input type="file" id="scan-f" accept="image/*" capture="environment" hidden>
+      <span class="viseur" id="viseur"><span></span></span><b>📷 Scan a barcode</b><small>Opens the camera. Fill the photo with the barcode, then tap Use Photo.</small></label>
+    <div class="cam" id="cam" hidden><video id="cam-v" playsinline muted autoplay></video><div class="cadre" id="cadre"></div><p class="cam-aide" id="cam-aide">Camera off</p></div>
+    <div class="row scan-in" id="cam-ligne" hidden><button class="btn" id="cam-on" type="button">🎥 Live camera</button></div>
+    <form id="scan-m" class="scan-m"><input id="scan-s" inputmode="numeric" placeholder="or type a set number" aria-label="Set number"><button class="btn">Add</button></form>
+    <details class="figbox" id="figbox"><summary>🧍 Minifigures</summary>
+      <p class="sub">Recognize them in <a href="https://henrionantony.github.io/lego-sourcing/" target="_blank" rel="noopener">LEGO Scan</a> (instant), tap <b>Copy list</b>, then paste it here.</p>
+      <form id="fig-m" class="fig-m"><textarea id="fig-t" rows="3" autocapitalize="off" autocorrect="off" placeholder="Paste the list, or type refs like sw0607 ×2" aria-label="Minifigure references"></textarea><button class="btn">Add</button></form></details>
+    <p id="scan-msg" class="scan-msg" hidden></p>
+    <div id="scan-res"></div>
+  </div>
+</section>
+
+
+<!-- LEGO HQ sur GitHub Pages : connexion à Supabase, puis chargement des données
+     privées (jamais dans la page publique) et lancement de l'application. -->
+<style>
+#hqlogin{position:fixed;inset:0;z-index:99;display:flex;align-items:center;justify-content:center;background:var(--bg,#f6f4ef);padding:16px}
+#hqlogin form{display:flex;flex-direction:column;gap:10px;width:100%;max-width:320px}
+#hqlogin h1{margin:0 0 6px;font-size:22px}
+#hqlogin input,#hqlogin button{font:inherit;font-size:16px;padding:12px;border-radius:10px;border:1px solid #bbb}
+#hqlogin button{background:#d01012;color:#fff;border:0;font-weight:600}
+#hqlogin p{margin:0;font-size:14px;min-height:1.2em}
+</style>
+<div id="hqlogin" hidden>
+  <form>
+    <h1>LEGO HQ</h1>
+    <input id="hqcfg" type="url" placeholder="Paste the setup link" hidden>
+    <input id="hqmail" type="email" autocomplete="username" placeholder="E-mail" required>
+    <input id="hqmdp" type="password" autocomplete="current-password" placeholder="Password" required>
+    <button>Sign in</button>
+    <p id="hqmsg"></p>
+  </form>
+</div>
+<script>
+(() => {
+  const L = (k, v) => { try { if (v === undefined) return JSON.parse(localStorage.getItem(k) || "null"); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch (e) { return null; } };
+  // Réglage unique : lien privé « …/hq/#cfg=<base64 de {u, k}> » (adresse du projet + clé publique)
+  const m = location.hash.match(/cfg=([A-Za-z0-9+/=_-]+)/);
+  if (m) { try { L("hq_cfg", JSON.parse(atob(m[1].replace(/-/g, "+").replace(/_/g, "/")))); } catch (e) {} history.replaceState(null, "", location.pathname); }
+  let CFG = L("hq_cfg");
+  let ses = L("hq_ses");
+  const $ = (s) => document.querySelector(s);
+
+  async function auth(type, corps) {
+    const r = await fetch(CFG.u + "/auth/v1/token?grant_type=" + type, { method: "POST", headers: { apikey: CFG.k, "Content-Type": "application/json" }, body: JSON.stringify(corps) });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error_description || j.msg || "Sign-in failed");
+    ses = { a: j.access_token, r: j.refresh_token, exp: Date.now() / 1000 + j.expires_in };
+    L("hq_ses", ses);
+  }
+  async function jeton() {
+    if (!ses) throw new Error("signed out");
+    if (ses.exp - 120 < Date.now() / 1000) {
+      try { await auth("refresh_token", { refresh_token: ses.r }); }
+      catch (e) { ses = null; L("hq_ses", null); connexion(); throw e; }
+    }
+    return ses.a;
+  }
+  async function rest(methode, chemin, corps, prefer) {
+    const h = { apikey: CFG.k, Authorization: "Bearer " + await jeton(), "Content-Type": "application/json" };
+    if (prefer) h.Prefer = prefer;
+    const r = await fetch(CFG.u + "/rest/v1/" + chemin, { method: methode, headers: h, body: corps === undefined ? undefined : JSON.stringify(corps) });
+    if (r.status === 401) { ses = null; L("hq_ses", null); connexion(); }
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const t = await r.text();
+    return t ? JSON.parse(t) : null;
+  }
+
+  // --- Base de l'application : même interface que celle de claude.ai (doc, collection, onSnapshot) ---
+  const cache = new Map();          // chemin -> {maj, data}
+  const ecoutes = new Set();        // {type: "doc"|"col", cle, cb, vu: Map(id -> maj)}
+  async function sonder() {
+    const liste = await rest("GET", "app_docs?select=chemin,maj&chemin=not.like.static/*&chemin=not.like.fichiers/*&limit=20000");
+    const actuel = new Map(liste.map((x) => [x.chemin, x.maj]));
+    const voulus = [...actuel].filter(([c, maj]) => [...ecoutes].some((e) => e.type === "doc" ? e.cle === c : c.startsWith(e.cle + "/")) && cache.get(c)?.maj !== maj).map(([c]) => c);
+    for (let i = 0; i < voulus.length; i += 40) {
+      const lot = voulus.slice(i, i + 40);
+      const docs = await rest("GET", "app_docs?select=chemin,data,maj&chemin=in.(" + lot.map((c) => '"' + c.replace(/"/g, '\\"') + '"').join(",") + ")");
+      for (const d of docs) cache.set(d.chemin, { maj: d.maj, data: d.data });
+    }
+    for (const c of [...cache.keys()]) if (!actuel.has(c)) cache.delete(c);
+    livrer();
+  }
+  // Pas de mise à jour de l'écran pendant une saisie : on attend que le champ soit
+  // quitté et 30 s sans frappe, pour ne jamais effacer ce qui est en cours.
+  let frappe = 0;
+  document.addEventListener("input", (ev) => { if (ev.target.id !== "q" && !ev.target.closest("#hqlogin")) frappe = Date.now(); }, true);
+  document.addEventListener("focusout", () => setTimeout(livrer, 31000), true);
+  function occupe() {
+    const a = document.activeElement;
+    if ((a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.id !== "q" && !a.closest("#hqlogin")) || Date.now() - frappe < 30000) return true;
+    // Formulaire commencé puis laissé ouvert : on garde l'écran tel quel
+    return [...document.querySelectorAll("form input, form textarea")].some((x) => x.offsetParent && x.id !== "q" && x.type !== "hidden"
+      && (x.type === "checkbox" || x.type === "radio" ? x.checked !== x.defaultChecked : x.value !== x.defaultValue));
+  }
+  function livrer() {
+    if (occupe()) return setTimeout(livrer, 5000);
+    for (const e of ecoutes) notifier(e);
+  }
+  function notifier(e) {
+    if (e.type === "doc") {
+      const d = cache.get(e.cle), maj = d?.maj || null;
+      if (e.vu.get("") === maj && e.vu.size) return;
+      e.vu.set("", maj);
+      e.cb({ exists: !!d, data: () => d ? d.data : undefined });
+      return;
+    }
+    const ch = [], p = e.cle + "/";
+    for (const [c, d] of cache) {
+      if (!c.startsWith(p) || c.slice(p.length).includes("/")) continue;
+      const id = c.slice(p.length);
+      if (e.vu.get(id) === d.maj) continue;
+      ch.push({ type: e.vu.has(id) ? "modified" : "added", doc: { id, data: () => d.data } });
+      e.vu.set(id, d.maj);
+    }
+    for (const id of [...e.vu.keys()]) if (!cache.has(p + id)) { ch.push({ type: "removed", doc: { id, data: () => undefined } }); e.vu.delete(id); }
+    if (ch.length || !e.premier) { e.premier = true; e.cb({ docChanges: () => ch }); }
+  }
+  let minuterie = null;
+  function relancer(ms) { clearTimeout(minuterie); minuterie = setTimeout(boucle, ms); }
+  async function boucle() { try { await sonder(); } catch (e) { console.warn(e); } relancer(document.hidden ? 120000 : 20000); }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) relancer(0); });
+  const db = {
+    doc(chemin) {
+      return {
+        async set(data) { await rest("POST", "app_docs", [{ chemin, data }], "resolution=merge-duplicates,return=minimal"); cache.set(chemin, { maj: new Date().toISOString(), data }); relancer(500); },
+        async delete() { await rest("DELETE", "app_docs?chemin=eq." + encodeURIComponent(chemin)); cache.delete(chemin); relancer(500); },
+        onSnapshot(cb, err) { const e = { type: "doc", cle: chemin, cb, vu: new Map() }; ecoutes.add(e); relancer(0); return () => ecoutes.delete(e); },
+      };
+    },
+    collection(nom) {
+      return { onSnapshot(cb, err) { const e = { type: "col", cle: nom, cb, vu: new Map() }; ecoutes.add(e); relancer(0); return () => ecoutes.delete(e); } };
+    },
+  };
+  // Téléchargement d'un fichier : un vrai navigateur sait le faire tout seul
+  const downloads = { async save({ filename, data }) { const a = document.createElement("a"); a.href = URL.createObjectURL(data instanceof Blob ? data : new Blob([data])); a.download = filename; document.body.append(a); a.click(); a.remove(); } };
+  window.claude = { use: async (n) => n === "db" ? db : n === "downloads" ? downloads : null };
+
+  // Images privées (vignettes) : lues avec le jeton, servies en adresses locales
+  const urls = new Map();
+  window.HQIMG = (chemin) => urls.get(chemin) || "";
+  async function images(liste) {
+    await Promise.all(liste.map(async (c) => {
+      try {
+        const r = await fetch(CFG.u + "/storage/v1/object/authenticated/app/" + c, { headers: { apikey: CFG.k, Authorization: "Bearer " + await jeton() } });
+        if (r.ok) urls.set(c, URL.createObjectURL(await r.blob()));
+      } catch (e) {}
+    }));
+  }
+
+  async function lancer() {
+    const [st] = await rest("GET", "app_docs?select=data&chemin=eq.static/page");
+    if (!st) throw new Error("App data not published yet");
+    await images(st.data.__IMAGES__ || []);
+    let code = document.getElementById("hqcode").textContent;
+    for (const [k, v] of Object.entries(st.data)) if (k !== "__IMAGES__") code = code.split(k).join(JSON.stringify(v));
+    const s = document.createElement("script");
+    s.textContent = code;
+    document.body.append(s);
+  }
+  function connexion() {
+    $("#hqlogin").hidden = false;
+    $("#hqcfg").hidden = !!CFG;
+    $("#hqmsg").textContent = "";
+  }
+  $("#hqlogin form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    $("#hqmsg").textContent = "…";
+    if (!CFG) {
+      const m2 = $("#hqcfg").value.match(/cfg=([A-Za-z0-9+/=_-]+)/);
+      try { CFG = JSON.parse(atob(m2[1].replace(/-/g, "+").replace(/_/g, "/"))); L("hq_cfg", CFG); }
+      catch (e) { $("#hqmsg").textContent = "Paste the setup link from the chat first."; return; }
+    }
+    try { await auth("password", { email: $("#hqmail").value.trim(), password: $("#hqmdp").value }); $("#hqmdp").value = ""; document.activeElement?.blur(); $("#hqlogin").hidden = true; await lancer(); }
+    catch (e) { $("#hqmsg").textContent = e.message; }
+  });
+  window.addEventListener("DOMContentLoaded", async () => {
+    if (!CFG || !ses) return connexion();
+    try { await jeton(); await lancer(); } catch (e) { connexion(); }
+  });
+})();
+</script>
+<script type="text/plain" id="hqcode">
+const EAN = __EAN__;
+const BUILD = __BUILD__;  // date de construction de la page : les quantités de ITEMS datent de là  // code-barres (EAN-13, UPC complété d'un 0) -> numéro de set Brickset
+const ITEMS = __ITEMS__;
+const ANNONCES = __ANNONCES__;  // annonces Vinted en ligne ou masquées, texte Vinted
+const PLANCHES = __PLANCHES__;
+const LBC = __LBC__;
+const APUB = __APUB__;
+let EXEMP = __EXEMP__;
+let EXEMP_LE = __EXEMP_LE__;  // date de l'extraction des exemplaires : les ventes d'après sont décomptées ici  // set -> {pp: prix public, c: [[article, coût, date, magasin, reste]]}, le moins cher d'abord  // set en stock -> {prix proposé, estimation, coût, état} (a_publier.py)  // export Leboncoin : {lien: {id Vinted: url Leboncoin}, seules: annonces Leboncoin sans annonce Vinted}  // ids des planches de vignettes
+const SPR = __SPRITES__;   // photo -> [planche, colonne, ligne] dans sprites/s<n>.jpg (16 x 16 vignettes)
+const FIGS = __FIGS__;
+const PLANCHER = __PLANCHER__;      // set -> [[fig_num, nom, qté par set]]
+const decoupes = {};        // id -> true quand le set est découpé
+const counts = {};          // id -> {n, maj}
+const actions = {};         // id de tâche ou de deal -> action envoyée depuis l'application
+let db = null, filtre = "todo", vue = "home", dfiltre = "achète", ETAT = null, ouvert = null;
+const pending = {};
+const $ = (s) => document.querySelector(s);
+const eur = (n) => (+n).toLocaleString("en-GB", { maximumFractionDigits: n >= 1000 ? 0 : 2 }) + " €";
+
+/* ---------- Navigation ---------- */
+function montrer(v){
+  vue = v;
+  document.querySelectorAll(".tab").forEach((t) => t.setAttribute("aria-selected", t.dataset.v === v));
+  document.querySelectorAll(".view").forEach((s) => s.hidden = s.id !== "v-" + v);
+  $(".tab-more").classList.toggle("actif", ["stock", "ads", "hist"].includes(v));
+  if (v !== "scan" && typeof arreterCam === "function") arreterCam();
+  if (v === "scan" && typeof rendreScanVue === "function") rendreScanVue();
+  try { localStorage.setItem("vue", v); } catch (e) {}
+  window.scrollTo(0, 0);
+}
+$(".tabs").addEventListener("click", (e) => {
+  const m = e.target.closest(".tab-more");
+  if (m){ const o = $(".tabs").classList.toggle("ouvert"); m.setAttribute("aria-expanded", o); return; }
+  const t = e.target.closest(".tab"); if (t){ $(".tabs").classList.remove("ouvert"); $(".tab-more").setAttribute("aria-expanded", false); montrer(t.dataset.v); }
+});
+document.addEventListener("click", (e) => { if (!e.target.closest(".tabs")) $(".tabs").classList.remove("ouvert"); });
+function hauteurBarre(){ document.documentElement.style.setProperty("--top", $("#app").offsetHeight + "px"); }
+addEventListener("resize", hauteurBarre);
+
+function depuis(iso){
+  if (!iso) return "";
+  if (iso.length === 10){ const j = Math.round((new Date(new Date().toDateString()) - new Date(iso + "T00:00:00")) / 864e5); return j <= 0 ? "today" : j === 1 ? "yesterday" : j + " days ago"; }
+  const d = new Date(iso), m = (Date.now() - d) / 60000;
+  if (m < 2) return "just now"; if (m < 60) return Math.round(m) + " min ago";
+  if (m < 1440) return Math.round(m / 60) + " h ago";
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
+/* ---------- Home ---------- */
+function stockStats(){
+  let fait = 0, gap = 0;
+  for (const it of ITEMS){ const e = etat(it); if (e !== "todo") fait++; if (e === "gap") gap++; }
+  return { fait, gap, total: ITEMS.length };
+}
+function rendreHome(){
+  if (!ETAT){ $("#home").innerHTML = `<p class="empty">${db ? "Waiting for the first update…" : "Sign in to see your dashboard."}</p>`; return; }
+  const o = ETAT.objectifs, t = ETAT.tresorerie, s = stockStats();
+  const pct = Math.min(100, 100 * o.ca / o.cible_ca);
+  const jours = Math.max(1, (Date.now() - new Date(o.debut)) / 864e5), rythme = o.ca / jours * 365;
+  const autos = ETAT.automatisations.map((a) => `<div class="auto"><span class="dot ${a.etat}"></span><b>${esc(a.nom)}</b><time>${depuis(a.quand)}</time>
+    <div class="sub">${esc(a.detail)}</div></div>`).join("");
+  const nbFaire = taches().length;
+  $("#home").innerHTML = `
+    <h2 class="sec">Today</h2>
+    <div class="kpis">
+      <div class="kpi"><div class="lbl">To do</div><div class="big">${nbFaire}</div><button class="link" data-go="todo">Open list</button></div>
+      <div class="kpi"><div class="lbl">Buy alerts (latest)</div><div class="big">${ETAT.deals.filter((d) => d.verdict === "achète" && !d.achete).length}</div><button class="link" data-go="deals">See deals</button></div>
+      <div class="kpi"><div class="lbl">Inventory checked</div><div class="big">${s.fait}<small> / ${s.total}</small></div><button class="link" data-go="stock">Continue</button></div>
+      <div class="kpi"><div class="lbl">Mismatches</div><div class="big">${s.gap}</div><button class="link" data-go="stock" data-f="gap">Review</button></div>
+    </div>
+    <h2 class="sec">Year 4 goal · since ${new Date(o.debut).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</h2>
+    <div class="panel"><div class="lbl">Revenue</div><div class="big">${eur(o.ca)} <small>/ ${eur(o.cible_ca)}</small></div>
+      <div class="bar"><i style="width:${pct}%"></i></div>
+      <div class="sub">${o.ventes} sales logged this year · ${o.ca ? `pace ≈ ${eur(Math.round(rythme))} a year` : "no sale logged yet"} · net goal ${eur(o.cible_net)}</div>
+      ${o.derniere_vente && (Date.now() - new Date(o.derniere_vente)) > 14 * 864e5 ? `<div class="sub" style="color:var(--gap);margin-top:6px">Last sale logged on ${new Date(o.derniere_vente).toLocaleDateString("en-GB")}: these numbers are behind until sales are logged.</div>` : ""}</div>
+    <h2 class="sec">Cash</h2>
+    <div class="panel">${t ? `<div class="lbl">Cash available</div><div class="big">${eur(t.solde)}</div>
+      <div class="sub">${t.a_rendre > 0 ? `Includes ${eur(t.a_rendre)} to pay back to yourself · ` : ""}20 % kept aside, 10 % for a real opportunity</div>`
+      : `<div class="lbl">Not set up yet</div><div class="sub">Alerts can't check your cash until the starting balance is in the database.</div>`}</div>
+    <h2 class="sec">Automations</h2><div class="panel">${autos}</div>`;
+}
+$("#home").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-go]"); if (!b) return;
+  if (b.dataset.f) choisirFiltre(b.dataset.f);
+  montrer(b.dataset.go);
+});
+
+/* ---------- To do ---------- */
+function taches(){
+  const l = ETAT ? ETAT.a_faire.filter((t) => !(actions[t.id] && actions[t.id].fait)) : [];
+  const s = stockStats();
+  if (s.gap) l.unshift({ id: "inv", type: "inv", titre: `${s.gap} inventory mismatch${s.gap > 1 ? "es" : ""}`, detail: "Your count differs from the database. Open each one and say what happened (sold, lost or extra): the database follows on its own.", go: "gap" });
+  return l;
+}
+const GENRE = { livraison: "Delivery", cashback: "Cashback", ventes: "Sales", annonces: "Listings", reglage: "Setup", transfert: "Money to move", ecart: "To fix", decision: "Decision", inv: "Inventory" };
+function rendreTodo(){
+  const l = taches();
+  $("#b-todo").textContent = l.filter((t) => !t.calme).length || "";
+  l.sort((a, b) => !!a.calme - !!b.calme);
+  if (!ETAT && !l.length){ $("#todo").innerHTML = `<p class="empty">Loading…</p>`; return; }
+  const ventes = Object.entries(actions).filter(([, a]) => a.type === "vente" && !a.fait);
+  const att = ventes.length ? `<article class="task cashback"><div class="kind">Sales logged</div><h3>${ventes.length} sale${ventes.length > 1 ? "s" : ""} waiting to be saved</h3>
+    <ul>${ventes.map(([, a]) => `<li>${esc(a.titre)} · ${eur(a.prix)}</li>`).join("")}</ul><div class="sub">Added to the database within the hour.</div></article>` : "";
+  $("#todo").innerHTML = att + l.map((t) => {
+    const a = actions[t.id];
+    if (t.lignes){
+      const li = t.lignes.filter((x) => !(actions[x.id] && actions[x.id].fait));
+      if (!li.length) return "";
+      const ligne = (x) => { const ax = actions[x.id];
+        return `<li class="tl${x.pret ? " pret" : ""}" data-lid="${esc(x.id)}"><div class="tlh"><span>${x.pret ? `<span class="pill warn">📦 Pick up</span> ` : ""}<b>${esc(x.titre)}</b>${x.sous ? ` <span class="sub">· ${esc(x.sous)}</span>` : ""}</span>
+          ${x.action ? (ax ? `<span class="sent">✓ Noted</span>` : `<button class="btn yes" data-a="lig" ${db ? "" : "disabled"}>${esc(x.action.label)}</button>`) : ""}</div>
+          ${x.etape != null ? `<ol class="steps">${["Ordered", "Shipped", x.arrivee || "Arrived", "Received"].map((n, i) => `<li class="${i < x.etape ? "fait" : i === x.etape ? "ici" : ""}"><i></i><span>${esc(n)}</span></li>`).join("")}</ol>` : ""}
+          ${x.suivi ? `<div class="sub suivi">Tracking ${x.suivi_url ? `<a href="${esc(x.suivi_url)}" target="_blank" rel="noopener">${esc(x.suivi)} ↗</a>` : esc(x.suivi)}</div>` : ""}
+          ${x.url ? `<div class="row"><a class="btn" href="${esc(x.url)}" target="_blank" rel="noopener">Open the email ↗</a></div>` : ""}
+          ${x.choix ? (ax ? `<span class="sent">✓ Noted</span>` : `<div class="row choix">${x.choix.map((c, i) => `<button class="btn ${i < x.choix.length - 1 ? "yes" : ""}" data-a="choix" data-i="${i}" ${db ? "" : "disabled"}>${esc(c.label)}</button>`).join("")}</div>`) : ""}
+          ${x.articles && x.articles.length === 1 ? `<div class="sub">${esc(x.articles[0])}</div>` : x.articles && x.articles.length ? `<details class="more"><summary>${x.articles.length} line${x.articles.length > 1 ? "s" : ""}</summary><ul>${x.articles.map((y) => `<li>${esc(y)}</li>`).join("")}</ul></details>` : ""}</li>`; };
+      const vus = li.slice(0, 3), reste = li.slice(3);
+      return `<article class="task ${t.type}" data-id="${t.id}"><div class="kind">${GENRE[t.type] || ""}</div><h3>${esc(t.titre)}</h3>
+        <div class="sub">${esc(t.detail || "")}</div>${t.type === "livraison" ? `<div class="row"><button class="btn yes" data-scan="1">📷 Scan this delivery</button></div>` : ""}<ul class="tls">${vus.map(ligne).join("")}</ul>
+        ${reste.length ? `<details class="more"><summary>${reste.length} more</summary><ul class="tls">${reste.map(ligne).join("")}</ul></details>` : ""}</article>`;
+    }
+    return `<article class="task ${t.type}${t.calme ? " calme" : ""}" data-id="${t.id}"><div class="kind">${GENRE[t.type] || ""}</div><h3>${esc(t.titre)}</h3>
+      <div class="sub">${esc(t.detail || "")}</div>${t.articles ? `<ul>${t.articles.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+      ${t.cashback ? lignesCashback(t.cashback) : ""}
+      ${t.action ? `<div class="row">${a ? `<span class="sent">✓ Noted. The database is updated within the hour.</span>`
+        : `<button class="btn yes" data-a="act" ${db ? "" : "disabled"}>${esc(t.action.label)}</button>`}</div>` : ""}
+      ${t.go ? `<div class="row"><button class="btn" data-go="${t.go}">Review in Stock</button></div>` : ""}</article>`;
+  }).join("") || (att ? "" : `<p class="empty">Nothing to sort out. Nice.</p>`);
+}
+// Onglet Scan : on choisit d'abord le mode (Delivery, Inventory, Sale), puis la caméra lit
+// les codes-barres dans le cadre. Les scans restent sur ce téléphone jusqu'à leur envoi.
+const MODES = { delivery: "📦 Delivery", inventory: "📋 Inventory", sale: "🏷️ Sale" };
+let SC = { mode: null, cmd: null, scans: {} };
+try { SC = { ...SC, ...JSON.parse(localStorage.getItem("scan") || "{}") }; } catch (e) {}
+function sauverScan(){ try { localStorage.setItem("scan", JSON.stringify(SC)); } catch (e) {} }
+const nbScans = () => Object.values(SC.scans).reduce((a, n) => a + n, 0) + Object.values(SC.figs || {}).reduce((a, x) => a + x.n, 0);
+// Minifigs collées depuis LEGO Scan : SC.figs[code] = {n, nom}. Comptées dans « comptes/f<code> ».
+const figsL = () => Object.entries(SC.figs || {});
+const moinsFig = (c) => `<span class="pm"><button class="btn" data-fmoins="${esc(c)}" aria-label="Remove one ${esc(c)}">−</button><button class="btn" data-fplus="${esc(c)}" aria-label="Add one ${esc(c)}">+</button></span>`;
+const vignetteFig = (c) => `<span class="sv"><span class="ref">🧍</span></span>`;
+function enCours(){
+  const t = ETAT && ETAT.a_faire.find((x) => x.id === "livraisons");
+  return t ? t.lignes.filter((x) => !actions[x.id] && x.sets) : [];
+}
+function nomSet(s){
+  const i = ITEMS.find((x) => x.s === s && x.t); if (i) return i.t;
+  for (const x of enCours()) for (const a of x.articles || []){ const m = a.match(/^\d+ × (.*) · ([\w-]+)$/); if (m && m[2] === s) return m[1]; }
+  const a = ANNONCES.find((x) => x.n === s); return a ? a.t : "";
+}
+// confirm() est bloqué dans claude.ai : petite fenêtre dans la page à la place
+function confirmer(texte, oui = "Yes"){
+  return new Promise((ok) => {
+    const d = document.createElement("dialog"); d.className = "confirmer";
+    d.innerHTML = `<p></p><div class="row"><button class="btn" value="non">Cancel</button><button class="btn yes" value="oui"></button></div>`;
+    d.querySelector("p").textContent = texte; d.querySelector("[value=oui]").textContent = oui;
+    d.addEventListener("click", (e) => { const b = e.target.closest("button"); if (b || e.target === d){ d.close(); d.remove(); ok(b?.value === "oui"); } });
+    document.body.appendChild(d); d.showModal();
+  });
+}
+async function choisirMode(m){
+  if (SC.mode && SC.mode !== m && nbScans() && !await confirmer(`You have ${nbScans()} scan(s) in ${MODES[SC.mode].slice(3)}. Drop them and switch to ${MODES[m].slice(3)}?`, "Drop and switch")) return;
+  if (SC.mode !== m) SC = { mode: m, cmd: null, scans: {}, choix: {}, v: {}, figs: {} };
+  SC.choisi = m === "delivery" ? false : true; sauverScan(); bipPret(); msgScan(""); rendreScanVue();
+}
+function rendreScanVue(){
+  const choix = !SC.mode, cmds = SC.mode === "delivery" && !SC.choisi;
+  $("#scan-choix").hidden = !choix; $("#scan-cmds").hidden = !cmds; $("#scan-go").hidden = choix || cmds;
+  if (cmds){
+    const l = enCours();
+    $("#scan-cmds").innerHTML = `<div class="scan-bandeau m-delivery"><b>📦 Delivery</b><button class="btn" data-changer="1">Change</button></div>
+      <h2 class="scan-titre">Which order is this parcel?</h2>
+      ${l.map((x) => `<button class="mode" data-cmd="${esc(x.id)}"><span class="ic">${x.pret ? "📍" : "🚚"}</span><span><b>${esc(x.titre)}</b><small>${esc(Object.entries(x.sets).map(([s, q]) => q + " × " + s).join(", "))}</small></span></button>`).join("")
+      || `<p class="empty">No order on the way.</p>`}
+      <button class="mode" data-cmd=""><span class="ic">🔀</span><span><b>Not sure</b><small>Match each box to the right order automatically</small></span></button>`;
+    return;
+  }
+  if (choix) return;
+  const cmd = SC.cmd && enCours().find((x) => x.id === SC.cmd);
+  $("#scan-bandeau").className = "scan-bandeau m-" + SC.mode;
+  $("#scan-bandeau").innerHTML = `<b>${MODES[SC.mode]}${cmd ? " · " + esc(cmd.titre) : ""}</b><button class="btn" data-changer="1">Change</button>`;
+  $("#cam-ligne").hidden = !camPossible();
+  $("#figbox").hidden = SC.mode === "delivery";
+  rendreScan();
+}
+$("#v-scan").addEventListener("click", async (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.mode){ choisirMode(b.dataset.mode); return; }
+  if (b.dataset.cmd !== undefined){ SC.cmd = b.dataset.cmd || null; SC.choisi = true; sauverScan(); rendreScanVue(); return; }
+  if (b.dataset.changer){
+    if (nbScans() && !await confirmer(`Drop the ${nbScans()} scan(s) not saved yet?`, "Drop them")) return;
+    arreterCam(); SC = { mode: null, cmd: null, scans: {}, figs: {} }; sauverScan(); msgScan(""); rendreScanVue(); return;
+  }
+  if (b.id === "cam-on"){ flux ? arreterCam() : demarrerCam(); return; }
+});
+function msgScan(t, ok){ const el = $("#scan-msg"); el.textContent = t; el.className = "scan-msg" + (ok === false ? " ko" : ok ? " ok" : ""); el.hidden = !t; }
+function ajouterScan(s){
+  SC.scans[s] = (SC.scans[s] || 0) + 1; sauverScan(); rendreScan();
+  const nom = nomSet(s); msgScan(`✓ ${nom ? nom + " · " : ""}${s}`, true);
+}
+function rendreScan(){
+  const r = SC.mode === "delivery" ? resDelivery() : SC.mode === "inventory" ? resInventaire() : resVente();
+  const nb = nbScans();
+  $("#scan-res").innerHTML = r + (nb ? `<div class="row"><button class="btn" id="scan-vider">Clear ${nb} scan${nb > 1 ? "s" : ""}</button></div>` : "");
+}
+// − / + sur chaque ligne scannée : pas besoin de rescanner chaque exemplaire
+const moins = (s) => `<span class="pm"><button class="btn" data-moins="${esc(s)}" aria-label="Remove one ${esc(s)}">−</button><button class="btn" data-plus="${esc(s)}" aria-label="Add one ${esc(s)}">+</button></span>`;
+function resDelivery(){
+  const reste = { ...SC.scans }, tous = enCours(), choisie = SC.cmd && tous.find((x) => x.id === SC.cmd);
+  const cmds = (choisie ? [choisie] : tous).map((x) => {
+    const l = Object.entries(x.sets).map(([s, q]) => { const v = Math.min(q, reste[s] || 0); reste[s] = (reste[s] || 0) - v; return { s, q, v }; });
+    return { x, l, ok: l.every((y) => y.v >= y.q), un: l.some((y) => y.v > 0) };
+  });
+  const extra = Object.entries(reste).filter(([, n]) => n > 0);
+  return (extra.length ? `<div class="scan-ko"><b>⚠ Not in ${choisie ? "this order" : "any open order"}</b>${extra.map(([s, n]) => `<div class="scan-l">${vignetteSet(s)}<span>${n} × ${esc(nomSet(s))} · ${esc(s)}</span>${moins(s)}</div>`).join("")}<div class="sub">Check the box. If it's from another order, tap Change and pick the right one.</div></div>` : "")
+    + cmds.sort((a, b) => b.un - a.un).map(({ x, l, ok, un }) => `<div class="scan-cmd${ok ? " ok" : un ? " part" : ""}"><div class="tlh"><b>${esc(x.titre)}</b>${ok ? `<button class="btn yes" data-recu="${esc(x.id)}">Mark received</button>` : ""}</div>
+      ${l.map((y) => `<div class="scan-l">${vignetteSet(y.s)}<span>${y.v >= y.q ? "✓" : y.v ? "◐" : "○"} ${esc(nomSet(y.s))} · ${esc(y.s)}</span><span>${y.v} / ${y.q}${y.v ? " " + moins(y.s) : ""}</span></div>`).join("")}</div>`).join("")
+    + (cmds.length ? "" : `<p class="empty">No order on the way.</p>`);
+}
+// Petite photo du set à côté de chaque scan : planche du stock, sinon 1re photo de l'annonce Vinted
+function vignetteSet(s){
+  const p = SPR[s];
+  if (p) return `<span class="sv"><span class="sp" style="background-image:url(${HQIMG("sprites/s" + p[0] + ".jpg")});background-position:${p[1] / 15 * 100}% ${p[2] / 15 * 100}%"></span></span>`;
+  const a = ANNONCES.find((x) => x.n === s && x.th);
+  if (a) return `<span class="sv">${vignetteAnnonce(a)}</span>`;
+  return `<span class="sv"><span class="ref">${esc(s)}</span></span>`;
+}
+const lignesStock = (s) => ITEMS.filter((x) => x.s === s && /^[bv]/.test(x.id));
+// Boîtes en stock d'après la base (achetées − vendues), pas d'après les annonces : une annonce peut couvrir 2 boîtes
+const enBase = (s) => EXEMP[s] ? EXEMP[s].c.reduce((a, x) => a + x[4], 0) : null;
+// Où ranger les comptages : les lignes de Stock, plus « b<set> » pour un set de la base absent de cette liste
+function lignesCompte(s){ const it = lignesStock(s); return EXEMP[s] && !it.some((x) => x.id === "b" + s) ? [...it, { id: "b" + s, q: 0 }] : it; }
+function resInventaire(){
+  const l = Object.entries(SC.scans), fl = figsL();
+  if (!l.length && !fl.length) return `<p class="empty">Scan the boxes on a shelf. Counts are added to the Stock tab when you save.</p>`;
+  return `<div class="scan-cmd">${fl.map(([c, x]) => { const avant = (counts["f" + c] || {}).n || 0;
+      return `<div class="scan-l">${vignetteFig(c)}<span><b>${x.n} ×</b> ${esc(x.nom || "Minifigure")} · ${esc(c)}<small>Counted: <b>${avant} → ${avant + x.n}</b></small></span>${moinsFig(c)}</div>`; }).join("")}${l.map(([s, n]) => { const it = lignesCompte(s), q = enBase(s) ?? it.reduce((a, x) => a + (x.q || 1), 0), c = it.reduce((a, x) => a + ((counts[x.id] || {}).n || 0), 0);
+      const apres = c + n, ecart = apres - q;
+      return `<div class="scan-l${it.length ? "" : " hors"}">${vignetteSet(s)}<span><b>${n} ×</b> ${esc(nomSet(s))} · ${esc(s)}<small>${it.length ? `In database: <b>${q}</b> · Counted: <b>${c} → ${apres}</b>`
+        + `<em class="${ecart ? "ec-ko" : "ec-ok"}">${ecart === 0 ? "✓ matches the database" : ecart > 0 ? `⚠ ${ecart} more than the database` : `${-ecart} still to find`}</em>` : "⚠ Database says 0 in stock (purchase not recorded, or all marked sold). Kept on a side list; your purchases are not changed"}</small></span>${moins(s)}</div>`; }).join("")}</div>
+    <div class="row"><button class="btn yes" id="inv-ok">Add ${nbScans()} to my inventory</button></div>`;
+}
+/* Vente : un colis = une vente, éventuellement en lot. Chaque article scanné est rattaché à un
+   exemplaire acheté, le moins cher d'abord (règle d'le vendeur) ; le prix total est réparti au prix public Lego. */
+function exemplairesLibres(s){
+  const pris = {};
+  for (const a of Object.values(actions)) if (a.type === "vente_lot" && a.le >= EXEMP_LE) for (const l of a.lignes || []) if (l.article_id) pris[l.article_id] = (pris[l.article_id] || 0) + 1;
+  const out = [];
+  for (const [id, cout, d, lieu, reste] of (EXEMP[s]?.c || [])) for (let k = 0; k < reste - (pris[id] || 0); k++) out.push({ id, cout, d, lieu });
+  return out;
+}
+function lignesVente(){
+  SC.choix = SC.choix || {};
+  const L = [];
+  for (const [s, n] of Object.entries(SC.scans)){
+    const libres = exemplairesLibres(s), ch = SC.choix[s] || [];
+    const pris = [];
+    for (let k = 0; k < n; k++){
+      // choix gardé s'il est encore libre, sinon le moins cher restant
+      const reste = libres.filter((x) => !pris.includes(x));
+      const voulu = ch[k] != null ? reste.find((x) => x.id === ch[k]) : null;
+      const e = voulu || reste[0] || null; if (e) pris.push(e);
+      L.push({ s, k, e, libres });
+    }
+  }
+  for (const [c, x] of figsL()) for (let k = 0; k < x.n; k++) L.push({ s: c, k, e: null, libres: [], fig: true, nom: x.nom || c });
+  const connus = L.filter((l) => !l.fig).map((l) => EXEMP[l.s]?.pp || l.e?.cout).filter(Boolean);
+  const moyen = connus.length ? connus.reduce((a, x) => a + x, 0) / connus.length : 1;  // set inconnu : poids moyen
+  const poids = (l) => l.fig ? FIG_POIDS : EXEMP[l.s]?.pp || l.e?.cout || moyen;
+  const somme = L.reduce((a, l) => a + poids(l), 0);
+  const total = +String(SC.v?.total || "").replace(",", ".") || 0;
+  let cumul = 0;
+  L.forEach((l, i) => { l.prix = i === L.length - 1 ? Math.round((total - cumul) * 100) / 100 : Math.round(total * poids(l) / somme * 100) / 100; cumul += l.prix; });
+  return { L, total };
+}
+const FIG_POIDS = 15;  // une minifig pèse comme un set à 15 € de prix public dans la répartition d'un lot
+const dateFr = (d) => d ? d.slice(8, 10) + "/" + d.slice(5, 7) + "/" + d.slice(0, 4) : "";
+function resVente(){
+  if (!nbScans()) return `<p class="empty">Scan every item going in this parcel. One parcel = one sale, even for a bundle.</p>`;
+  const { L, total } = lignesVente(), v = SC.v || {};
+  const auj = new Date().toISOString().slice(0, 10);
+  return `<div class="scan-cmd">${L.map((l) => l.fig ? `<div class="scan-l">${vignetteFig(l.s)}<span><b>${esc(l.nom)}</b> · ${esc(l.s)}
+      <small>Minifigure · linked to its purchase later</small>
+      <small class="vpart" data-i="${L.indexOf(l)}">${total ? "Share of the price: " + eur(l.prix) : ""}</small></span>${l.k === 0 ? moinsFig(l.s) : ""}</div>` : `<div class="scan-l${l.e ? "" : " hors"}">${vignetteSet(l.s)}<span><b>${esc(nomSet(l.s) || l.s)}</b> · ${esc(l.s)}
+      <small>${l.e ? (l.libres.length > 1 ? `<select class="vex" data-s="${esc(l.s)}" data-k="${l.k}" aria-label="Which copy">${l.libres.map((x) => `<option value="${x.id}"${x.id === l.e.id ? " selected" : ""}>Cost ${eur(x.cout)} · ${esc(x.lieu)} ${dateFr(x.d)}</option>`).join("")}</select>`
+        : `Cost ${eur(l.e.cout)} · ${esc(l.e.lieu)} ${dateFr(l.e.d)}`) : "Not in stock in the database: the sale is saved without its purchase"}</small>
+      <small class="vpart" data-i="${L.indexOf(l)}">${total ? "Share of the price: " + eur(l.prix) : ""}</small></span>${l.k === 0 ? moins(l.s) : ""}</div>`).join("")}</div>
+    <form class="vente-f" id="vente-f">
+      <label>${L.length > 1 ? `Total price of the bundle (${L.length} items)` : "Sale price"} (€)<input name="total" type="number" inputmode="decimal" step="0.01" min="0" value="${esc(v.total || "")}" required></label>
+      <div class="two"><label>Platform<select name="pf">${[["VINTED", "Vinted"], ["LEBONCOIN", "Leboncoin"], ["EN MAIN PROPRE", "In person"], ["EBAY", "eBay"], ["AUTRE", "Other"]].map(([k, t]) => `<option value="${k}"${(v.pf || "VINTED") === k ? " selected" : ""}>${t}</option>`).join("")}</select></label>
+      <label>Date<input name="date" type="date" value="${esc(v.date || auj)}" max="${auj}" required></label></div>
+      <div class="sub">${L.length > 1 ? "The total is split by LEGO retail price. " : ""}When you have several copies, the cheapest one is used first; change it in the list if needed.</div>
+      <button class="btn yes" id="vente-ok" ${db ? "" : "disabled"}>Save this sale</button></form>`;
+}
+async function envoyerAction(id, act){
+  actions[id] = act;
+  try { await db.doc("actions/" + id).set({ ...act, le: new Date().toISOString(), fait: false }); return true; }
+  catch (e) { delete actions[id]; return false; }
+}
+$("#scan-res").addEventListener("click", async (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.id === "scan-vider"){ if (!await confirmer(`Clear ${nbScans() > 1 ? "all " + nbScans() + " scans" : "this scan"}?`, "Clear")) return; SC.scans = {}; SC.figs = {}; sauverScan(); rendreScan(); msgScan(""); return; }
+  if (b.dataset.fmoins){ const c = b.dataset.fmoins, x = SC.figs[c]; if (x && --x.n <= 0) delete SC.figs[c]; sauverScan(); rendreScan(); return; }
+  if (b.dataset.fplus){ const x = SC.figs[b.dataset.fplus]; if (x) x.n++; sauverScan(); rendreScan(); return; }
+  if (b.dataset.plus){ const s = b.dataset.plus; SC.scans[s] = (SC.scans[s] || 0) + 1; sauverScan(); rendreScan(); return; }
+  if (b.dataset.moins){ const s = b.dataset.moins; SC.scans[s] = (SC.scans[s] || 1) - 1; if (SC.scans[s] <= 0) delete SC.scans[s]; sauverScan(); rendreScan(); return; }
+  if (!db){ msgScan("Not connected. Reload the page and try again.", false); return; }
+  if (b.dataset.recu){
+    const x = enCours().find((y) => y.id === b.dataset.recu); if (!x) return;
+    const { label, ...act } = x.action;
+    if (!await envoyerAction(x.id, { ...act, tache: x.id })){ msgScan("This was not saved. Check your connection and try again.", false); return; }
+    for (const [s, q] of Object.entries(x.sets)){ SC.scans[s] = (SC.scans[s] || 0) - q; if (SC.scans[s] <= 0) delete SC.scans[s]; }
+    if (SC.cmd === x.id) SC.cmd = null;
+    sauverScan(); rendreScanVue(); rendreTodo(); msgScan(`✓ ${x.titre} marked received`, true); return;
+  }
+  if (b.id === "inv-ok"){
+    b.disabled = true; let ko = 0; const trouves = {}; const nbTot = nbScans();
+    for (const [s, n] of Object.entries(SC.scans)){
+      const it = lignesCompte(s);
+      if (!it.length){ trouves[s] = n; continue; }
+      // on remplit d'abord les lignes pas encore complètes, le surplus va sur la dernière
+      let r = n; const maj = new Date().toISOString();
+      for (let k = 0; k < it.length && r > 0; k++){
+        const x = it[k], c = (counts[x.id] || {}).n || 0, place = k === it.length - 1 ? r : Math.max(0, (x.q || 1) - c), v = Math.min(r, place);
+        if (!v) continue; r -= v;
+        try { await db.doc("comptes/" + x.id).set({ n: c + v, maj }); counts[x.id] = { n: c + v, maj }; } catch (err) { ko++; }
+      }
+    }
+    for (const [c, x] of figsL()){
+      const id = "f" + c, avant = (counts[id] || {}).n || 0, maj = new Date().toISOString();
+      try { await db.doc("comptes/" + id).set({ n: avant + x.n, maj }); counts[id] = { n: avant + x.n, maj }; delete SC.figs[c]; } catch (err) { ko++; }
+    }
+    if (Object.keys(trouves).length && !await envoyerAction("trouve-" + Date.now(), { type: "stock_trouve", sets: trouves })) ko++;
+    if (ko){ b.disabled = false; msgScan("Part of it was not saved. Check your connection and tap again.", false); return; }
+    const nb = nbTot; SC.scans = {}; SC.figs = {}; sauverScan(); rendreScan(); rendre();
+    msgScan(`✓ ${nb} item${nb > 1 ? "s" : ""} added to your inventory`, true); return;
+  }
+});
+$("#scan-res").addEventListener("input", (e) => {
+  const f = e.target.closest("#vente-f"); if (!f) return;
+  SC.v = { total: f.total.value, pf: f.pf.value, date: f.date.value }; sauverScan();
+  const { L } = lignesVente();
+  document.querySelectorAll(".vpart").forEach((el) => { const l = L[+el.dataset.i]; el.textContent = l && SC.v.total ? "Share of the price: " + eur(l.prix) : ""; });
+});
+$("#scan-res").addEventListener("change", (e) => {
+  const x = e.target.closest(".vex"); if (!x) return;
+  SC.choix = SC.choix || {}; const c = SC.choix[x.dataset.s] = SC.choix[x.dataset.s] || [];
+  c[+x.dataset.k] = +x.value; sauverScan(); rendreScan();
+});
+$("#scan-res").addEventListener("submit", async (e) => {
+  e.preventDefault(); if (e.target.id !== "vente-f" || !db) return;
+  const { L, total } = lignesVente(); const f = e.target, b = f.querySelector("#vente-ok");
+  if (!(total > 0)){ msgScan("Type the price you got.", false); return; }
+  b.disabled = true;
+  const act = { type: "vente_lot", total, plateforme: f.pf.value, date: f.date.value,
+    lignes: L.map((l) => l.fig ? { article_id: null, set: null, fig: l.s, titre: l.nom, prix: l.prix }
+      : { article_id: l.e ? l.e.id : null, set: l.s, titre: nomSet(l.s) || l.s, prix: l.prix }) };
+  if (!await envoyerAction("lot-" + Date.now().toString(36), act)){ b.disabled = false; msgScan("This was not saved. Check your connection and try again.", false); return; }
+  const nb = L.length; SC.scans = {}; SC.choix = {}; SC.v = {}; SC.figs = {}; sauverScan(); rendreScan();
+  msgScan(`✓ Sale saved: ${nb} item${nb > 1 ? "s" : ""}, ${eur(total)}. Stock updated.`, true);
+});
+// Liste copiée dans LEGO Scan : une ligne « code · nom » par figurine, ou des codes séparés
+$("#fig-m").addEventListener("submit", (e) => {
+  e.preventDefault(); SC.figs = SC.figs || {};
+  const t = $("#fig-t").value, lus = [];
+  for (const ligne of t.split(/\n|,|;/)){
+    // « njo0872 ×3 · Nom » : la quantité est facultative
+    const m = ligne.trim().match(/^([a-z]{2,5}\d{2,5}[a-z]?)\b\s*(?:[×x]\s*(\d{1,3})\b)?\s*(?:·\s*(.*))?$/i);
+    if (!m) continue;
+    const c = m[1].toLowerCase(), x = SC.figs[c] = SC.figs[c] || { n: 0, nom: "" }, q = +m[2] || 1;
+    x.n += q; if (m[3]) x.nom = m[3].trim(); for (let k = 0; k < q; k++) lus.push(c);
+  }
+  if (!lus.length){ msgScan("No minifigure reference found. They look like sw0607 or njo0938.", false); return; }
+  $("#fig-t").value = ""; sauverScan(); rendreScan();
+  msgScan(`✓ ${lus.length} minifigure${lus.length > 1 ? "s" : ""} added`, true);
+});
+$("#scan-m").addEventListener("submit", (e) => {
+  e.preventDefault(); const s = $("#scan-s").value.trim().split("-")[0];
+  if (!/^\d{3,7}$/.test(s)){ msgScan("Type a set number, for example 75379.", false); return; }
+  $("#scan-s").value = ""; ajouterScan(s);
+  if (codeInconnu && db){
+    const c = codeInconnu; codeInconnu = null; EANAPPRIS[c] = s;
+    db.doc("ean/" + c).set({ set: s, le: new Date().toISOString() }).then(() => msgScan(`✓ ${nomSet(s) ? nomSet(s) + " · " : ""}${s} · barcode saved, it will scan next time`, true)).catch(() => {});
+  }
+});
+// Caméra en direct : on ne lit que ce qui est dans le cadre. Le cadre passe au vert quand un
+// code est lu. Le même code n'est recompté qu'après être sorti du cadre.
+let flux = null, boucle = null, occupe = false, dernier = { code: null, t: 0 }, audio = null;
+// claude.ai ne laisse pas toujours une page utiliser la caméra en direct : on retient le refus
+// et on garde alors le scan par photo, qui ouvre l'appareil photo du téléphone.
+let camBloquee = false; try { camBloquee = localStorage.getItem("cam-ko") === "1"; } catch (e) {}
+const camPossible = () => !camBloquee && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+function bipPret(){ try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); audio.resume(); } catch (e) {} }
+function bip(f){ try { const o = audio.createOscillator(), g = audio.createGain(); o.frequency.value = f; g.gain.value = .15; o.connect(g); g.connect(audio.destination); o.start(); o.stop(audio.currentTime + .09); } catch (e) {} }
+function cadre(c){ const v = $("#scan-photo"); v.classList.remove("lu", "inconnu"); void v.offsetWidth; if (c){ v.classList.add(c); setTimeout(() => v.classList.remove(c), 1200); }
+  const el = $("#cadre"); el.classList.remove("lu", "inconnu"); void el.offsetWidth; if (c){ el.classList.add(c); setTimeout(() => el.classList.remove(c), 900); } }
+async function demarrerCam(){
+  if (flux || !SC.mode || !SC.choisi) return;
+  const aide = $("#cam-aide");
+  if (!camPossible()) return;
+  aide.textContent = "Starting camera…"; $("#cam").hidden = false;
+  try { flux = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false }); }
+  catch (e) { flux = null; camBloquee = true; try { localStorage.setItem("cam-ko", "1"); } catch (x) {} $("#cam").hidden = true; $("#cam-ligne").hidden = true; return; }
+  const v = $("#cam-v"); v.srcObject = flux; try { await v.play(); } catch (e) {}
+  $("#cam").classList.add("on"); $("#cam-on").textContent = "■ Stop camera"; aide.textContent = "Put the barcode inside the frame";
+  lecteur().catch(() => { aide.textContent = "The barcode reader didn't load. Check your connection."; });
+  boucle = setInterval(lireCadre, 220);
+}
+function arreterCam(){
+  clearInterval(boucle); boucle = null;
+  if (flux) flux.getTracks().forEach((t) => t.stop()); flux = null;
+  const c = $("#cam"); if (c){ c.classList.remove("on"); c.hidden = true; $("#cam-on").textContent = "🎥 Live camera"; $("#cam-aide").textContent = "Camera off"; }
+}
+document.addEventListener("visibilitychange", () => { if (document.hidden) arreterCam(); });
+async function lireCadre(){
+  const v = $("#cam-v"); if (occupe || !flux || !window.ZXing || !lecteurZX || v.readyState < 2) return;
+  occupe = true;
+  try {
+    const boite = $("#cam").getBoundingClientRect(), r = $("#cadre").getBoundingClientRect();
+    const k = Math.max(boite.width / v.videoWidth, boite.height / v.videoHeight);
+    const ox = (boite.width - v.videoWidth * k) / 2, oy = (boite.height - v.videoHeight * k) / 2;
+    const sx = (r.left - boite.left - ox) / k, sy = (r.top - boite.top - oy) / k, sw = r.width / k, sh = r.height / k;
+    const e = Math.min(1, 1000 / sw), c = document.createElement("canvas"); c.width = Math.round(sw * e); c.height = Math.round(sh * e);
+    c.getContext("2d").drawImage(v, sx, sy, sw, sh, 0, 0, c.width, c.height);
+    let code = null;
+    try { code = lecteurZX.decodeWithState(new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(new ZXing.HTMLCanvasElementLuminanceSource(c)))).getText(); } catch (err) {}
+    const t = Date.now();
+    if (code){
+      if (code === dernier.code && t - dernier.t < 2500){ dernier.t = t; return; }
+      dernier = { code, t }; codeLu(code);
+    }
+  } finally { occupe = false; }
+}
+// Codes-barres appris dans l'app (boîtes européennes absentes de Brickset), db "ean/<code>" {set}
+const EANAPPRIS = {};
+let codeInconnu = null;
+function codeLu(code){
+  const c13 = code.padStart(13, "0"), s = EANAPPRIS[c13] || EAN[c13];
+  if (!s){ cadre("inconnu"); bip(220); codeInconnu = c13;
+    msgScan(`Barcode ${code} is not in my list yet. Type the set number below: the app will remember this barcode for next time.`, false); return; }
+  codeInconnu = null;
+  cadre("lu"); bip(1320); try { navigator.vibrate && navigator.vibrate(60); } catch (e) {}
+  ajouterScan(s.split("-")[0]);
+}
+let lecteurZX = null;
+async function lecteur(){
+  if (lecteurZX) return lecteurZX;
+  if (!window.ZXing) await new Promise((ok, ko) => { const s = document.createElement("script"); s.src = "https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"; s.onload = ok; s.onerror = ko; document.head.appendChild(s); });
+  const h = new Map();
+  h.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.EAN_8]);
+  h.set(ZXing.DecodeHintType.TRY_HARDER, true);
+  lecteurZX = new ZXing.MultiFormatReader(); lecteurZX.setHints(h);
+  return lecteurZX;
+}
+async function lireCode(file){
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = url; });
+    const r = await lecteur();
+    for (const w of [1400, 2200, 900]){
+      const k = Math.min(1, w / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement("canvas"); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      // rotateCounterClockwise() fait tourner la source elle-même : d'abord à plat, ensuite tournée
+      for (const tourner of [false, true]){
+        let src = new ZXing.HTMLCanvasElementLuminanceSource(c);
+        if (tourner) src = src.rotateCounterClockwise();
+        try { return r.decodeWithState(new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(src))).getText(); } catch (e) {}
+      }
+      if (k === 1) break;
+    }
+    return null;
+  } finally { URL.revokeObjectURL(url); }
+}
+$("#scan-f").addEventListener("change", async (e) => {
+  const f = e.target.files && e.target.files[0]; e.target.value = ""; if (!f) return;
+  msgScan("Reading the barcode…"); bipPret();
+  let code = null;
+  try { code = await lireCode(f); } catch (err) { msgScan("The barcode reader didn't load. Check your connection, or type the set number.", false); return; }
+  if (!code){ msgScan("No barcode found. Get closer, keep it flat and sharp, or type the set number.", false); return; }
+  codeLu(code);
+});
+
+// Une ligne par cashback : « Confirmed » quand iGraal l'affiche en attente, puis « Paid ».
+// Les cashbacks en attente sont repliés, ils peuvent attendre un an.
+function ligneCb(c){
+  const id = (c.statut === "à confirmer" ? "cbc-" : "cbp-") + c.achat_id, a = actions[id];
+  const etat = c.statut === "à confirmer" ? `<span class="pill warn">To confirm</span>` : `<span class="pill">Pending${c.mois ? " · " + c.mois + " mo" : ""}</span>`;
+  return `<li class="cb"><span>${esc(c.lieu)} · ${esc(c.date)} · <b>${eur(c.montant)}</b> ${etat}</span>
+    ${a ? `<span class="sent">✓ Noted</span>` : `<button class="btn ${c.statut === "à confirmer" ? "yes" : ""}" data-cb="${id}" ${db ? "" : "disabled"}>${c.statut === "à confirmer" ? "Confirmed" : "Paid"}</button>`}</li>`;
+}
+function lignesCashback(l){
+  const conf = l.filter((c) => c.statut === "à confirmer"), att = l.filter((c) => c.statut !== "à confirmer");
+  return (conf.length ? `<ul class="cbs">${conf.map(ligneCb).join("")}</ul>` : "")
+    + (att.length ? `<details class="more" ${conf.length ? "" : "open"}><summary>${att.length} pending · ${eur(att.reduce((x, c) => x + c.montant, 0))}</summary><ul class="cbs">${att.map(ligneCb).join("")}</ul></details>` : "");
+}
+$("#todo").addEventListener("click", async (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.scan){ montrer("scan"); choisirMode("delivery"); return; }
+  if (b.dataset.cb){
+    const id = b.dataset.cb, act = { type: id.startsWith("cbc-") ? "cashback_confirme" : "cashback_recu", achat_id: +id.slice(4) };
+    actions[id] = act; rendreTodo();
+    try { await db.doc("actions/" + id).set({ ...act, le: new Date().toISOString(), fait: false }); note(""); }
+    catch (err) { delete actions[id]; rendreTodo(); note("This was not saved. Check your connection and try again."); }
+    return;
+  }
+  if (b.dataset.a === "choix"){
+    const lid = b.closest(".tl").dataset.lid, t = ETAT.a_faire.find((x) => x.id === b.closest(".task").dataset.id);
+    const x = t && t.lignes.find((y) => y.id === lid), c = x && x.choix[+b.dataset.i]; if (!c || !db) return;
+    actions[lid] = { ...c.action, tache: lid }; rendreTodo();
+    try { await db.doc("actions/" + lid).set({ ...c.action, tache: lid, le: new Date().toISOString(), fait: false }); note(""); }
+    catch (err) { delete actions[lid]; rendreTodo(); note("This was not saved. Check your connection and try again."); }
+    return;
+  }
+  if (b.dataset.a === "lig"){
+    const lid = b.closest(".tl").dataset.lid, t = ETAT.a_faire.find((x) => x.id === b.closest(".task").dataset.id);
+    const x = t && t.lignes.find((y) => y.id === lid); if (!x || !db) return;
+    const { label, ...act } = x.action;
+    actions[lid] = { ...act, tache: lid }; rendreTodo(); if (typeof rendreHist === "function") rendreHist();
+    try { await db.doc("actions/" + lid).set({ ...act, tache: lid, le: new Date().toISOString(), fait: false }); note(""); }
+    catch (err) { delete actions[lid]; rendreTodo(); note("This was not saved. Check your connection and try again."); }
+    return;
+  }
+  const id = b.closest(".task").dataset.id;
+  if (b.dataset.go){ choisirFiltre(b.dataset.go); montrer("stock"); return; }
+  const t = ETAT.a_faire.find((x) => x.id === id); if (!t || !db) return;
+  const { label, ...act } = t.action;
+  actions[id] = { ...act, tache: id }; rendreTodo();
+  try { await db.doc("actions/" + id).set({ ...act, tache: id, le: new Date().toISOString(), fait: false }); note(""); }
+  catch (err) { delete actions[id]; rendreTodo(); note("This was not saved. Check your connection and try again."); }
+});
+
+/* ---------- Log a sale ---------- */
+const vente = { k: "set", p: "LEBONCOIN" };
+const ARTS = ITEMS.filter((it) => !it.h);  // sets en stock ou masqués, sans les pièces détachées
+function etiquette(it){ return `${it.t}${it.s ? " · " + it.s : ""}`; }
+$("#sale-items").innerHTML = ARTS.map((it) => `<option value="${esc(etiquette(it))}">`).join("");
+function seg(group, attr, val){ group.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset[attr] === val)); }
+const ROWS = {
+  fig: { mot: "minifig", lab: "Minifig", ph: "Name or ref, e.g. sw1404", list: "",
+    exp: "One line per minifig. Type the <b>ID Achat</b> (inventory line ID) or, if you only know it, the <b>Lot ID</b> (purchase ID)." },
+  set: { mot: "set", lab: "Set", ph: "Name or set number", list: ' list="sale-items"',
+    exp: "One line per set. For a catch-up sale, type the <b>ID Achat</b> or the <b>Lot ID</b> from your Excel. Left empty, I take the cheapest copy still in stock." },
+};
+function figRow(){
+  const R = ROWS[vente.k] || ROWS.fig, d = document.createElement("div"); d.className = "figrow";
+  d.innerHTML = `<label class="fr-n">${R.lab}<input name="fn" autocomplete="off"${R.list} placeholder="${R.ph}"></label>
+    <label>ID Achat<input name="fa" inputmode="numeric" placeholder="e.g. 160"></label>
+    <label>Lot ID<input name="fl" inputmode="numeric" placeholder="e.g. 92"></label>
+    <label>Price (€)<input name="fp" type="number" inputmode="decimal" step="0.01" min="0"></label>
+    <button class="btn fr-x" type="button" aria-label="Remove this minifig">✕</button>
+    <p class="sub fr-o"></p>`;
+  $("#figrows").appendChild(d); figMaj(); return d;
+}
+function figMaj(){
+  const O = (ETAT && ETAT.origines) || [], rows = [...document.querySelectorAll("#figrows .figrow")];
+  let tot = 0;
+  rows.forEach((r) => {
+    const a = r.querySelector("[name=fa]").value.replace(/\D/g, ""), o = a && O.find((x) => String(x.id) === a);
+    r.querySelector(".fr-o").textContent = o ? `ID Achat ${a}: ${o.t} · ${o.d || ""}${o.l ? " · " + o.l.toLowerCase() : ""}` : "";
+    tot += +r.querySelector("[name=fp]").value || 0;
+  });
+  $("#figtot").textContent = rows.length > 1 ? `${rows.length} ${(ROWS[vente.k] || ROWS.fig).mot}s · ${tot.toFixed(2).replace(".", ",")} € in total` : "";
+  rows.forEach((r) => { r.querySelector(".fr-x").hidden = rows.length < 2; });
+}
+function figMode(on){
+  const R = ROWS[vente.k] || ROWS.fig;
+  $("#figexp").innerHTML = R.exp; $("#figadd").textContent = "＋ Add a " + R.mot;
+  $("#figrows").innerHTML = "";
+  $("#sale .figonly").hidden = !on;
+  document.querySelectorAll("#sale .notfig").forEach((l) => { l.hidden = on; l.querySelector("input").required = !on; });
+  if (on && !document.querySelector("#figrows .figrow")) figRow().querySelector("input").focus();
+}
+$("#figadd").addEventListener("click", () => figRow().querySelector("input").focus());
+$("#figrows").addEventListener("input", figMaj);
+$("#figrows").addEventListener("change", (e) => {  // set choisi dans la liste : son prix proposé
+  if (vente.k !== "set" || e.target.name !== "fn") return;
+  const it = ARTS.find((x) => etiquette(x) === e.target.value.trim()), p = e.target.closest(".figrow").querySelector("[name=fp]");
+  if (it && it.p && !p.value){ p.value = it.p; figMaj(); }
+});
+$("#figrows").addEventListener("click", (e) => { const x = e.target.closest(".fr-x"); if (x){ x.closest(".figrow").remove(); figMaj(); } });
+function ouvrirVente(){
+  const f = $("#sale"); f.reset(); f.hidden = false; $("#logbtn").hidden = true;
+  f.date.value = new Date().toISOString().slice(0, 10);
+  vente.k = "set"; vente.p = "LEBONCOIN"; seg(f.querySelector(".seg"), "k", "set"); seg($("#sale-pf"), "p", "LEBONCOIN");
+  figMode(true);
+}
+function fermerVente(){ $("#sale").hidden = true; $("#logbtn").hidden = false; }
+$("#logbtn").addEventListener("click", ouvrirVente);
+$("#sale-cancel").addEventListener("click", fermerVente);
+$("#sale").addEventListener("click", (e) => {
+  const b = e.target.closest(".seg button"); if (!b) return;
+  if (b.dataset.k){ vente.k = b.dataset.k; seg(b.parentNode, "k", vente.k); figMode(vente.k !== "other"); }
+  if (b.dataset.p){ vente.p = b.dataset.p; seg(b.parentNode, "p", vente.p); }
+});
+$("#sale [name=titre]").addEventListener("change", () => {
+  const it = ARTS.find((x) => etiquette(x) === $("#sale [name=titre]").value);
+  if (it && it.p && !$("#sale [name=prix]").value) $("#sale [name=prix]").value = it.p;
+});
+$("#sale").addEventListener("submit", async (e) => {
+  e.preventDefault(); if (!db) return;
+  const f = e.target, titre = f.titre.value.trim(), it = ARTS.find((x) => etiquette(x) === titre);
+  const id = "vente-" + Date.now().toString(36);
+  if (vente.k !== "other"){
+    const fig = vente.k === "fig", mot = ROWS[vente.k].mot;
+    const lignes = [...document.querySelectorAll("#figrows .figrow")].map((r) => {
+      const n = r.querySelector("[name=fn]").value.trim(), it = fig ? null : ARTS.find((x) => etiquette(x) === n);
+      return { titre: it ? it.t : n, fig: fig ? (n.match(/\b([a-z]{2,4}\d{3,4}[a-z]?)\b/i) || [])[1] || null : null,
+        set: fig ? null : it ? it.s : ((n.match(/\b(\d{4,7})\b/) || [])[1] || null), item: it ? it.id : null,
+        article_id: r.querySelector("[name=fa]").value.replace(/\D/g, "") || null,
+        achat_id: r.querySelector("[name=fl]").value.replace(/\D/g, "") || null, prix: +r.querySelector("[name=fp]").value || 0 };
+    }).filter((l) => l.titre || l.prix);
+    if (!lignes.length){ note(`Add at least one ${mot}.`); return; }
+    if (lignes.some((l) => !l.titre)){ note(`Give each ${mot} a name or ${fig ? "reference" : "set number"}.`); return; }
+    if (lignes.some((l) => !(l.prix > 0))){ note(`Give each ${mot} its price.`); return; }
+    const total = Math.round(lignes.reduce((t, l) => t + l.prix, 0) * 100) / 100;
+    const act = { type: "vente_lot", genre: vente.k, lignes, total, plateforme: vente.p, date: f.date.value, le: new Date().toISOString(), fait: false };
+    actions[id] = act; fermerVente(); rendreTodo();
+    try { await db.doc("actions/" + id).set(act); note(""); }
+    catch (err) { delete actions[id]; rendreTodo(); note("This sale was not saved. Check your connection and try again."); }
+    return;
+  }
+  const act = { type: "vente", titre: it ? it.t : titre, item: it ? it.id : null, set: it ? it.s : ((titre.match(/\b(\d{4,7})\b/) || [])[1] || null),
+    fig: vente.k === "fig" ? (titre.match(/\b([a-z]{2,4}\d{3,4}[a-z]?)\b/i) || [])[1] || null : null,
+    origine: null, genre: vente.k,
+    prix: +f.prix.value, plateforme: vente.p, date: f.date.value, le: new Date().toISOString(), fait: false };
+  actions[id] = act; fermerVente(); rendreTodo();
+  try { await db.doc("actions/" + id).set(act); note(""); }
+  catch (err) { delete actions[id]; rendreTodo(); note("This sale was not saved. Check your connection and try again."); }
+});
+
+/* ---------- Deals ---------- */
+function verdictCle(v){ return v === "achète" ? "achète" : v === "à regarder" ? "regarder" : "non"; }
+const archives = {};        // id de deal -> date d'archivage
+const ARCHIVE_JOURS = 30;
+const MOIS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const moisAn = (iso) => { const [y, m] = iso.split("-"); return MOIS[+m - 1] + " " + y; };
+function badgeRetrait(r){
+  if (!r) return "";
+  if (r.etat === "retiré") return `<span class="ret old">Retired</span>`;
+  if (r.etat === "bientôt") return `<span class="ret soon" title="${esc(r.sur || "")}">🔚 Retiring ${moisAn(r.date)}</span>`;
+  return `<span class="ret later">In catalogue until ${moisAn(r.date)}</span>`;
+}
+function rendreDeals(){
+  if (!ETAT){ $("#deals").innerHTML = `<p class="empty">Loading…</p>`; return; }
+  const vivants = ETAT.deals.filter((d) => !archives[d.id]);
+  const k = { "achète": 0, regarder: 0, non: 0, all: vivants.length, arch: ETAT.deals.length - vivants.length };
+  for (const d of vivants) k[verdictCle(d.verdict)]++;
+  for (const f in k) $("#d-" + f).textContent = k[f];
+  $("#b-deals").textContent = vivants.filter((d) => d.verdict === "achète" && !d.achete && !actions["deal-" + d.id] && (Date.now() - new Date(d.vu_le)) < 864e5).length || "";
+  const l = (dfiltre === "arch" ? ETAT.deals.filter((d) => archives[d.id]) : vivants.filter((d) => dfiltre === "all" || verdictCle(d.verdict) === dfiltre))
+    .sort((a, b) => (b.score ?? -1) - (a.score ?? -1) || new Date(b.vu_le) - new Date(a.vu_le));
+  const SG = ETAT.seuils_gain || { fort: 15, moyen: 5 };
+  const tete = dfiltre === "arch" ? `<p class="sub" style="grid-column:1/-1;margin:0">Archived deals are cleared after ${ARCHIVE_JOURS} days.</p>`
+    : `<p class="sub" style="grid-column:1/-1;margin:0">Net gain per box: <span class="gainp gF">${eur(SG.fort)}+</span> top quarter · <span class="gainp gW">&lt; ${eur(SG.moyen)}</span> bottom quarter${SG.n ? ` of the last ${SG.jours} days (${SG.n} deals)` : ""}.</p>`;
+  $("#deals").innerHTML = tete + l.map((d) => {
+    const a = actions["deal-" + d.id], fait = d.achete || a, v = verdictCle(d.verdict);
+    const remise = d.prix_public && d.prix ? Math.round(100 * (1 - d.prix / d.prix_public)) : null;
+    // Thresholds follow the last month of deals (top / bottom quarter), same as Telegram
+    const gk = d.gain == null ? "" : d.gain >= SG.fort ? "gF" : d.gain >= SG.moyen ? "gM" : "gW";
+    const chiffres = d.gain != null ? `<div class="kf">
+        <div><small>Net gain</small><b class="${gk}">${d.gain > 0 ? "+" : ""}${eur(Math.round(d.gain))}</b></div>
+        <div><small>Return</small><b>+${Math.round(d.pct * 100)} %</b><em>≈ ${Math.round(d.an * 100)} %/yr</em></div>
+        <div><small>Cash tied up</small><b>${d.jours < 60 ? d.jours + " days" : Math.round(d.jours / 30) + " months"}</b><em>${d.garde ? "hold to retirement" : "quick resale"}</em></div></div>`
+      : (d.id_set && d.prix ? `<div class="why">Not profitable at this price${d.prix_max ? `: worth buying up to ${eur(d.prix_max)}` : ""}.</div>` : (d.raison ? `<div class="why">${esc(d.raison)}</div>` : ""));
+    const infos = [d.risque ? `Risk: ${{ "sûr": "low", moyen: "medium", "risqué": "high" }[d.risque] || d.risque}` : "",
+      d.demande ? `Demand: ${{ forte: "strong", moyenne: "medium", faible: "weak" }[d.demande] || d.demande}` : "",
+      d.deja_en_stock && d.quantite == null ? `${d.deja_en_stock} already in stock` : ""].filter(Boolean).join(" · ");
+    return `<article class="deal" data-id="${esc(d.id)}">
+      <div class="dtop"><span class="v ${v}">${{ "achète": "Buy", regarder: "Take a look", non: "Skip" }[v]}</span>
+        ${gk ? `<span class="gainp ${gk}">${d.gain > 0 ? "+" : ""}${eur(Math.round(d.gain))} net${gk === "gF" ? " · big" : ""}</span>` : ""}
+        ${d.lettre ? `<span class="grade g${d.lettre}">${{A: "⭐⭐⭐ Great deal", B: "⭐⭐ Good deal", C: "⭐ Fair deal"}[d.lettre] || d.lettre}</span>` : ""}
+        ${badgeRetrait(d.retrait)}<span class="ago">${depuis(d.vu_le)}</span></div>
+      <div class="dmain">${d.img ? `<img class="dimg" src="${d.img}" alt="" loading="lazy">` : ""}<div>
+      <h3>${esc(d.titre)}</h3>
+      <div class="price">${d.prix != null ? `<b>${eur(d.prix)}</b>` : ""}${d.prix_public ? `<span class="sub"><s>${eur(d.prix_public)}</s> ${remise > 0 ? "−" + remise + " %" : ""}</span>` : ""}
+        ${d.prix_max && d.gain != null ? `<span class="sub">· buy up to ${eur(d.prix_max)}</span>` : ""}</div></div></div>
+      ${chiffres}
+      ${d.assez ? `<div class="reco stop">✋ You already have ${d.en_stock} in stock (${d.plafond} max advised): don't buy more</div>`
+        : d.quantite > 0 ? `<div class="reco go">Buy ${d.quantite} · ${eur(d.quantite * d.prix)}${d.en_stock ? ` (${d.en_stock} already in stock)` : ""}</div>`
+        : d.quantite === 0 && d.diversif ? `<div class="reco stop">⚖ Enough money already on this set or theme: skip it to stay diversified</div>`
+        : d.quantite === 0 && d.gain != null ? `<div class="reco stop">No free cash for this kind of buy right now</div>` : ""}
+      ${infos ? `<div class="sub">${infos}</div>` : ""}
+      ${d.id_set && d.prix ? `<details class="more"${prixFR(d.id) ? " open" : ""}><summary>Check the French price${prixFR(d.id) ? ` · ${eur(prixFR(d.id))} seen` : ""}</summary>
+        <div class="frp"><a href="https://www.idealo.fr/prechcat.html?q=lego+${esc(d.id_set)}" target="_blank" rel="noopener">Idealo ↗</a>
+        <a href="https://www.brickwatch.net/fr-FR/search?q=${esc(d.id_set)}" target="_blank" rel="noopener">Brickwatch ↗</a>
+        <label>Cheapest new<input class="frin" type="number" inputmode="decimal" step="0.01" min="0" placeholder="€" value="${esc(prixFR(d.id) ?? "")}"></label>
+        <div class="frout sub">${calcFR(d, prixFR(d.id))}</div></div></details>` : ""}
+      ${d.details && d.details.length ? `<details class="more"><summary>Scenarios, quantity and cash</summary><ul>${d.details.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></details>` : ""}
+      ${d.memo ? `<details class="more"><summary>Comment la note est construite</summary><ul>${d.memo.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></details>` : ""}
+      ${ouvert === d.id && !fait ? `<form class="buy"><label>Quantity<input name="q" type="number" inputmode="numeric" min="1" value="1"></label>
+          ${(() => { const c = cagnotteDe(d.titre) || 0, caisse = d.prix != null ? +(d.prix + c).toFixed(2) : "";
+            return `<label>Shelf price each (€)<input name="p" type="number" inputmode="decimal" step="0.01" min="0" value="${caisse}"></label>
+          <label>Loyalty credit (%)<input name="cp" type="number" inputmode="decimal" step="0.1" min="0" max="100" value="${c && caisse ? Math.round(100 * c / caisse) : ""}" placeholder="0"></label>`; })()}
+          <p class="sub netline" style="grid-column:1/-1;margin:0"></p>
+          <label>iGraal cashback (%)<input name="cb" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0"></label>
+          <label style="grid-column:1/-1">Transaction<select name="panier" style="width:100%;height:42px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);padding:0 10px;font:16px var(--body)">${paniers().map((p) => `<option value="${p.k}">${esc(p.label)}</option>`).join("")}</select></label>
+          <p class="sub" style="grid-column:1/-1;margin:0">Type the price you pay at the till and the store's loyalty %. The credit goes to your To do as money to move to the LEGO account.</p>
+          <div class="row"><button class="btn" type="button" data-a="annuler">Cancel</button><button class="btn yes" type="submit" ${db ? "" : "disabled"}>Save purchase</button></div></form>`
+        : `<div class="acts">${d.lien ? `<a class="btn" href="${esc(d.lien)}" target="_blank" rel="noopener">Open deal ↗</a>` : ""}
+          ${fait ? `<span class="sent">✓ Bought${a && !d.achete ? ", saved within the hour" : ""}</span>` : `<button class="btn yes" data-a="buy">I bought it</button>`}
+          <button class="btn ghost" data-a="${archives[d.id] ? "restore" : "archive"}" aria-label="${archives[d.id] ? "Restore" : "Archive"}" title="${archives[d.id] ? "Restore" : "Archive"}" ${db ? "" : "disabled"}>${archives[d.id] ? "↩" : `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18v4H3zM5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4"/></svg>`}</button></div>`}
+    </article>`;
+  }).join("") || `<p class="empty">No deal in this view.</p>`;
+}
+$("#dfilters").addEventListener("click", (e) => {
+  const b = e.target.closest(".chip"); if (!b) return;
+  dfiltre = b.dataset.d;
+  document.querySelectorAll("#dfilters .chip").forEach((c) => c.setAttribute("aria-pressed", c === b));
+  rendreDeals();
+});
+$("#deals").addEventListener("click", async (e) => {
+  const b = e.target.closest("button[data-a]"); if (!b) return;
+  const id = b.closest(".deal").dataset.id;
+  if (b.dataset.a === "archive" || b.dataset.a === "restore"){
+    const ref = db.doc("archives/" + id), avant = archives[id];
+    if (b.dataset.a === "archive") archives[id] = new Date().toISOString(); else delete archives[id];
+    rendreDeals();
+    try { if (archives[id]) await ref.set({ le: archives[id] }); else await ref.delete(); note(""); }
+    catch (err) { if (avant) archives[id] = avant; else delete archives[id]; rendreDeals(); note("This change was not saved. Check your connection and try again."); }
+    return;
+  }
+  ouvert = b.dataset.a === "buy" ? id : null; rendreDeals();
+});
+$("#deals").addEventListener("submit", async (e) => {
+  e.preventDefault(); if (!db) return;
+  const id = e.target.closest(".deal").dataset.id, f = new FormData(e.target);
+  const n = netAchat(e.target);
+  const act = { type: "achete", deal_id: id, quantite: Math.max(1, +f.get("q") || 1), prix: n.net || null, prix_caisse: n.caisse || null,
+    cagnotte: n.cag, cashback_pct: +f.get("cb") || 0,
+    panier: f.get("panier") || "p" + Date.now().toString(36), le: new Date().toISOString(), fait: false };
+  actions["deal-" + id] = act; ouvert = null; rendreDeals();
+  try { await db.doc("actions/deal-" + id).set(act); note(""); }
+  catch (err) { delete actions["deal-" + id]; rendreDeals(); note("This purchase was not saved. Check your connection and try again."); }
+});
+
+/* ---------- Listings ---------- */
+let afiltre = "masqué", aouvert = null, amax = 60;
+// Posté sur Leboncoin : ce que tu as coché dans l'app (db "leboncoin") passe avant le dernier export.
+const lbcMarques = {};
+// Baisses de prix de la liste du lundi (etat.baisses), cochées « faites » dans db "baisses"
+const baissesFaites = {};
+const nouveauPrix = (a) => { const p = ETAT?.baisses?.prix?.[a.id]; return p && !baissesFaites[a.id] ? p : null; };
+const surLbc = (a) => lbcMarques[a.id] !== undefined ? lbcMarques[a.id] : !!LBC.lien?.[a.id];
+// Leboncoin : boîte neuve = « Neuf & Scellé » dans le titre et l'état ; remise en main propre en tête ; 3 premiers hashtags.
+const ETAT_NEUF = /^(\s*✅\s*[ÉE]tat\s*:\s*)(jamais ouverts?|neuf (?:&|et) scell[ée]s?)\.?/im;
+const boiteNeuve = (a) => ETAT_NEUF.test(a.d);
+const lbcTitre = (a) => boiteNeuve(a) && !/neuf\s*(&|et)\s*scell/i.test(a.t) ? a.t + " - Neuf & Scellé" : a.t;
+function lbc(a){
+  const lignes = a.d.split("\n");
+  const tags = lignes.filter((l) => l.trim().startsWith("#")).join(" ").match(/#[^\s#]+/g) || [];
+  const corps = lignes.filter((l) => !l.trim().startsWith("#")).join("\n").replace(ETAT_NEUF, "$1Neuf & Scellé").trim();
+  return "🤝 Remise en main propre possible.\n\n" + corps + (tags.length ? "\n\n" + tags.slice(0, 3).join(" ") : "");
+}
+const sansAccent = (s) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+function rendreAnnonces(){
+  const k = { "masqué": 0, "en ligne": 0, baisse: 0, all: ANNONCES.length };
+  for (const a of ANNONCES) { k[a.s]++; if (nouveauPrix(a)) k.baisse++; }
+  for (const f in k) $("#a-" + f.replace(" ", "\\ ")) && ($("#a-" + f.replace(" ", "\\ ")).textContent = k[f]);
+  const q = sansAccent($("#aq").value.trim());
+  const g = $("#ag").value, lf = $("#al").value;
+  const nl = { on: 0, off: 0 };
+  for (const a of ANNONCES) if (afiltre === "all" || a.s === afiltre || (afiltre === "baisse" && nouveauPrix(a))) nl[surLbc(a) ? "on" : "off"]++;
+  $("#al").innerHTML = `<option value="">Leboncoin: all</option><option value="off">Not on Leboncoin, best first (${nl.off})</option><option value="on">On Leboncoin (${nl.on})</option>`;
+  $("#al").value = lf;
+  const vendus = (LBC.seules || []).filter((x) => x.vendu);
+  $("#lbcalerte").innerHTML = vendus.length ? `<details class="lbcw"><summary>⚠ ${vendus.length} Leboncoin ad${vendus.length > 1 ? "s" : ""} for sets already sold on Vinted: check your stock and delete ${vendus.length > 1 ? "them" : "it"}</summary>
+    ${vendus.map((x) => `<a href="${esc(x.u)}" target="_blank" rel="noopener">${esc(x.t)} ↗</a>`).join("")}</details>` : "";
+  const parGamme = {};
+  for (const a of ANNONCES) if (afiltre === "all" || a.s === afiltre || (afiltre === "baisse" && nouveauPrix(a))) parGamme[a.g] = (parGamme[a.g] || 0) + 1;
+  $("#ag").innerHTML = `<option value="">All themes</option>` + Object.entries(parGamme).sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]))
+    .map(([n, k]) => `<option value="${esc(n)}">${esc(n)} (${k})</option>`).join("") + (g && !parGamme[g] ? `<option value="${esc(g)}">${esc(g)} (0)</option>` : "");
+  $("#ag").value = g;
+  const l = ANNONCES.filter((a) => (afiltre === "all" || a.s === afiltre || (afiltre === "baisse" && nouveauPrix(a))) && (!g || a.g === g) && (!lf || (lf === "on") === surLbc(a)) && (!q || sansAccent(a.t).includes(q) || a.n.includes(q)));
+  if (lf === "off") l.sort((x, y) => (y.pr || 0) - (x.pr || 0));
+  const vus = l.slice(0, amax);
+  $("#ads").innerHTML = vus.map((a) => `<article class="ad" data-id="${a.id}">
+      <button class="adhead" data-x="open" aria-expanded="${aouvert === a.id}">${vignetteAnnonce(a)}<span class="adt">${esc(a.t)}<span class="lbcb${surLbc(a) ? " on" : ""}">${surLbc(a) ? "✓ On Leboncoin" : "Not on Leboncoin" + (a.pr >= 3 ? " · priority ★★★" : a.pr >= 2 ? " · priority ★★" : "")}</span></span><span class="adp">${nouveauPrix(a) ? `<s>${eur(a.p)}</s> ${eur(nouveauPrix(a))}` : eur(a.p)}</span></button>
+      ${aouvert === a.id ? `<div class="adbody">
+        ${nouveauPrix(a) ? `<div class="adf drop"><div class="adl">Price drop · Monday list</div><div class="adv"><b>${eur(a.p)} → ${eur(nouveauPrix(a))}</b></div>
+          <div class="adbtns"><button class="btn yes" data-x="baisse-ouvrir">📋 Copy ${String(nouveauPrix(a)).replace(".", ",")} and open on Vinted</button>
+          <button class="btn" data-x="baisse-ok" ${db ? "" : "disabled"}>✓ Done, price changed</button></div>
+          <div class="sub">On Vinted: Edit → paste the price → Save. Then come back and tap Done.</div></div>` : ""}
+        <div class="adf"><div class="adl">Photos · ${a.ph.length}</div>${a.ph.length ? `<div class="adph">${a.ph.map((p, i) => `<button class="phb" data-x="ph" data-i="${i}" aria-label="Save photo ${i + 1}"><img alt="Photo ${i + 1}" data-i="${i}"></button>`).join("")}</div>
+          <div class="sub">Tap a photo to save just that one.</div>
+          <div class="adbtns"><button class="btn yes" data-x="tout">Save all ${a.ph.length} photos</button><button class="btn" data-x="zip">Download as ZIP</button></div>
+          <div class="sub">Each photo asks once: the file name shows where you are (2 of ${a.ph.length}…).</div>`
+          : `<div class="sub">No photos for this listing yet. Save them from the Vinted listing.</div>`}</div>
+        <div class="adf"><div class="adl">Leboncoin title</div><div class="adv">${esc(lbcTitre(a))}</div><button class="btn yes" data-x="copy" data-c="lt">Copy Leboncoin title</button></div>
+        <div class="adf"><div class="adl">Leboncoin text</div><pre class="adv">${esc(lbc(a))}</pre><button class="btn yes" data-x="copy" data-c="lbc">Copy Leboncoin text</button>
+          <div class="adbtns">${surLbc(a) ? `${LBC.lien?.[a.id] ? `<a class="btn" href="${esc(LBC.lien[a.id])}" target="_blank" rel="noopener">Open on Leboncoin ↗</a>` : ""}<button class="btn" data-x="lbc-off" ${db ? "" : "disabled"}>Not on Leboncoin any more</button>`
+            : `<button class="btn yes" data-x="lbc-on" ${db ? "" : "disabled"}>✓ I posted it on Leboncoin</button>`}</div></div>
+        <div class="adf"><div class="adl">Vinted title</div><div class="adv">${esc(a.t)}</div><button class="btn" data-x="copy" data-c="t">Copy Vinted title</button></div>
+        <div class="adf"><div class="adl">Vinted text</div><pre class="adv">${esc(a.d)}</pre><button class="btn" data-x="copy" data-c="d">Copy Vinted text</button></div>
+        <a class="btn" href="${esc(a.u)}" target="_blank" rel="noopener">Open on Vinted ↗</a></div>` : ""}
+    </article>`).join("") + (l.length > vus.length ? `<button class="btn" data-x="plus">Show ${Math.min(60, l.length - vus.length)} more (${l.length - vus.length} left)</button>` : "")
+    || `<p class="empty">No listing here.</p>`;
+  const o = aouvert && vus.find((x) => x.id === aouvert);
+  if (o) afficherPhotos(o);
+  rendrePlateformes();
+}
+async function copier(txt, b){
+  let ok = false;
+  try { await navigator.clipboard.writeText(txt); ok = true; } catch (e) {
+    const t = document.createElement("textarea"); t.value = txt; t.style.position = "fixed"; t.style.opacity = "0";
+    document.body.appendChild(t); t.select(); try { ok = document.execCommand("copy"); } catch (e2) {} t.remove();
+  }
+  const av = b.textContent; b.textContent = ok ? "✓ Copied" : "Copy blocked: select the text"; setTimeout(() => b.textContent = av, 1600);
+}
+$("#afilters").addEventListener("click", (e) => { const c = e.target.closest(".chip"); if (!c) return; afiltre = c.dataset.a;
+  $("#afilters").querySelectorAll(".chip").forEach((x) => x.setAttribute("aria-pressed", x === c)); rendreAnnonces(); });
+$("#aq").addEventListener("input", rendreAnnonces);
+$("#ag").addEventListener("change", () => { amax = 60; rendreAnnonces(); });
+$("#al").addEventListener("change", () => { amax = 60; rendreAnnonces(); });
+async function marquerBaisse(a){
+  const prix = nouveauPrix(a); if (!prix) return;
+  baissesFaites[a.id] = true; aouvert = null; rendreAnnonces();
+  try { await db.doc("baisses/" + a.id).set({ prix, liste: ETAT?.baisses?.liste || "", le: new Date().toISOString() }); }
+  catch (e) { delete baissesFaites[a.id]; rendreAnnonces(); note("This was not saved. Check your connection and try again."); }
+}
+async function marquerLbc(a, on){
+  const av = lbcMarques[a.id];
+  lbcMarques[a.id] = on; rendreAnnonces();
+  try { await db.doc("leboncoin/" + a.id).set({ on, le: new Date().toISOString() }); }
+  catch (e) { if (av === undefined) delete lbcMarques[a.id]; else lbcMarques[a.id] = av; rendreAnnonces(); note("This was not saved. Check your connection and try again."); }
+}
+$("#ads").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-x]"); if (!b) return;
+  if (b.dataset.x === "plus"){ amax += 60; rendreAnnonces(); return; }
+  const a = ANNONCES.find((x) => x.id === b.closest(".ad").dataset.id);
+  // Copie synchrone (garde le geste de l'utilisateur), puis le lien ouvre Raccourcis
+  if (b.dataset.x === "raccourci"){
+    const ok = copieSync(a.pu.join("\n"));
+    const av = b.textContent;
+    b.textContent = ok ? "✓ Copied: now run “" + RACCOURCI + "”" : "Copy blocked, try again";
+    setTimeout(() => b.textContent = av, 4000);
+    return;
+  }
+  if (b.dataset.x === "open"){ aouvert = aouvert === a.id ? null : a.id; rendreAnnonces(); return; }
+  if (b.dataset.x === "baisse-ouvrir"){
+    copieSync(String(nouveauPrix(a)).replace(".", ","));
+    window.open(a.u, "_blank", "noopener");
+    return;
+  }
+  if (b.dataset.x === "baisse-ok") return marquerBaisse(a);
+  if (b.dataset.x === "lbc-on" || b.dataset.x === "lbc-off") return marquerLbc(a, b.dataset.x === "lbc-on");
+  if (b.dataset.x === "ph") return partager(a, [+b.dataset.i], b);
+  if (b.dataset.x === "tout") return partager(a, a.ph.map((p, i) => i), b);
+  if (b.dataset.x === "zip") return enregistrerZip(a, b);
+  copier(b.dataset.c === "lbc" ? lbc(a) : b.dataset.c === "lt" ? lbcTitre(a) : a[b.dataset.c], b);
+});
+/* ---------- Platforms : file d'actions par priorité ----------
+   1 retirer (risque de double vente), 2 publier ce qui n'est en ligne nulle part,
+   3 remettre en ligne les annonces masquées comptées, 4 publier sur Leboncoin,
+   5 baisses de prix du lundi. « Done » / « Skip » sont gardés dans db "plateformes". */
+const pfaits = {};
+let pvue = "actions", pcourant = null, pmax = 30;
+try { pvue = localStorage.getItem("pvue") || "actions"; } catch (e) {}
+const PTYPES = {
+  retirer: { ic: "🗑", lib: "Remove", cl: "t-rm" },
+  publier: { ic: "🆕", lib: "Post for the first time", cl: "t-new" },
+  remettre: { ic: "👁", lib: "Relist", cl: "t-relist" },
+  lbc: { ic: "➕", lib: "Post on Leboncoin", cl: "t-lbc" },
+  baisse: { ic: "↘", lib: "Lower the price", cl: "t-drop" },
+};
+const majuscule = (t) => t ? t[0].toUpperCase() + t.slice(1) : t;
+const ETATS_FR = { SCELLE: "Jamais ouvert", "SCELLÉ": "Jamais ouvert" };
+// Annonce rédigée comme les tiennes sur Vinted, pour un set qui n'a encore aucune annonce
+function annonceNeuve(it){
+  const nom = majuscule((it.fr || "").split(" - ").slice(1).join(" - ").trim()) || it.t;
+  const gamme = it.g || "LEGO";
+  const etat = ETATS_FR[(APUB[it.s]?.etat || "").toUpperCase()] || "Jamais ouvert";
+  const tags = ["#lego", "#" + sansAccent(gamme).replace(/[^a-z0-9]/g, ""), "#" + it.s, "#legocollection"].filter((x) => x.length > 1);
+  const t = `LEGO ${gamme} - Set ${nom} - ${it.s}`;
+  const d = `🔔 Vends set LEGO ${it.s} - ${nom} de la gamme LEGO ${gamme}.\n\nℹ️ Prix ferme\n\n🎁 Parfait pour compléter une collection/offrir.\n\n✅ Etat : ${etat}\n\n📦 Envoi soigné\n\n${tags.join(" ")}`;
+  return { id: "n" + it.s, t, d, n: it.s, p: APUB[it.s]?.prix || null, ph: [], u: "", s: "nouveau" };
+}
+const numeroDans = (t, n) => new RegExp("(^|\\D)" + n + "(\\D|$)").test(t || "");
+function listeActions(){
+  const L = [], vus = new Set(ANNONCES.map((a) => a.n));
+  const seules = LBC.seules || [];
+  for (const x of seules) if (x.vendu) L.push({ k: "rm-lbc-" + x.id, type: "retirer", pf: "Leboncoin", titre: x.t, prix: x.p, u: x.u,
+    pourquoi: "This set is already sold on Vinted. Delete the Leboncoin ad so nobody buys it twice." });
+  for (const a of ANNONCES){
+    const c = counts["v" + a.id];
+    if (c && c.n === 0){
+      L.push({ k: "rm-v-" + a.id, type: "retirer", pf: "Vinted", a, titre: a.t, prix: a.p, u: a.u, pourquoi: "You counted 0 at the inventory. Delete this Vinted listing." });
+      if (surLbc(a)) L.push({ k: "rm-l-" + a.id, type: "retirer", pf: "Leboncoin", a, titre: a.t, prix: a.p, u: LBC.lien?.[a.id] || "", pourquoi: "You counted 0 at the inventory. Delete it on Leboncoin too." });
+    }
+  }
+  for (const it of ITEMS){
+    if (it.src !== "base" || vus.has(it.s) || seules.some((x) => numeroDans(x.t, it.s))) continue;
+    const c = counts[it.id], q = c && c.n != null ? c.n : attendu(it);
+    if (q < 1) continue;
+    const a = annonceNeuve(it);
+    if (!pfaits["new-" + it.s]) L.push({ k: "new-" + it.s, type: "publier", pf: "Vinted", a, it, titre: a.t, prix: a.p, q,
+      pourquoi: `${q > 1 ? q + " in stock" : "In stock"} and listed nowhere. Post it on Vinted first.` });
+    else L.push({ k: "lbcnew-" + it.s, type: "lbc", pf: "Leboncoin", a, it, titre: a.t, prix: a.p, q, pourquoi: "Posted on Vinted. Now the Leboncoin copy." });
+  }
+  for (const a of ANNONCES){
+    if (a.s !== "masqué") continue;
+    const c = counts["v" + a.id];
+    if (c && c.n >= 1) L.push({ k: "relist-" + a.id, type: "remettre", pf: "Vinted", a, titre: a.t, prix: a.p, u: a.u, pourquoi: "Hidden on Vinted, but you counted it at the inventory. Buyers can't see it." });
+  }
+  for (const a of ANNONCES){
+    const relistee = pfaits["relist-" + a.id]?.etat === "fait";
+    if ((a.s === "en ligne" || relistee) && !surLbc(a) && !(counts["v" + a.id]?.n === 0))
+      L.push({ k: "lbc-" + a.id, type: "lbc", pf: "Leboncoin", a, titre: a.t, prix: a.p, pr: a.pr || 0, pourquoi: "Live on Vinted, missing on Leboncoin." });
+  }
+  for (const a of ANNONCES) if (nouveauPrix(a)) L.push({ k: "drop-" + a.id, type: "baisse", pf: "Vinted", a, titre: a.t, prix: nouveauPrix(a), avant: a.p, u: a.u, pourquoi: "Monday list: it has been listed too long at this price." });
+  const rang = { retirer: 0, publier: 1, remettre: 2, lbc: 3, baisse: 4 };
+  const ok = L.filter((x) => pfaits[x.k]?.etat !== "fait");
+  ok.sort((x, y) => (pfaits[x.k]?.etat === "passe") - (pfaits[y.k]?.etat === "passe") || rang[x.type] - rang[y.type]
+    || (y.pr || 0) - (x.pr || 0) || (+y.prix || 0) - (+x.prix || 0));
+  return ok;
+}
+const prixTexte = (p) => String(p).replace(".", ",");
+function boutonsPlateforme(x){
+  const a = x.a, b = [];
+  if (x.type === "retirer"){
+    if (x.u) b.push(`<a class="btn yes" href="${esc(x.u)}" target="_blank" rel="noopener">Open on ${x.pf} ↗</a>`);
+    b.push(`<button class="btn" data-y="fait">✓ Done, deleted</button>`);
+  } else if (x.type === "publier"){
+    b.push(`<a class="btn" href="https://www.vinted.fr/items/new" target="_blank" rel="noopener">Open Vinted ↗</a>`);
+    b.push(`<button class="btn yes" data-y="fait">✓ Done, posted on Vinted</button>`);
+  } else if (x.type === "remettre"){
+    b.push(`<a class="btn yes" href="${esc(x.u)}" target="_blank" rel="noopener">Open on Vinted ↗</a>`);
+    b.push(`<button class="btn" data-y="fait">✓ Done, visible again</button>`);
+  } else if (x.type === "lbc"){
+    b.push(`<a class="btn" href="https://www.leboncoin.fr/deposer-une-annonce" target="_blank" rel="noopener">Open Leboncoin ↗</a>`);
+    b.push(`<button class="btn yes" data-y="fait">✓ Done, posted on Leboncoin</button>`);
+  } else if (x.type === "baisse"){
+    b.push(`<button class="btn yes" data-y="baisse">📋 Copy ${prixTexte(x.prix)} and open on Vinted</button>`);
+    b.push(`<button class="btn" data-y="fait">✓ Done, price changed</button>`);
+  }
+  return b.join("");
+}
+function carteAction(x){
+  const T = PTYPES[x.type], a = x.a, lb = x.pf === "Leboncoin" && a && x.type !== "retirer";
+  const titre = a ? (lb ? lbcTitre(a) : a.t) : x.titre, texte = a ? (lb ? lbc(a) : a.d) : "";
+  const apub = x.it && APUB[x.it.s];
+  const photos = a && a.ph.length ? `<div class="adph">${a.ph.map((p, i) => `<button class="phb" data-y="ph" data-i="${i}" aria-label="Save photo ${i + 1}"><img alt="Photo ${i + 1}" data-i="${i}"></button>`).join("")}</div>
+      <div class="adbtns"><button class="btn" data-y="tout">Save all ${a.ph.length} photos</button></div>`
+    : x.it ? `<div class="pf-sansph">${photo(x.it)}<span>No photos yet. Take 3 or 4: front, back, both sides of the box.</span></div>` : "";
+  return `<article class="ad pf-top ${T.cl}" data-id="${a ? a.id : ""}" data-k="${esc(x.k)}">
+    <div class="pf-tete"><span class="pf-type">${T.ic} ${T.lib}</span><span class="pf-pf">${x.pf}</span></div>
+    <div class="adbody">
+      <div class="pf-titre">${esc(x.titre)}</div>
+      <div class="sub">${esc(x.pourquoi)}</div>
+      ${x.type !== "retirer" && x.prix ? `<div class="adf"><div class="adl">Price</div><div class="pf-prix">${x.avant ? `<s>${eur(x.avant)}</s> ` : ""}${eur(x.prix)}
+        ${x.type !== "baisse" ? `<button class="btn" data-y="copie" data-c="prix">Copy price</button>` : ""}</div>
+        ${apub ? `<div class="sub">Estimate ${apub.estime ? eur(apub.estime) : "unknown"}${apub.douteux ? `. Check: the cost in the database (${eur(apub.cout)}) looks like a whole lot, not this set alone.` : apub.cout ? ` · floor ${eur(apub.cout * PLANCHER)} (your cost ×${PLANCHER})` : " · free gift"}</div>` : ""}</div>` : ""}
+      ${x.type !== "retirer" && x.type !== "baisse" && x.type !== "remettre" ? `<div class="adf"><div class="adl">${x.pf} title</div><div class="adv">${esc(titre)}</div><button class="btn yes" data-y="copie" data-c="titre">Copy title</button></div>
+      <div class="adf"><div class="adl">${x.pf} text</div><pre class="adv">${esc(texte)}</pre><button class="btn yes" data-y="copie" data-c="texte">Copy text</button></div>` : ""}
+      ${x.type !== "retirer" && x.type !== "baisse" ? `<div class="adf"><div class="adl">Photos</div>${photos}</div>` : ""}
+      <div class="adbtns">${boutonsPlateforme(x)}</div>
+      <button class="btn ghost pf-passer" data-y="passe">Skip for now</button>
+    </div></article>`;
+}
+function rendrePlateformes(){
+  if (!$("#p-actions")) return;
+  const L = listeActions(), n = L.filter((x) => pfaits[x.k]?.etat !== "passe").length;
+  $("#pf-n").textContent = n ? " (" + n + ")" : "";
+  $("#b-pf").textContent = n || "";
+  document.querySelectorAll("#pseg button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.p === pvue));
+  $("#p-actions").hidden = pvue !== "actions"; $("#p-listes").hidden = pvue !== "listes";
+  if (pvue !== "actions") return;
+  if (!L.length){ $("#p-actions").innerHTML = `<p class="empty">Nothing to do on the platforms. 🎉</p>`; return; }
+  const x = L.find((y) => y.k === pcourant) || L[0];
+  pcourant = x.k;
+  const autres = L.filter((y) => y !== x), vus = autres.slice(0, pmax);
+  const compte = {}; for (const y of L) compte[y.type] = (compte[y.type] || 0) + 1;
+  $("#p-actions").innerHTML = `<p class="sub pf-resume">${Object.entries(PTYPES).filter(([k]) => compte[k]).map(([k, T]) => `${T.ic} ${compte[k]} ${T.lib.toLowerCase()}`).join(" · ")}</p>
+    ${carteAction(x)}
+    ${autres.length ? `<h2 class="sec">Next</h2><div class="pf-file">${vus.map((y) => `<button class="pf-ligne ${PTYPES[y.type].cl}${pfaits[y.k]?.etat === "passe" ? " passe" : ""}" data-k="${esc(y.k)}">
+      <span class="pf-ic" aria-hidden="true">${PTYPES[y.type].ic}</span><span class="pf-lt"><b>${PTYPES[y.type].lib}</b> · ${y.pf}${pfaits[y.k]?.etat === "passe" ? " · skipped" : ""}<span>${esc(y.titre)}</span></span>
+      <span class="adp">${y.prix ? eur(y.prix) : ""}</span></button>`).join("")}</div>
+      ${autres.length > vus.length ? `<button class="btn" data-y="plus">Show ${Math.min(30, autres.length - vus.length)} more (${autres.length - vus.length} left)</button>` : ""}` : ""}`;
+  if (x.a && x.a.ph.length) afficherPhotos(x.a);
+}
+async function marquerPf(x, etat){
+  const av = pfaits[x.k];
+  pfaits[x.k] = { etat, le: new Date().toISOString() };
+  pcourant = null;
+  rendrePlateformes(); window.scrollTo(0, 0);
+  try {
+    if (etat === "fait" && x.type === "lbc" && x.a && !x.it) await marquerLbc(x.a, true);
+    if (etat === "fait" && x.type === "baisse") await marquerBaisse(x.a);
+    if (etat === "fait" && x.k.startsWith("rm-l")) { if (x.a) await marquerLbc(x.a, false); }
+    await db.doc("plateformes/" + x.k).set({ etat, type: x.type, pf: x.pf, titre: String(x.titre).slice(0, 200), le: pfaits[x.k].le });
+  } catch (e) {
+    if (av) pfaits[x.k] = av; else delete pfaits[x.k];
+    rendrePlateformes(); note("This was not saved. Check your connection and try again.");
+  }
+}
+$("#pseg").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-p]"); if (!b) return;
+  pvue = b.dataset.p; try { localStorage.setItem("pvue", pvue); } catch (e2) {}
+  rendrePlateformes();
+});
+$("#p-actions").addEventListener("click", (e) => {
+  const l = e.target.closest(".pf-ligne");
+  if (l){ pcourant = l.dataset.k; rendrePlateformes(); window.scrollTo(0, 0); return; }
+  const b = e.target.closest("[data-y]"); if (!b) return;
+  if (b.dataset.y === "plus"){ pmax += 30; rendrePlateformes(); return; }
+  const x = listeActions().find((y) => y.k === b.closest(".pf-top")?.dataset.k); if (!x) return;
+  const a = x.a, lb = x.pf === "Leboncoin";
+  if (b.dataset.y === "copie"){
+    const t = b.dataset.c === "prix" ? prixTexte(x.prix) : b.dataset.c === "titre" ? (lb ? lbcTitre(a) : a.t) : (lb ? lbc(a) : a.d);
+    return copier(t, b);
+  }
+  if (b.dataset.y === "baisse"){ copieSync(prixTexte(x.prix)); window.open(x.u, "_blank", "noopener"); return; }
+  if (b.dataset.y === "ph") return partager(a, [+b.dataset.i], b);
+  if (b.dataset.y === "tout") return partager(a, a.ph.map((p, i) => i), b);
+  if (!db){ note("Not connected: this can't be saved right now."); return; }
+  if (b.dataset.y === "fait" || b.dataset.y === "passe") return marquerPf(x, b.dataset.y === "fait" ? "fait" : "passe");
+});
+
+rendreAnnonces();
+
+/* Photos : chaque annonce est stockée en bandes (photos collées les unes sous
+   les autres) ; on redécoupe ici chaque photo en JPEG. ph = [[asset, y, h], …] */
+const bandes = new Map(), vignettes = new Map();
+let telech;
+function bande(id){
+  if (!bandes.has(id)) bandes.set(id, new Promise((ok, ko) => {
+    const im = new Image(); im.onload = () => ok(im); im.onerror = () => { bandes.delete(id); ko(new Error("photo")); };
+    im.src = "/_blob/" + id;
+  }));
+  return bandes.get(id);
+}
+async function photoAnnonce(a, i){
+  const cle = a.id + "/" + i;
+  if (!vignettes.has(cle)) vignettes.set(cle, (async () => {
+    const [id, y, h] = a.ph[i], im = await bande(id);
+    const c = document.createElement("canvas"); c.width = im.naturalWidth; c.height = h;
+    c.getContext("2d").drawImage(im, 0, y, c.width, h, 0, 0, c.width, h);
+    return await new Promise((ok, ko) => c.toBlob((bl) => bl ? ok(bl) : ko(new Error("photo")), "image/jpeg", 0.92));
+  })().catch((e) => { vignettes.delete(cle); throw e; }));
+  return vignettes.get(cle);
+}
+const urls = new Map();
+async function afficherPhotos(a){
+  for (let i = 0; i < a.ph.length; i++){
+    photoAnnonce(a, i).then((bl) => {
+      const cle = a.id + "/" + i;
+      if (!urls.has(cle)) urls.set(cle, URL.createObjectURL(bl));
+      document.querySelectorAll(`.ad[data-id="${a.id}"] img[data-i="${i}"]`).forEach((im) => im.src = urls.get(cle));
+    }).catch(() => {});
+  }
+}
+// Vignette = 1re photo, prise dans une planche de 100 (cases de 120×160, affichées à 48×64)
+function vignetteAnnonce(a){
+  if (!a.th) return `<span class="adth"></span>`;
+  const [pl, k] = a.th;
+  return `<span class="adth" style="background-image:url(${HQIMG(PLANCHES[pl])});background-position:-${(k % 10) * 48}px -${Math.floor(k / 10) * 64}px"></span>`;
+}
+// Sur iPhone, le partage natif propose « Enregistrer N images » (toutes d'un coup dans la pellicule) ;
+// sinon on retombe sur l'enregistrement fichier par fichier.
+async function partager(a, liste, b){
+  try {
+    const files = [];
+    for (const i of liste) files.push(new File([await photoAnnonce(a, i)], nomPhoto(a, i), { type: "image/jpeg" }));
+    if (navigator.canShare?.({ files })){
+      try { await navigator.share({ files }); return; }
+      catch (e) { if (e?.name === "AbortError") return; }
+    }
+  } catch (e) {}
+  return enregistrer(a, liste, b);
+}
+const RACCOURCI = "Photos LEGO";
+function copieSync(txt){
+  const t = document.createElement("textarea"); t.value = txt; t.setAttribute("readonly", ""); t.style.position = "fixed"; t.style.opacity = "0";
+  document.body.appendChild(t); t.select(); t.setSelectionRange(0, txt.length);
+  let ok = false;
+  try { ok = document.execCommand("copy"); } catch (e) {}
+  t.remove();
+  try { navigator.clipboard?.writeText(txt).catch(() => {}); ok = ok || !!navigator.clipboard; } catch (e) {}
+  return ok;
+}
+const nomPhoto = (a, i) => `${a.n || "lego-" + a.id}-${String(i + 1).padStart(2, "0")}.jpg`;
+async function downloads(){
+  if (telech === undefined) telech = await window.claude?.use?.("downloads") || null;
+  if (!telech) note("Saving files is not available in this view. Open the app in the Claude app or on claude.ai.");
+  return telech;
+}
+async function enregistrer(a, liste, b){
+  const d = await downloads(); if (!d) return;
+  const av = b.textContent;
+  for (const [k, i] of liste.entries()){
+    if (liste.length > 1) b.textContent = `Saving ${k + 1} / ${liste.length}…`;
+    const nom = liste.length > 1 ? `${k + 1} of ${liste.length} - ${nomPhoto(a, i)}` : nomPhoto(a, i);
+    try { await d.save({ filename: nom, data: await photoAnnonce(a, i) }); }
+    catch (e) {
+      if (e?.code === "declined") break;
+      note(e?.code === "rate_limited" ? "Too many saves at once. Wait a moment and try again." : "This photo could not be saved. Try again.");
+      break;
+    }
+  }
+  b.textContent = av;
+}
+// ZIP sans compression (les JPEG sont déjà compressés)
+const CRC = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+function crc32(u){ let c = 0xFFFFFFFF; for (let i = 0; i < u.length; i++) c = CRC[(c ^ u[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function zip(fichiers){
+  const parts = [], central = []; let pos = 0;
+  for (const { nom, data } of fichiers){
+    const n = new TextEncoder().encode(nom), crc = crc32(data);
+    const h = new DataView(new ArrayBuffer(30));
+    h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint32(14, crc, true);
+    h.setUint32(18, data.length, true); h.setUint32(22, data.length, true); h.setUint16(26, n.length, true);
+    const c = new DataView(new ArrayBuffer(46));
+    c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint32(16, crc, true);
+    c.setUint32(20, data.length, true); c.setUint32(24, data.length, true); c.setUint16(28, n.length, true); c.setUint32(42, pos, true);
+    parts.push(h, n, data); central.push(c, n); pos += 30 + n.length + data.length;
+  }
+  const taille = central.reduce((s, x) => s + x.byteLength, 0), e = new DataView(new ArrayBuffer(22));
+  e.setUint32(0, 0x06054b50, true); e.setUint16(8, fichiers.length, true); e.setUint16(10, fichiers.length, true);
+  e.setUint32(12, taille, true); e.setUint32(16, pos, true);
+  return new Blob([...parts, ...central, e], { type: "application/zip" });
+}
+async function enregistrerZip(a, b){
+  const d = await downloads(); if (!d) return;
+  const av = b.textContent; b.textContent = "Preparing…";
+  try {
+    const f = [];
+    for (let i = 0; i < a.ph.length; i++) f.push({ nom: nomPhoto(a, i), data: new Uint8Array(await (await photoAnnonce(a, i)).arrayBuffer()) });
+    await d.save({ filename: `${a.n || "lego-" + a.id}-photos.zip`, data: zip(f) });
+  } catch (e) { if (e?.code !== "declined") note("The photos could not be saved. Try again."); }
+  b.textContent = av;
+}
+
+/* ---------- Stock ---------- */
+function morceaux(it){
+  const f = FIGS[it.s] || [];
+  return [{ id: it.id + "~c", t: "Build (no minifigs)", s: it.s, f: "", q: it.q },
+    ...f.map(([fn, nom, k]) => ({ id: it.id + "~" + fn, t: nom, s: "", f: fn, q: k * it.q }))];
+}
+// Quantité attendue : celle de la base quand la page a été construite (BUILD), moins les
+// ventes et pertes notées depuis pour cet élément, plus le stock trouvé en trop.
+function attendu(it){
+  let q = it.q;
+  for (const a of Object.values(actions)){
+    if (!a.le || a.le < BUILD || (a.item !== it.id && a.type !== "vente_lot")) continue;
+    if (a.type === "vente" || a.type === "perte") q -= 1;
+    else if (a.type === "vente_lot" && lignesStock(it.s)[0] === it) q -= (a.lignes || []).filter((l) => l.set === it.s).length;
+    else if (a.type === "stock_trouve") q += a.n || 0;
+  }
+  return Math.max(0, q);
+}
+function etatMorceau(m){ const c = counts[m.id]; if (!c || c.n == null) return "todo"; return c.n === m.q ? "ok" : "gap"; }
+function etat(it){
+  if (decoupes[it.id]){ const e = morceaux(it).map(etatMorceau); return e.includes("todo") ? "todo" : e.includes("gap") ? "gap" : "ok"; }
+  const c = counts[it.id]; if (!c || c.n === undefined || c.n === null) return "todo"; return c.n === attendu(it) ? "ok" : "gap"; }
+function libelle(it){ const c = counts[it.id], q = attendu(it); if (!c || c.n == null) return q === 0 ? "Sold (per database)" : ""; if (c.n === q) return q === 0 ? "Match: sold" : "Match"; if (c.n === 0) return "Gone"; return c.n < q ? `${q - c.n} missing` : `${c.n - q} extra`; }
+// Écart de comptage : on dit ce qui s'est passé, l'app l'envoie à la base toute seule.
+function resolution(it){
+  const c = counts[it.id]; if (!c || c.n == null || !db) return "";
+  const q = attendu(it), manque = q - c.n;
+  if (manque > 0) return `<div class="resol" data-id="${it.id}"><div class="sub"><b>${manque} missing.</b> What happened to ${manque > 1 ? "one of them" : "it"}?</div>
+    <div class="row"><button class="q yes" data-r="vendu">💶 Sold</button><button class="q" data-r="perdu">Lost / given away</button></div>
+    <form class="resol-f" hidden><div class="two"><label>Price (€)<input name="prix" type="number" inputmode="decimal" step="0.01" min="0" required></label>
+      <label>Date<input name="date" type="date" required></label></div>
+      <select name="pf" aria-label="Where"><option value="VINTED">Vinted</option><option value="LEBONCOIN">Leboncoin</option><option value="EN MAIN PROPRE">In person</option><option value="AUTRE">Other</option></select>
+      <button class="q yes">Save sale</button></form></div>`;
+  if (manque < 0) return `<div class="resol" data-id="${it.id}"><div class="sub"><b>${-manque} more than the database.</b></div>
+    <div class="row"><button class="q yes" data-r="trouve">Add ${-manque} to stock</button></div></div>`;
+  return "";
+}
+function photo(it){
+  const p = SPR[it.f] || SPR[it.s];
+  if (p) return `<span class="sp" style="background-image:url(${HQIMG("sprites/s" + p[0] + ".jpg")});background-position:${p[1] / 15 * 100}% ${p[2] / 15 * 100}%"></span>`;
+  return `<span class="ref">${esc(it.f || it.s || "?")}</span>`;
+}
+function esc(s){ return String(s).replace(/[&<>"]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
+function carte(it){
+  const c = counts[it.id], n = c && c.n != null ? c.n : null, e = etat(it);
+  const prix = it.p ? `<span>${it.p.toLocaleString("fr-FR")} €</span>` : "";
+  const lien = it.u ? `<a href="${esc(it.u)}" target="_blank" rel="noopener">Listing ↗</a>` : "";
+  const src = { "masqué":"Hidden on Vinted", "en ligne":"Live on Vinted", base:"In stock (database)", decoupe:"Build", fig:"Set minifig" }[it.src];
+  const dis = db ? "" : "disabled";
+  return `<article class="card ${e === "todo" ? "" : e}" data-id="${it.id}">
+    <div class="ph">${photo(it)}</div>
+    <div class="info">
+      <div class="t">${esc(it.t)}</div>${it.fr ? `<div class="fr">${esc(it.fr)}</div>` : ""}
+      <div class="meta">${it.s ? `<span>Set ${esc(it.s)}</span>` : ""}<span class="tag">${src}</span>${prix}${lien}</div>
+    </div>
+    <div class="wide">
+      ${decoupes[it.id] ? blocMorceaux(it) : `<div class="ctl${it.q === 0 ? " sold" : ""}">
+        <div class="cnt"><button data-a="moins" aria-label="One less" ${dis}>−</button>
+          <output>${n == null ? "?" : n}<small> / ${attendu(it)}</small></output>
+          <button data-a="plus" aria-label="One more" ${dis}>+</button></div>
+        <button class="q yes" data-a="tout" ${dis}>${attendu(it) === 0 ? "✓ Sold" : `✓ Got ${attendu(it) > 1 ? attendu(it) : "it"}`}</button>
+        ${attendu(it) === 0 ? "" : `<button class="q" data-a="zero" ${dis}>Gone</button>`}
+      </div>
+      <div class="state">${libelle(it)}</div>${resolution(it)}`}
+      ${FIGS[it.s] && !it.h ? `<button class="q cut" data-a="decoupe" aria-pressed="${!!decoupes[it.id]}" ${dis}>${decoupes[it.id] ? "Undo: keep as whole set" : "✂ Part-out (build + minifigs sold separately)"}</button>` : ""}
+    </div></article>`;
+}
+function blocMorceaux(it){
+  const dis = db ? "" : "disabled";
+  return `<div class="mxs">${morceaux(it).map((m) => { const c = counts[m.id], v = c && c.n != null ? c.n : null, e = etatMorceau(m);
+    return `<div class="mx ${e === "todo" ? "" : e}" data-id="${m.id}">
+      <div class="mph">${photo(m)}</div>
+      <div class="mt">${esc(m.t)}${v === 0 ? ` <em>· gone</em>` : v != null ? ` <em>· ${v} / ${m.q}</em>` : ""}</div>
+      <div class="mb"><button class="q yes" data-a="tout" aria-label="Got it" ${dis}>✓ Got${m.q > 1 ? " " + m.q : " it"}</button>
+        <button class="q" data-a="zero" ${dis}>Gone</button>
+        ${m.q > 1 ? `<button class="q" data-a="moins" aria-label="One less" ${dis}>−1</button>` : ""}</div>
+    </div>`; }).join("")}</div>`;
+}
+async function basculer(id){
+  const on = !decoupes[id];
+  if (on) decoupes[id] = true; else delete decoupes[id];
+  pending["cut:" + id] = 1; majCarte(id);
+  try { await db.doc("decoupes/" + id).set({ on, maj: new Date().toISOString() }); note(""); }
+  catch (e) { note("This change was not saved. Check your connection and try again."); }
+  finally { delete pending["cut:" + id]; }
+}
+function visibles(){
+  const q = $("#q").value.trim().toLowerCase(), g = $("#g").value;
+  return ITEMS.filter((it) => (filtre === "all" || (filtre === "cut" ? (it.h || decoupes[it.id]) : filtre === "hid" ? it.src === "masqué" && etat(it) === "todo" : etat(it) === filtre))
+    && (!g || it.g === g) && (!q || it.t.toLowerCase().includes(q) || (it.fr || "").toLowerCase().includes(q) || (it.h || "").toLowerCase().includes(q) || it.s.includes(q) || it.f.includes(q)));
+}
+function rendre(){
+  const v = visibles(); let html = "", grp = null;
+  for (const it of v){ const h = it.h || it.g; if (h !== grp){ grp = h; html += `<h2 class="grp${it.h ? " set" : ""}">${it.h ? "Part-out · " : ""}${esc(grp)}</h2>`; } html += carte(it); }
+  $("#list").innerHTML = html || `<p class="empty">${filtre === "todo" ? "Everything in this view is checked." : "Nothing here yet."}</p>`;
+  compteurs();
+}
+function compteurs(){
+  const k = { todo:0, gap:0, ok:0, cut:0, hid:0, all:ITEMS.length };
+  for (const it of ITEMS){ k[etat(it)]++; if (it.h || decoupes[it.id]) k.cut++; if (it.src === "masqué" && etat(it) === "todo") k.hid++; }
+  for (const f in k) $("#c-" + f).textContent = k[f];
+  const fait = k.ok + k.gap;
+  $("#prog").innerHTML = `<b>${fait}</b> / ${ITEMS.length} checked`;
+  $("#meter").style.width = (100 * fait / ITEMS.length) + "%";
+}
+function rafraichirResume(){ if (vue !== "stock") rendreHome(); rendreTodo(); }
+function majCarte(id){
+  id = id.split("~")[0];
+  const it = ITEMS.find((x) => x.id === id), el = document.querySelector(`.card[data-id="${id}"]`);
+  if (el && it){ const t = document.createElement("div"); t.innerHTML = carte(it); el.replaceWith(t.firstElementChild); }
+  compteurs();
+}
+function changer(id, n){
+  n = Math.max(0, n);
+  counts[id] = { ...(counts[id] || {}), n };
+  majCarte(id);
+  clearTimeout(pending[id]);
+  pending[id] = setTimeout(async () => {
+    try { await db.doc("comptes/" + id).set({ n, maj: new Date().toISOString() }); note(""); }
+    catch (e) { note("This change was not saved. Check your connection and try again."); }
+    finally { delete pending[id]; }
+  }, 500);
+}
+function note(t){ const el = $("#note"); el.textContent = t; el.hidden = !t; }
+function choisirFiltre(f){
+  filtre = f;
+  document.querySelectorAll(".tools .chip").forEach((c) => c.setAttribute("aria-pressed", c.dataset.f === f));
+  rendre();
+}
+document.querySelector(".tools .filters").addEventListener("click", (e) => {
+  const b = e.target.closest(".chip"); if (b) choisirFiltre(b.dataset.f);
+});
+$("#q").addEventListener("input", rendre);
+$("#g").addEventListener("change", rendre);
+$("#list").addEventListener("click", async (e) => {
+  const b = e.target.closest("button[data-r]"); if (!b || !db) return;
+  const box = b.closest(".resol"), it = ITEMS.find((x) => x.id === box.dataset.id); if (!it) return;
+  if (b.dataset.r === "vendu"){ const f = box.querySelector("form"); f.hidden = false; f.date.value = new Date().toISOString().slice(0, 10); f.prix.value = it.p || ""; f.prix.focus(); return; }
+  const c = counts[it.id], q = attendu(it);
+  const act = b.dataset.r === "perdu" ? { type: "perte", item: it.id, set: it.s || null, titre: it.t }
+    : { type: "stock_trouve", item: it.id, n: c.n - q, sets: it.s ? { [it.s]: c.n - q } : {}, titre: it.t };
+  await envoyerResol(it, act);
+});
+$("#list").addEventListener("submit", async (e) => {
+  const f = e.target.closest(".resol-f"); if (!f) return; e.preventDefault();
+  const it = ITEMS.find((x) => x.id === f.closest(".resol").dataset.id); if (!it || !db) return;
+  await envoyerResol(it, { type: "vente", titre: it.t, item: it.id, set: it.s || null, fig: null, origine: null, genre: "set",
+    prix: +f.prix.value, plateforme: f.pf.value, date: f.date.value, source: "inventaire" });
+});
+async function envoyerResol(it, act){
+  const id = act.type + "-" + Date.now().toString(36), le = new Date().toISOString();
+  actions[id] = { ...act, le, fait: false }; majCarte(it.id); rendreTodo();
+  try { await db.doc("actions/" + id).set({ ...act, le, fait: false }); note(act.type === "vente" ? "Sale saved. It goes into your database automatically." : "Saved. It goes into your database automatically."); }
+  catch (err) { delete actions[id]; majCarte(it.id); note("This was not saved. Check your connection and try again."); }
+}
+$("#list").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-a]"); if (!b || !db) return;
+  const cid = b.closest(".card").dataset.id, carteIt = ITEMS.find((x) => x.id === cid);
+  const a = b.dataset.a;
+  if (a === "decoupe"){ basculer(cid); return; }
+  const row = b.closest(".mx");
+  const it = row ? morceaux(carteIt).find((m) => m.id === row.dataset.id) : carteIt, id = it.id;
+  const c = counts[id], n = c && c.n != null ? c.n : null;
+  if (a === "plus") changer(id, (n ?? 0) + 1);
+  else if (a === "moins") changer(id, (n ?? it.q) - 1);
+  else if (a === "tout") changer(id, row ? it.q : attendu(it));
+  else if (a === "zero") changer(id, 0);
+});
+
+for (const g of [...new Set(ITEMS.map((i) => i.g))].sort((a, b) => a.localeCompare(b, "fr"))){
+  const o = document.createElement("option"); o.value = g; o.textContent = g; $("#g").appendChild(o);
+}
+try { const v = localStorage.getItem("vue"); if (v && document.getElementById("v-" + v)) montrer(v); } catch (e) {}
+
+// Paniers des deux derniers jours : les articles payés dans la même transaction
+// partagent une clé et deviennent une seule commande.
+function paniers(){
+  const out = [{ k: "", label: "New transaction" }], vus = {};
+  const acts = Object.values(actions).filter((a) => (a.type === "achete" || a.type === "achat_libre") && a.panier && Date.now() - new Date(a.le) < 2 * 864e5)
+    .sort((x, y) => String(y.le).localeCompare(String(x.le)));
+  for (const a of acts){
+    const d = (ETAT?.deals || []).find((x) => String(x.id) === String(a.deal_id));
+    const nom = a.type === "achat_libre" ? (a.set ? "set " + a.set : String(a.designation || "item").slice(0, 38)) : d ? d.titre.replace(/^.*\bEx\s*:\s*/i, "").replace(/^LEGO\s*/i, "").replace(/\s*\(.*$/, "").slice(0, 38) : "deal " + a.deal_id;
+    if (vus[a.panier]){ vus[a.panier].n += a.quantite || 1; continue; }
+    vus[a.panier] = { k: a.panier, nom, n: a.quantite || 1, h: new Date(a.le).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) };
+    out.push(vus[a.panier]);
+  }
+  for (const p of out.slice(1)) p.label = `Same basket as ${p.nom} (${p.n} item${p.n > 1 ? "s" : ""}, ${p.h})`;
+  return out;
+}
+// Cagnotte annoncée dans le titre Dealabs (« X € sur la carte de fidélité », « 12 € cagnottés »).
+function cagnotteDe(t){ const m = /(\d+(?:[.,]\d+)?)\s*€\s*(?:sur (?:la|ta|votre) carte|cagnott|de cagnotte)/i.exec(t || ""); return m ? +m[1].replace(",", ".") : null; }
+
+/* ---------- Prix français vu par le vendeur ---------- */
+// Idealo et Brickwatch bloquent les robots : il regarde lui-même, tape le prix le plus bas,
+// et la carte recalcule la revente « juste sous ce prix ». Gardé sur son téléphone seulement.
+function prixFR(id){ try { const v = localStorage.getItem("fr-" + id); return v ? +v : null; } catch (e) { return null; } }
+function calcFR(d, fr){
+  if (!fr) return "";
+  const vente = Math.round(fr * 0.95), net = vente * 0.79 - d.prix;
+  return `Sell at ~${eur(vente)} (5% under) → <b class="${net > 0 ? "pos" : "neg"}">${net >= 0 ? "+" : ""}${eur(net)} net</b> (${net >= 0 ? "+" : ""}${Math.round(100 * net / d.prix)}%)`;
+}
+$("#deals").addEventListener("input", (e) => {
+  const i = e.target.closest(".frin"); if (!i) return;
+  const id = i.closest(".deal").dataset.id, d = (ETAT?.deals || []).find((x) => String(x.id) === id);
+  try { if (i.value) localStorage.setItem("fr-" + id, i.value); else localStorage.removeItem("fr-" + id); } catch (er) {}
+  if (d) i.closest(".frp").querySelector(".frout").innerHTML = calcFR(d, +i.value || null);
+});
+
+/* ---------- Prix en caisse et cagnotte en % ---------- */
+// La cagnotte Leclerc/Carrefour est un % du prix en caisse, qui bouge avec le stock :
+// on saisit ces deux chiffres et l'app en déduit le coût réel.
+function netAchat(form){
+  const caisse = +form.querySelector("[name=p]").value || 0, pct = +form.querySelector("[name=cp]").value || 0;
+  const cag = Math.round(caisse * pct) / 100;
+  return { caisse, cag, net: Math.round((caisse - cag) * 100) / 100 };
+}
+const e2 = (n) => (+n).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
+function majNet(form){
+  const l = form.querySelector(".netline"); if (!l) return;
+  const n = netAchat(form);
+  const q = Math.max(1, +(form.querySelector("[name=q]")?.value) || 1), cb = +(form.querySelector("[name=cb]")?.value) || 0;
+  const tot = Math.round(q * n.caisse * 100) / 100;
+  const h = n.caisse ? [`Total at the till: ${q} × ${e2(n.caisse)} = <b>${e2(tot)}</b>`,
+    n.cag ? `Credit ${e2(n.cag)} each → <b>real cost ${e2(n.net)} each</b> (${e2(Math.round(q * n.net * 100) / 100)} in total)` : "",
+    cb ? `iGraal ${cb} % → ${e2(Math.round(tot * cb) / 100)} cashback` : ""].filter(Boolean).join("<br>") : "";
+  if (l.innerHTML !== h) l.innerHTML = h;  // sans changement, pas d'écriture (sinon l'observateur boucle)
+}
+document.addEventListener("input", (e) => { const f = e.target.closest("form.buy"); if (f && ["p", "cp", "q", "cb"].includes(e.target.name)) majNet(f); });
+new MutationObserver(() => document.querySelectorAll("form.buy .netline:empty").forEach((l) => majNet(l.closest("form")))).observe(document.body, { childList: true, subtree: true });
+
+/* ---------- Achat sans deal ---------- */
+$("#libre-ouvrir").addEventListener("click", () => {
+  if (!db){ note("Sign in to log a purchase."); return; }
+  $("#libre-panier").innerHTML = paniers().map((p) => `<option value="${p.k}">${esc(p.label)}</option>`).join("");
+  $("#libre [name=date]").value = new Date().toISOString().slice(0, 10); $("#libre [name=date]").max = $("#libre [name=date]").value;
+  $("#libre").hidden = false; $("#libre-ouvrir").hidden = true; $("#libre [name=set]").focus();
+});
+let libreK = "set";
+// Autres sets payés dans la même transaction : une ligne chacun, même Lot ID
+function libreLigne(){
+  const d = document.createElement("div"); d.className = "figrow";
+  d.innerHTML = `<label class="fr-n">Set number<input name="xs" inputmode="numeric" placeholder="e.g. 31208"></label>
+    <label>Quantity<input name="xq" type="number" inputmode="numeric" min="1" value="1"></label>
+    <label>Price each (€)<input name="xp" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0 = gift"></label>
+    <label>Loyalty (%)<input name="xc" type="number" inputmode="decimal" step="0.1" min="0" max="100" placeholder="0"></label>
+    <button class="btn fr-x" type="button" aria-label="Remove this set">✕</button>
+    <label>Insiders pts<input name="xpts" type="number" inputmode="numeric" step="1" min="0" placeholder="0"></label>
+    <label style="grid-column:2/-1">Strategy<select name="xstrat" style="width:100%;height:42px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);padding:0 10px;font:16px var(--body)"><option value="ENTIER">Whole set</option><option value="LOT/DETAILS">Part-out</option><option value="">To decide</option></select></label>
+    <p class="sub fr-o"></p>`;
+  $("#libre-plus").appendChild(d); libreTot(); return d;
+}
+function libreLignes(){
+  return [...document.querySelectorAll("#libre-plus .figrow")].map((r) => ({ set: r.querySelector("[name=xs]").value.replace(/\D/g, ""),
+    q: Math.max(1, +r.querySelector("[name=xq]").value || 1), p: +r.querySelector("[name=xp]").value || 0, vide: r.querySelector("[name=xp]").value === "", c: +r.querySelector("[name=xc]").value || 0, pts: Math.max(0, Math.round(+r.querySelector("[name=xpts]").value || 0)), strat: r.querySelector("[name=xstrat]").value, r }));
+}
+// Points Insiders dépensés : déduits du prix payé en euros, sauf boîte entièrement payée en points (prix 0)
+const valPts = (pts, prix) => (prix > 0 ? pts / 150 : 0);
+function libreTot(){
+  const L = libreLignes(), f = $("#libre"), pts0 = Math.round(+f.querySelector("[name=pts]").value || 0);
+  const r2 = (x) => Math.round(x * 100) / 100, n = netAchat(f), q0 = Math.max(1, +f.querySelector("[name=q]").value || 1);
+  f.querySelector(".pts-v").textContent = pts0 ? `≈ ${e2(pts0 / 150)} in points (750 pts = 5 €)${n.caisse > 0 ? ", deducted from the price" : ""}` : "";
+  for (const l of L){  // coût réel de la ligne : cagnotte et points déduits
+    const cag = Math.round(l.p * l.c) / 100, vp = valPts(l.pts, l.p);
+    l.r.querySelector(".fr-o").textContent = [l.p && l.c ? `Credit ${e2(cag)} each` : "",
+      l.pts ? `${l.pts} pts ≈ ${e2(l.pts / 150)}${l.p > 0 ? " deducted" : " (paid in points)"}` : "",
+      l.p && (l.c || vp) ? `real cost ${e2(r2(l.q * (l.p - cag) - vp))}` : ""].filter(Boolean).join(" · ");
+  }
+  if (!L.length && !pts0){ $("#libre-tot").textContent = ""; return; }
+  const t = r2(q0 * n.caisse + L.reduce((s, l) => s + l.q * l.p, 0));
+  const pd = r2(valPts(pts0, n.caisse) + L.reduce((s, l) => s + valPts(l.pts, l.p), 0));
+  const ptsT = pts0 + L.reduce((s, l) => s + l.pts, 0);
+  const cag = r2(q0 * n.cag + L.reduce((s, l) => s + l.q * Math.round(l.p * l.c) / 100, 0));
+  const cb = +f.querySelector("[name=cb]").value || 0, paye = r2(t - pd);
+  $("#libre-tot").innerHTML = `<b>Whole purchase (${L.length + 1} line${L.length ? "s" : ""})</b><br>Shelf price: ${e2(t)}` +
+    (pd ? `<br>Insiders points deducted: −${e2(pd)}` : "") +
+    `<br>Paid in euros: <b>${e2(paye)}</b>` +
+    (cag ? `<br>Loyalty credit: −${e2(cag)}` : "") +
+    (cag ? `<br>Real cost: <b>${e2(r2(paye - cag))}</b>` : "") +
+    (cb ? `<br>iGraal ${cb} %: ${e2(r2(paye * cb / 100))} cashback` : "") +
+    (ptsT ? `<br>Insiders points spent in total: ${ptsT} (≈ ${e2(ptsT / 150)})` : "");
+}
+$("#libre-add").addEventListener("click", () => libreLigne().querySelector("input").focus());
+$("#libre-plus").addEventListener("click", (e) => { const x = e.target.closest(".fr-x"); if (x){ x.closest(".figrow").remove(); libreTot(); } });
+$("#libre").addEventListener("input", libreTot);
+// Rattrapage avec cagnotte : case « pas encore reversée » pour la garder dans Money to move
+function libreRev(){
+  const f = $("#libre"), d = f.querySelector("[name=date]").value;
+  const cag = (+f.querySelector("[name=cp]").value || 0) > 0 || libreLignes().some((l) => l.c > 0);
+  f.querySelector(".lk-rev").hidden = !(d && d < "2026-10-18" && cag);
+}
+$("#libre").addEventListener("input", libreRev);
+function libreMode(k){
+  libreK = k; seg($("#libre-k"), "lk", k);
+  const set = k === "set", d = $("#libre .lk-desc");
+  $("#libre .lk-set").hidden = !set; $("#libre [name=set]").required = set;
+  d.hidden = set; d.querySelector("input").required = !set;
+  d.querySelector("input").placeholder = k === "figlot" ? "e.g. 23 Ninjago minifigs" : "e.g. bulk bricks 2 kg";
+  libreRev();
+}
+$("#libre-k").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) libreMode(b.dataset.lk); });
+$("#libre-annuler").addEventListener("click", () => { $("#libre").reset(); $("#libre-plus").innerHTML = ""; libreTot(); libreMode("set"); $("#libre").hidden = true; $("#libre-ouvrir").hidden = false; });
+$("#libre").addEventListener("submit", async (e) => {
+  e.preventDefault(); if (!db) return;
+  const f = new FormData(e.target), set = libreK === "set" ? String(f.get("set")).replace(/\D/g, "") : null;
+  const desc = libreK === "set" ? null : String(f.get("desc") || "").trim();
+  if (libreK === "set" && !set){ note("Type the set number."); return; }
+  if (libreK !== "set" && !desc){ note("Say what you bought."); return; }
+  const plus = libreLignes().filter((l) => l.set || l.p || !l.vide);
+  if (plus.some((l) => !l.set)){ note("Type the set number of each extra line."); return; }
+  if (plus.some((l) => l.vide)){ note("Give each extra set its price (0 for a free gift)."); return; }
+  const id = "libre-" + Date.now().toString(36);
+  const n = netAchat(e.target), q0 = Math.max(1, +f.get("q") || 1), pts0 = Math.max(0, Math.round(+f.get("pts") || 0));
+  const d0 = valPts(pts0, n.caisse) / q0, r2 = (x) => Math.max(0, Math.round(x * 100) / 100);
+  const act = { type: "achat_libre", genre: libreK, set, designation: desc, quantite: q0, prix: r2(n.net - d0), prix_caisse: r2(n.caisse - d0), cagnotte: n.cag,
+    cashback_pct: +f.get("cb") || 0, lieu: String(f.get("lieu") || "").trim(), panier: f.get("panier") || "p" + Date.now().toString(36),
+    date: String(f.get("date") || "").slice(0, 10) || null, notes: String(f.get("notes") || "").trim().slice(0, 300) || null, points: Math.max(0, Math.round(+f.get("pts") || 0)), points_gagnes: Math.max(0, Math.round(+f.get("ptsg") || 0)), strategie: libreK === "set" ? f.get("strat") || null : null,
+    cagnotte_a_reverser: !e.target.querySelector(".lk-rev").hidden && !!f.get("rev"), le: new Date().toISOString(), fait: false };
+  const acts = [[id, act]];
+  plus.forEach((l, k) => {
+    const cag = Math.round(l.p * l.c) / 100, d = valPts(l.pts, l.p) / l.q;
+    acts.push([id + "-" + (k + 1), { ...act, notes: null, points_gagnes: 0, points: l.pts, strategie: l.strat || null, genre: "set", set: l.set, designation: null, quantite: l.q, prix: r2(l.p - cag - d), prix_caisse: r2(l.p - d), cagnotte: cag }]);
+  });
+  for (const [k, v] of acts) actions[k] = v;
+  try {
+    for (const [k, v] of acts) await db.doc("actions/" + k).set(v);
+    e.target.reset(); $("#libre-plus").innerHTML = ""; libreTot(); e.target.hidden = true; $("#libre-ouvrir").hidden = false; libreMode("set");
+    note(`Purchase saved${acts.length > 1 ? ` (${acts.length} lines)` : ""}. Claude records it in your base within 10 minutes.`);
+  }
+  catch (err) { note("Part of this purchase may not be saved. Check History in 10 minutes before logging it again."); }
+});
+
+/* ---------- History ---------- */
+let HIST = null, hvue = "ventes", hopen = {}, hedit = null;
+try { hvue = localStorage.getItem("hvue") || "ventes"; } catch (e) {}
+const HMOIS = (d) => d ? new Date(d + "T00:00:00").toLocaleDateString("en-GB", { month: "long", year: "numeric" }) : "No date";
+const jj = (d) => d ? new Date(d + "T00:00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : "?";
+// Corrections envoyées mais pas encore appliquées par Claude : affichées tout de suite.
+function corr(table, id){
+  let v = null;
+  for (const a of Object.values(actions)) if (a.type === "corrige" && !a.fait && a.table === table && +a.id === +id) v = { ...(v || {}), ...a.valeurs };
+  return v;
+}
+const champ = (lbl, name, val, type = "text", extra = "") => `<label>${lbl}<input name="${name}" type="${type}" ${type === "number" ? 'inputmode="decimal" step="0.01"' : ""} ${extra} value="${esc(val ?? "")}"></label>`;
+const formEdit = (key, inner) => `<form class="buy hedit" data-k="${key}">${inner}<div class="row"><button type="button" class="btn" data-x="cancel">Cancel</button><button class="btn yes">Save</button></div></form>`;
+const editBtn = (key) => `<button type="button" class="link hbtn" data-e="${key}">Edit</button>`;
+function rendreHist(){
+  document.querySelectorAll("#hseg button").forEach((x) => x.setAttribute("aria-pressed", x.dataset.h === hvue));
+  if (!HIST){ $("#hist").innerHTML = `<p class="empty">${db ? "Waiting for the first update…" : "Sign in to see your purchases and sales."}</p>`; $("#hsum").textContent = ""; return; }
+  const q = $("#hq").value.trim().toLowerCase(), DEP = HIST.depenses || {};
+  const rows = (HIST[hvue] || []).filter((r) => !q || JSON.stringify(r).toLowerCase().includes(q));
+  let html = "", mois = null, tot = 0;
+  const t0 = new Date(), auj = `${t0.getFullYear()}-${String(t0.getMonth() + 1).padStart(2, "0")}-${String(t0.getDate()).padStart(2, "0")}`;
+  const attente = `<span class="tagc">saving…</span>`;
+  if (hvue === "ventes"){
+    for (const v0 of rows){
+      const c = corr("ventes", v0.id), v = c ? { ...v0, d: c.date_vente ?? v0.d, px: c.prix_vente ?? v0.px, q: c.quantite ?? v0.q, p: c.plateforme ?? v0.p, n: c.nom_article ?? v0.n } : v0;
+      const m = HMOIS(v.d); if (m !== mois){ mois = m; html += `<tr class="mois"><td colspan="3">${m}</td></tr>`; }
+      tot += +v.px || 0;
+      html += `<tr${v.d === auj ? ' class="today"' : ""}><td class="dt">${v.d === auj ? "Today" : jj(v.d)}</td><td>${esc(v.n)}${v.q > 1 ? ` <span class="tagc">×${v.q}</span>` : ""}${v.co ? `<span class="tagc">shared</span>` : ""}${c ? attente : ""}
+        <div class="sub">${esc(v.p)}${v.k ? " · " + esc(v.k) : ""} <span class="rid">#${v.id}</span> ${editBtn("v" + v.id)}</div></td><td class="num">${v.px == null ? "?" : eur(v.px)}</td></tr>`;
+      if (hedit === "v" + v.id) html += `<tr class="det"><td colspan="3">${formEdit("ventes:" + v.id,
+        champ("Date", "date_vente", v.d, "date") + champ("Price (€)", "prix_vente", v.px, "number") + champ("Quantity", "quantite", v.q, "number", 'step="1" min="1"') +
+        champ("Platform", "plateforme", v.p) + `<div style="grid-column:1/-1">${champ("Item", "nom_article", v.n)}</div>`)}</td></tr>`;
+    }
+    $("#hsum").textContent = `${rows.length} latest sales shown, ${eur(tot)} in total. Newest first.`;
+  } else {
+    for (const a0 of rows){
+      const ca = corr("achats", a0.id), a = ca ? { ...a0, d: ca.date_achat ?? a0.d, l: ca.lieu ?? a0.l, no: ca.notes ?? a0.no, cb: ca.cashback != null ? +ca.cashback : a0.cb } : a0;
+      const it = a.it.map((x) => { const c = corr("articles", x[5]); return c ? [c.quantite ?? x[0], c.designation ? c.designation : x[1], c.prix_total ?? x[2], x[3], x[4], x[5], c.cagnotte ?? x[6], c.designation ?? x[7], 1, x[9]] : x; });
+      const total = it.reduce((s, x) => s + (+x[2] || 0), 0), cag = it.reduce((s, x) => s + (+x[6] || 0), 0);
+      const m = HMOIS(a.d); if (m !== mois){ mois = m; const dm = DEP.mois && DEP.mois[String(a.d || "").slice(0, 7)]; html += `<tr class="mois"><td colspan="2">${m}</td><td class="num">${dm != null && !q ? eur(dm) : ""}</td></tr>`; }
+      tot += total;
+      const n = it.reduce((s, x) => s + (+x[0] || 1), 0), first = it[0] ? it[0][1] : "No item";
+      const extra = [cag ? `cagnotte ${eur(cag)}` : "", a.cb ? `cashback ${eur(a.cb)}` : "", a.pt ? `${a.pt} pts` : ""].filter(Boolean).join(" · ");
+      const enCours = ca || it.some((x) => x[8]);
+      const pb = [a.x && !a.x.ok ? "Email: " + a.x.msg : "", a.rg && !actions["vire-" + a.id] ? a.rg : ""].filter(Boolean);
+      const etiq = pb.length ? `<div class="sub alerte-txt">⚠ ${esc(pb.join(" · "))}</div>` : "";
+      html += `<tr class="ach${a.d === auj ? " today" : ""}${pb.length ? " alerte" : ""}" data-id="${a.id}"><td class="dt">${a.d === auj ? "Today" : jj(a.d)}</td><td><b>${esc(a.l)}</b> · ${n} item${n > 1 ? "s" : ""}${enCours ? attente : ""}
+        <div class="sub">${esc(first)}${it.length > 1 ? ` +${it.length - 1} more` : ""} <span class="rid">Lot ID ${a.id}</span>${a.x && a.x.ok ? `<span class="tagc ok">✓ email</span>` : ""}</div>${etiq}</td><td class="num">${eur(total)}</td></tr>`;
+      if (hopen[a.id]){
+        html += `<tr class="det"><td colspan="3"><ul>${it.map((x) => `<li><span>${x[0] > 1 ? x[0] + " × " : ""}${esc(x[1])}${x[3] && !x[9] ? `<span class="tagc">gift</span>` : ""}${x[4] ? `<span class="tagc">shared</span>` : ""}${x[6] ? `<span class="tagc">cagnotte ${eur(x[6])}</span>` : ""}${x[9] ? `<span class="tagc">${+x[2] > 0 ? "part paid with" : "paid with"} ${x[9]} pts (${eur(Math.round(x[9] / 1.5) / 100)})</span>` : ""}${x[5] ? ` <span class="rid">ID Achat ${x[5]}</span> ` + editBtn("i" + x[5]) : ""}</span><span class="num">${eur(x[2])}</span></li>` +
+          (hedit === "i" + x[5] ? `<li class="fe">${formEdit("articles:" + x[5], champ("Quantity", "quantite", x[0], "number", 'step="1" min="1"') + champ("Total paid (€)", "prix_total", x[2], "number") +
+            champ("Cagnotte (€)", "cagnotte", x[6], "number") + `<div style="grid-column:1/-1">${champ("Description", "designation", x[7])}</div>`)}</li>` : "")).join("")}</ul>
+          ${extra ? `<div class="sub">${extra}</div>` : ""}${a.no ? `<div class="sub clamp">${esc(a.no)}</div>` : ""}<div class="sub">${editBtn("a" + a.id)} date, store, cashback or notes of this order</div>
+          ${hedit === "a" + a.id ? formEdit("achats:" + a.id, champ("Date", "date_achat", a.d, "date") + champ("Store", "lieu", a.l) + champ("iGraal cashback (€)", "cashback", a.cb, "number") + `<div style="grid-column:1/-1">${champ("Notes", "notes", a.no)}</div>`) : ""}</td></tr>`;
+      }
+    }
+    const dt = new Date(), cle = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
+    $("#hsum").innerHTML = (DEP.total != null ? `<span class="dep"><span><small>Spent since ${DEP.debut ? HMOIS(DEP.debut + "-01") : "the start"}</small><b>${eur(DEP.total)}</b></span><span><small>This month</small><b>${eur(DEP.mois[cle] || 0)}</b></span></span>` : "") +
+      esc(`${rows.length} latest purchases shown. Newest first, tap one to see its items. Each month shows its total spent.`);
+  }
+  $("#hist").innerHTML = rows.length ? `<table class="htab"><thead><tr><th>Date</th><th>${hvue === "ventes" ? "Item" : "Order"}</th><th class="num">${hvue === "ventes" ? "Price" : "Paid"}</th></tr></thead><tbody>${html}</tbody></table>` : `<p class="empty">Nothing matches.</p>`;
+}
+$("#hseg").addEventListener("click", (e) => { const x = e.target.closest("button"); if (!x) return; hvue = x.dataset.h; hedit = null; try { localStorage.setItem("hvue", hvue); } catch (er) {} rendreHist(); });
+$("#hq").addEventListener("input", rendreHist);
+$("#hist").addEventListener("click", (e) => {
+  const eb = e.target.closest("[data-e]");
+  if (eb){ if (!db){ note("Sign in to correct a line."); return; } hedit = hedit === eb.dataset.e ? null : eb.dataset.e; rendreHist(); return; }
+  if (e.target.closest("[data-x=cancel]")){ hedit = null; rendreHist(); return; }
+  if (e.target.closest("form")) return;
+  const r = e.target.closest("tr.ach"); if (!r) return; hopen[r.dataset.id] = !hopen[r.dataset.id]; rendreHist();
+});
+$("#hist").addEventListener("submit", async (e) => {
+  e.preventDefault(); if (!db) return;
+  const [table, id] = e.target.dataset.k.split(":"), f = new FormData(e.target), valeurs = {};
+  // On n'envoie que ce qui a changé.
+  for (const inp of e.target.querySelectorAll("input")) if (inp.value !== inp.defaultValue) valeurs[inp.name] = inp.value;
+  hedit = null;
+  if (!Object.keys(valeurs).length){ rendreHist(); return; }
+  const cle = `corr-${table}-${id}-${Date.now()}`, act = { type: "corrige", table, id: +id, valeurs, le: new Date().toISOString(), fait: false };
+  actions[cle] = act; rendreHist();
+  try { await db.doc("actions/" + cle).set(act); note("Correction saved. It goes into your base within 30 minutes."); }
+  catch (err) { delete actions[cle]; rendreHist(); note("This correction was not saved. Check your connection and try again."); }
+});
+
+hauteurBarre();
+rendre(); rendreHome(); rendreTodo(); rendreDeals(); rendreHist();
+
+(async () => {
+  db = await window.claude?.use?.("db");
+  if (!db){ note("Sign in to save your counts and see live data. Until then the app is read-only."); rendre(); rendreHome(); return; }
+  rendreHome(); rendreDeals();
+  db.doc("etat/principal").onSnapshot((snap) => {
+    ETAT = snap.exists ? snap.data() : null;
+    rendreAnnonces();
+    $("#fresh").textContent = ETAT ? "Updated " + depuis(ETAT.maj) : "";
+    rendreHome(); rendreTodo(); rendreDeals(); if (vue === "scan") rendreScanVue();
+  }, () => note("The dashboard could not be loaded right now. Reload the page."));
+  db.doc("etat/historique").onSnapshot((snap) => {
+    HIST = snap.exists ? snap.data() : null;
+    // Quantités de la base rafraîchies à chaque passage (sinon : copie figée à la publication)
+    if (HIST && HIST.ex) { EXEMP = HIST.ex; EXEMP_LE = new Date(HIST.maj).toISOString(); }
+    rendreHist(); if (vue === "scan") rendreScanVue();
+  }, () => {});
+  db.collection("archives").onSnapshot((snap) => {
+    for (const ch of snap.docChanges()){
+      const d = ch.doc.data() || {};
+      if (ch.type === "removed") { delete archives[ch.doc.id]; continue; }
+      // L'archive se vide toute seule après ARCHIVE_JOURS jours
+      if (Date.now() - new Date(d.le) > ARCHIVE_JOURS * 864e5) { delete archives[ch.doc.id]; db.doc("archives/" + ch.doc.id).delete().catch(() => {}); }
+      else archives[ch.doc.id] = d.le;
+    }
+    rendreDeals();
+  }, () => {});
+  db.collection("actions").onSnapshot((snap) => {
+    for (const ch of snap.docChanges()){
+      const d = ch.doc.data() || {};
+      if (ch.type === "removed") delete actions[ch.doc.id]; else actions[ch.doc.id] = d;
+    }
+    rendreTodo(); rendreDeals(); rendreHist(); if (vue === "stock") rendre();
+  }, () => {});
+  let premier = true;
+  db.collection("comptes").onSnapshot((snap) => {
+    const changes = [];
+    for (const ch of snap.docChanges()){
+      const id = ch.doc.id, d = ch.doc.data() || {};
+      if (pending[id]) continue;  // une modification locale est en cours d'envoi
+      if (ch.type === "removed") delete counts[id]; else counts[id] = { n: d.n, maj: d.maj };
+      changes.push(id);
+    }
+    if (premier){ premier = false; rendre(); } else changes.forEach(majCarte);
+    rafraichirResume(); rendrePlateformes();
+  }, () => note("Saved counts could not be loaded right now. Reload the page."));
+  db.collection("baisses").onSnapshot((snap) => {
+    for (const ch of snap.docChanges()){
+      const d = ch.doc.data() || {};
+      // Une coche ne vaut que pour la liste de la semaine où elle a été faite
+      if (ch.type === "removed" || (ETAT?.baisses?.liste && d.liste !== ETAT.baisses.liste)) delete baissesFaites[ch.doc.id]; else baissesFaites[ch.doc.id] = true;
+    }
+    rendreAnnonces();
+  }, () => {});
+  db.collection("leboncoin").onSnapshot((snap) => {
+    for (const ch of snap.docChanges()){
+      const d = ch.doc.data() || {};
+      // Un export Leboncoin plus récent que la coche fait foi
+      if (ch.type === "removed" || (LBC.date && d.le < LBC.date)) delete lbcMarques[ch.doc.id]; else lbcMarques[ch.doc.id] = !!d.on;
+    }
+    rendreAnnonces();
+  }, () => {});
+  db.collection("ean").onSnapshot((snap) => {
+    for (const ch of snap.docChanges()){ const d = ch.doc.data() || {}; if (ch.type === "removed") delete EANAPPRIS[ch.doc.id]; else if (/^\d{3,7}$/.test(d.set || "")) EANAPPRIS[ch.doc.id] = d.set; }
+  }, () => {});
+  db.collection("plateformes").onSnapshot((snap) => {
+    for (const ch of snap.docChanges()){
+      if (ch.type === "removed") delete pfaits[ch.doc.id]; else pfaits[ch.doc.id] = ch.doc.data() || {};
+    }
+    rendrePlateformes();
+  }, () => {});
+  db.collection("decoupes").onSnapshot((snap) => {
+    const ids = [];
+    for (const ch of snap.docChanges()){
+      const id = ch.doc.id, d = ch.doc.data() || {};
+      if (pending["cut:" + id]) continue;
+      if (ch.type === "removed" || !d.on) delete decoupes[id]; else decoupes[id] = true;
+      ids.push(id);
+    }
+    ids.forEach(majCarte);
+    rafraichirResume();
+  }, () => {});
+  setInterval(() => { if (ETAT) $("#fresh").textContent = "Updated " + depuis(ETAT.maj); }, 60000);
+})();
+</script></body></html>

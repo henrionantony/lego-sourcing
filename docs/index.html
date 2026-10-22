@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f5c400">
+<title>LEGO Scan</title>
+<style>
+:root{--bg:#f6f5f2;--card:#fff;--ink:#1b1b1b;--sub:#6b6b6b;--line:#e3e1dc;--acc:#f5c400;--ok:#1f7a3a;--ko:#b3261e}
+@media (prefers-color-scheme:dark){:root{--bg:#141414;--card:#1f1f1f;--ink:#f1f1f1;--sub:#a3a3a3;--line:#333;--ok:#5cc47e;--ko:#ff8a80}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:16px 16px calc(24px + env(safe-area-inset-bottom))}
+h1{font-size:20px;margin:4px 0 2px}
+.sub{color:var(--sub);font-size:14px;margin:0 0 14px}
+.shoot{display:flex;flex-direction:column;align-items:center;gap:4px;background:var(--acc);color:#1b1b1b;border-radius:16px;padding:22px 16px;font-weight:700;font-size:18px;cursor:pointer;text-align:center}
+.shoot small{font-weight:400;font-size:13px}
+.busy{opacity:.6;pointer-events:none}
+.msg{margin:12px 0;font-size:15px}.msg.ko{color:var(--ko)}.msg.ok{color:var(--ok)}
+.prev{display:flex;gap:12px;align-items:center;margin:14px 0 8px}
+.prev img{width:84px;height:112px;object-fit:cover;border-radius:10px;border:1px solid var(--line)}
+.choix{display:grid;gap:10px}
+.c{display:grid;grid-template-columns:72px 1fr;gap:12px;align-items:center;background:var(--card);border:2px solid var(--line);border-radius:14px;padding:10px;text-align:left;color:inherit;font:inherit;width:100%;cursor:pointer}
+.c.sel{border-color:var(--ok)}
+.c img{width:72px;height:72px;object-fit:contain;background:#fff;border-radius:8px}
+.c b{display:block;font-size:17px}.c small{display:block;color:var(--sub);font-size:13px}
+.c em{font-style:normal;font-size:13px;color:var(--sub)}.c em.hi{color:var(--ok);font-weight:600}
+.man{display:flex;gap:8px;margin-top:10px}
+input[type=text]{flex:1;min-width:0;font:inherit;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:inherit}
+.btn{font:inherit;padding:10px 14px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:inherit;cursor:pointer}
+.btn.yes{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+h2{font-size:16px;margin:24px 0 8px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.hist{list-style:none;margin:0;padding:0;background:var(--card);border:1px solid var(--line);border-radius:14px}
+.hist li{display:flex;gap:10px;align-items:center;padding:8px 10px;border-top:1px solid var(--line)}
+.hist li:first-child{border-top:0}
+.hist img{width:40px;height:40px;object-fit:contain;background:#fff;border-radius:6px}
+.hist span{flex:1;min-width:0}.hist .pm{min-width:40px;padding:8px 0;font-weight:600;font-size:18px}.hist small{display:block;color:var(--sub);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.empty{color:var(--sub);font-size:14px;padding:10px}
+.qui{font-size:13px;color:var(--sub);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin:0 0 10px}
+.qui b{color:var(--ink)}.qui .ok{color:var(--ok)}.qui .ko{color:var(--ko)}
+details.ia{margin-top:24px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+details.ia summary{font-weight:700;cursor:pointer}
+.kv{display:grid;grid-template-columns:1fr auto;gap:4px 12px;font-size:14px;margin:10px 0}
+.kv span:nth-child(even){text-align:right;font-weight:600}
+.note{font-size:13px;color:var(--sub)}
+</style>
+</head>
+<body>
+<h1>🧍 LEGO Scan</h1>
+<p class="sub">Photo a minifigure, tap the right match, then paste the list into LEGO HQ (Scan tab).</p>
+
+<label class="shoot" id="shoot"><input type="file" id="f" accept="image/*" hidden>
+  📷 Photo a minifigure<small>One figure per photo, close up, plain background if you can</small></label>
+<p class="msg" id="msg" hidden></p>
+<div id="res"></div>
+
+<h2><span>This session <span id="nb"></span></span><span class="row" style="margin:0"><button class="btn yes" id="copier">Copy list</button><button class="btn" id="vider">Clear</button></span></h2>
+<ul class="hist" id="hist"></ul>
+
+<details class="ia" id="ia"><summary>🧠 Our model <span id="ia-etat" class="note"></span></summary>
+  <div class="kv" id="ia-kv"></div>
+  <p class="note" id="ia-mode"></p>
+  <div class="row"><button class="btn" id="sauver">Back up photos</button><label class="btn">Restore<input type="file" id="restaurer" accept="application/json,.json" hidden></label></div>
+  <p class="note">Each figure you confirm is kept on this phone (photo + fingerprint) and teaches our model. Back up now and then: clearing the browser data erases it.</p>
+</details>
+
+<script>
+// Reconnaissance des minifigs : la photo part directement du téléphone vers Brickognize
+// (gratuit, sans clé). Notre propre modèle tourne à côté, sur le téléphone : il apprend de
+// chaque figurine validée et prend la main quand son score mesuré le permet.
+// Rien n'est stocké ailleurs que sur ce téléphone.
+const API = "https://api.brickognize.com/predict/figs/";
+const TFJS = "https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js";
+const MODELE = "https://storage.googleapis.com/tfjs-models/tfjs/mobilenet_v1_1.0_224/model.json";
+const SUR = 0.9;                 // similarité à partir de laquelle notre modèle se dit « sûr »
+const PRISE_MIN = 50, PRISE_TAUX = 0.98;  // il répond en premier seulement s'il a fait ≥98 % sur ≥50 validations
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const lire = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch (e) { return d; } };
+const ecrire = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+let liste = lire("liste", []);          // [{code, nom, img}]
+let corr = lire("corrections", {});     // 1er choix proposé -> choix retenu, appris des corrections
+let stats = lire("stats", { api: [0, 0], nous: [0, 0], log: [] });  // [justes, total] ; log [[sim, juste]]
+let courant = null;                     // {photo, top, apiTop1, nous, emb, blob, qui}
+
+function msg(t, ok){ const m = $("#msg"); m.textContent = t; m.className = "msg" + (ok === false ? " ko" : ok ? " ok" : ""); m.hidden = !t; }
+
+// ---------- Mémoire du téléphone (IndexedDB) : photos validées + empreintes ----------
+let base = [];                          // [{id, code, nom, img, e1, e2}] en mémoire pour comparer vite
+const idb = new Promise((ok, ko) => {
+  const r = indexedDB.open("legoscan", 1);
+  r.onupgradeneeded = () => r.result.createObjectStore("photos", { keyPath: "id", autoIncrement: true });
+  r.onsuccess = () => ok(r.result); r.onerror = () => ko(r.error);
+});
+async function tx(mode, f){
+  const db = await idb;
+  return new Promise((ok, ko) => { const t = db.transaction("photos", mode); const r = f(t.objectStore("photos")); t.oncomplete = () => ok(r && r.result); t.onerror = () => ko(t.error); });
+}
+const toutes = () => tx("readonly", (s) => s.getAll());
+async function chargerBase(){ try { base = (await toutes()).filter((x) => x.e1); } catch (e) { base = []; } rendreIA(); }
+
+// ---------- Notre modèle : empreinte MobileNet (1024 nombres) comparée aux photos validées ----------
+let tronque = null, etatIA = "loading";
+function script(src){ return new Promise((ok, ko) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = ko; document.head.appendChild(s); }); }
+const pret = (async () => {
+  try {
+    await script(TFJS);
+    let m; try { m = await tf.loadLayersModel("indexeddb://mobilenet"); }
+    catch (e) { m = await tf.loadLayersModel(MODELE); m.save("indexeddb://mobilenet").catch(() => {}); }
+    tronque = tf.model({ inputs: m.inputs, outputs: m.getLayer("conv_pw_13_relu").output });
+    etatIA = "ready";
+  } catch (e) { etatIA = "off"; }
+  rendreIA(); return !!tronque;
+})();
+function empreinte(img, x, y, w, h){
+  const c = document.createElement("canvas"); c.width = c.height = 224;
+  c.getContext("2d").drawImage(img, x, y, w, h, 0, 0, 224, 224);
+  return tf.tidy(() => {
+    const e = tronque.predict(tf.browser.fromPixels(c).toFloat().div(127.5).sub(1).expandDims()).mean([1, 2]);
+    return e.div(e.norm()).dataSync().slice();
+  });
+}
+const dot = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * b[i]; return s; };
+function devinerNous(q){
+  const m = {};
+  for (const x of base) {
+    const s = Math.max(dot(q[0], x.e1), dot(q[0], x.e2), dot(q[1], x.e1), dot(q[1], x.e2));
+    if (!m[x.code] || s > m[x.code].sim) m[x.code] = { code: x.code, nom: x.nom, img: x.img, sim: s };
+  }
+  return Object.values(m).sort((a, b) => b.sim - a.sim).slice(0, 3);
+}
+// Seuil de confiance mesuré : le plus bas où notre modèle a fait ≥98 % sur ≥50 validations
+function seuilConfiance(){
+  for (let t = 0.8; t <= 0.991; t += 0.01) {
+    const l = stats.log.filter((x) => x[0] >= t);
+    if (l.length >= PRISE_MIN && l.filter((x) => x[1]).length / l.length >= PRISE_TAUX) return t;
+  }
+  return null;
+}
+
+// ---------- Photo ----------
+async function charger(file){
+  const url = URL.createObjectURL(file);
+  const img = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = url; });
+  return { img, url };
+}
+function jpeg(img, x, y, w, h, max = 1000, q = .88){
+  const k = Math.min(1, max / Math.max(w, h)), c = document.createElement("canvas");
+  c.width = Math.round(w * k); c.height = Math.round(h * k);
+  c.getContext("2d").drawImage(img, x, y, w, h, 0, 0, c.width, c.height);
+  return new Promise((ok) => c.toBlob(ok, "image/jpeg", q));
+}
+async function demander(blob){
+  const f = new FormData(); f.append("query_image", blob, "fig.jpg");
+  const r = await fetch(API, { method: "POST", body: f });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return (await r.json()).items || [];
+}
+// Photo entière + centre recadré, en parallèle : la figurine petite dans le cadre est trouvée
+// grâce au recadrage (93 % de bonnes réponses au test sur 60 annonces, contre 43 % sans).
+async function brickognize(img, W, H){
+  const [a, b] = await Promise.all([
+    jpeg(img, 0, 0, W, H).then(demander).catch(() => null),
+    jpeg(img, W * .25, H * .12, W * .5, H * .6).then(demander).catch(() => null),
+  ]);
+  if (a === null && b === null) return null;
+  const m = {};
+  for (const it of [...(a || []), ...(b || [])]) if (!m[it.id] || it.score > m[it.id].score) m[it.id] = it;
+  return Object.values(m).sort((x, y) => y.score - x.score).slice(0, 3);
+}
+async function reconnaitre(file){
+  const { img, url } = await charger(file);
+  const W = img.naturalWidth, H = img.naturalHeight;
+  const r = { photo: url, blob: jpeg(img, 0, 0, W, H, 640, .8), emb: null, nous: [], top: [], apiTop1: null, qui: "api" };
+  // Notre modèle d'abord (sur le téléphone, sans réseau) si son modèle est déjà chargé
+  const emp = () => { try { return [empreinte(img, 0, 0, W, H), empreinte(img, W * .25, H * .12, W * .5, H * .6)]; } catch (e) { return null; } };
+  if (tronque) { r.emb = emp(); if (r.emb) r.nous = devinerNous(r.emb); }
+  else r.embP = pret.then((ok) => ok ? emp() : null);   // modèle encore en chargement : l'empreinte suivra pour la mémoire
+  const seuil = seuilConfiance();
+  if (seuil !== null && r.nous[0] && r.nous[0].sim >= seuil) {
+    r.qui = "nous";
+    r.top = r.nous.map((n) => ({ id: n.code, name: n.nom, img_url: n.img, sim: n.sim }));
+    return r;
+  }
+  const api = await brickognize(img, W, H);
+  if (api === null) {
+    if (!r.nous.length) throw new Error("réseau");
+    r.qui = "secours";   // Brickognize n'a pas répondu : notre modèle prend le relais
+    r.top = r.nous.map((n) => ({ id: n.code, name: n.nom, img_url: n.img, sim: n.sim }));
+    return r;
+  }
+  r.apiTop1 = api[0] ? api[0].id : null;
+  let top = api;
+  // Correction déjà faite sur ce 1er choix : on propose d'abord la bonne
+  const c = top[0] && corr[top[0].id];
+  if (c && !top.some((t) => t.id === c.code)) top.unshift({ id: c.code, name: c.nom, img_url: c.img, score: null, appris: true });
+  else if (c) top.sort((x, y) => (y.id === c.code) - (x.id === c.code));
+  r.top = top.slice(0, 3);
+  return r;
+}
+
+async function lancerPhoto(file){
+  $("#shoot").classList.add("busy"); msg("Recognizing…"); $("#res").innerHTML = "";
+  try { courant = await reconnaitre(file); msg(""); rendreRes(); }
+  catch (err) { msg("No answer from the recognition service. Check your connection and try again.", false); }
+  finally { $("#shoot").classList.remove("busy"); }
+}
+$("#f").addEventListener("change", (e) => {
+  const file = e.target.files && e.target.files[0]; e.target.value = ""; if (file) lancerPhoto(file);
+});
+
+const court = (n) => String(n || "").split(" - ")[0];
+const pc = (x) => Math.round(x * 100) + "%";
+function ligneQui(){
+  const c = courant, n = c.nous[0];
+  if (c.qui === "nous") return `Answered by: <b>our model</b> (${pc(n.sim)} match, Brickognize not used) · <a href="#" id="aussi-api">ask Brickognize too</a>`;
+  if (c.qui === "secours") return `Answered by: <b>our model</b>, as backup <span class="ko">(Brickognize didn't answer)</span>`;
+  let l = "Answered by: <b>Brickognize</b>";
+  if (etatIA !== "ready" || !c.emb) l += " · Our model: " + (etatIA === "off" ? "unavailable" : "still loading");
+  else if (!n) l += " · Our model: nothing learned yet";
+  else l += ` · Our model: ${esc(n.code)} (${pc(n.sim)}) ` + (n.code === (c.top[0] && c.top[0].id) ? `<span class="ok">agrees</span>` : `<span class="ko">differs</span>`);
+  return l;
+}
+function rendreRes(){
+  if (!courant) { $("#res").innerHTML = ""; return; }
+  const t = courant.top;
+  $("#res").innerHTML = `<div class="prev"><img src="${courant.photo}" alt="Your photo"><div><b>${t.length ? "Which one is it?" : "Not recognized"}</b>
+      <div class="sub" style="margin:2px 0 0">${t.length ? "Tap the right one to add it to the list." : "Take a closer photo, or type the reference below."}</div></div></div>
+    <p class="qui">${ligneQui()}</p>
+    <div class="choix">${t.map((c, k) => `<button class="c" data-k="${k}"><img src="${esc(c.img_url || "")}" alt="" loading="lazy">
+      <span><b>${esc(c.id)}</b><small>${esc(c.name)}</small>
+      <em class="${c.appris || c.score >= .8 || c.sim >= SUR ? "hi" : ""}">${c.appris ? "Your earlier correction" : c.sim != null ? pc(c.sim) + " match with your photos" : pc(c.score) + " sure" + (c.score >= .8 ? "" : " · check it")}</em></span></button>`).join("")}</div>
+    <form class="man" id="man"><input type="text" name="c" placeholder="or type the ref, e.g. sw0607" autocapitalize="off" autocorrect="off" aria-label="Minifigure reference"><button class="btn">Add</button></form>`;
+}
+// Validation : on note qui avait raison, puis la photo et son empreinte rejoignent la mémoire
+async function apprendre(c, code, nom, img){
+  if (c.qui === "api" && c.apiTop1) { stats.api[1]++; if (c.apiTop1 === code) stats.api[0]++; }
+  const n = c.nous[0];
+  if (n) {
+    const ok = n.code === code;
+    stats.nous[1]++; if (ok) stats.nous[0]++;
+    stats.log.push([Math.round(n.sim * 1000) / 1000, ok ? 1 : 0]); if (stats.log.length > 1000) stats.log.shift();
+  }
+  ecrire("stats", stats);
+  if (!c.emb && c.embP) c.emb = await c.embP;
+  if (!c.emb) { rendreIA(); return; }
+  try {
+    const x = { code, nom, img, e1: c.emb[0], e2: c.emb[1], photo: await c.blob, quand: new Date().toISOString(), qui: c.qui };
+    const id = await tx("readwrite", (s) => s.add(x)); x.id = id; base.push(x);
+  } catch (e) {}
+  rendreIA();
+}
+function ajouter(code, nom, img){
+  const c = courant, t = c && c.top[0];
+  // Le 1er choix de Brickognize était faux : on retient la bonne réponse pour la prochaine fois
+  if (t && c.qui === "api" && t.id !== code && !t.appris) { corr[t.id] = { code, nom, img }; ecrire("corrections", corr); }
+  if (c) apprendre(c, code, nom, img);
+  // Déjà dans la liste : on ajoute un exemplaire au lieu d'une nouvelle ligne
+  const deja = liste.find((x) => x.code === code);
+  if (deja) { deja.n = (deja.n || 1) + 1; if (!deja.nom && nom) deja.nom = nom; }
+  else liste.unshift({ code, nom, img, n: 1 });
+  ecrire("liste", liste);
+  courant = null; rendreRes(); rendreListe();
+  msg(`✓ ${code} added${deja ? ` (now ×${deja.n})` : ""}. Use + if you have several of the same.`, true);
+}
+$("#res").addEventListener("click", async (e) => {
+  if (e.target.id === "aussi-api") {
+    e.preventDefault(); const c = courant;
+    $("#shoot").classList.add("busy"); msg("Asking Brickognize…");
+    const { img } = await charger(await c.blob);
+    const api = await brickognize(img, img.naturalWidth, img.naturalHeight);
+    $("#shoot").classList.remove("busy"); msg(api ? "" : "Brickognize didn't answer.", api ? "" : false);
+    if (api && api.length) { c.qui = "api"; c.apiTop1 = api[0].id; c.top = api; rendreRes(); }
+    return;
+  }
+  const b = e.target.closest(".c"); if (!b) return;
+  const c = courant.top[+b.dataset.k]; ajouter(c.id, court(c.name), c.img_url || "");
+});
+$("#res").addEventListener("submit", (e) => {
+  e.preventDefault(); const v = e.target.c.value.trim().toLowerCase();
+  if (!/^[a-z]{2,5}\d{2,5}[a-z]?$/.test(v)) { msg("A minifigure reference looks like sw0607 or njo0938.", false); return; }
+  ajouter(v, "", "");
+});
+
+function rendreListe(){
+  const tot = liste.reduce((a, x) => a + (x.n || 1), 0);
+  $("#nb").textContent = tot ? `(${tot})` : "";
+  $("#hist").innerHTML = liste.map((x, k) => `<li>${x.img ? `<img src="${esc(x.img)}" alt="" loading="lazy">` : ""}<span><b>${x.n > 1 ? x.n + " × " : ""}${esc(x.code)}</b><small>${esc(x.nom)}</small></span>
+      <button class="btn pm" data-moins="${k}" aria-label="One less ${esc(x.code)}">−</button><button class="btn pm" data-plus="${k}" aria-label="One more ${esc(x.code)}">+</button></li>`).join("")
+    || `<li class="empty">Nothing yet. Each figure you confirm lands here.</li>`;
+  $("#copier").disabled = $("#vider").disabled = !liste.length;
+}
+$("#hist").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.plus) liste[+b.dataset.plus].n = (liste[+b.dataset.plus].n || 1) + 1;
+  else if (b.dataset.moins) { const x = liste[+b.dataset.moins]; x.n = (x.n || 1) - 1; if (x.n <= 0) liste.splice(+b.dataset.moins, 1); }
+  ecrire("liste", liste); rendreListe();
+});
+// Une ligne par figurine « code ×n · nom » : LEGO HQ lit le code et la quantité
+$("#copier").addEventListener("click", async () => {
+  const txt = liste.slice().reverse().map((x) => x.code + (x.n > 1 ? " ×" + x.n : "") + (x.nom ? " · " + x.nom : "")).join("\n");
+  const tot = liste.reduce((a, x) => a + (x.n || 1), 0);
+  try { await navigator.clipboard.writeText(txt); msg(`✓ ${tot} minifigure${tot > 1 ? "s" : ""} copied. Paste them in LEGO HQ, Scan tab, Minifigures field.`, true); }
+  catch (e) { msg("Copy was blocked. Long-press the list to select it instead.", false); }
+});
+$("#vider").addEventListener("click", () => {
+  if (!liste.length || !window.confirm(`Clear the ${liste.length} figure(s) of this session?`)) return;
+  liste = []; ecrire("liste", liste); rendreListe(); msg("");
+});
+
+// ---------- Tableau de bord du modèle ----------
+const taux = (x) => x[1] ? `${x[0]}/${x[1]} (${pc(x[0] / x[1])})` : "—";
+async function rendreIA(){
+  const codes = new Set(base.map((x) => x.code)).size, sur = stats.log.filter((x) => x[0] >= SUR);
+  const s = seuilConfiance();
+  $("#ia-etat").textContent = etatIA === "loading" ? "· loading…" : etatIA === "off" ? "· unavailable" : s !== null ? "· answers first" : "· learning";
+  let place = "—";
+  try { const e = await navigator.storage.estimate(); place = (e.usage / 1048576).toFixed(1) + " MB"; } catch (e) {}
+  $("#ia-kv").innerHTML = [
+    ["Photos learned", base.length], ["Different figures", codes],
+    ["Brickognize right", taux(stats.api)], ["Our model right", taux(stats.nous)],
+    [`Our model when sure (≥${pc(SUR)})`, taux([sur.filter((x) => x[1]).length, sur.length])], ["Space used on this phone", place],
+  ].map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join("");
+  $("#ia-mode").textContent = s !== null
+    ? `Our model answers first when its match is ≥${pc(s)} (it was right ${pc(PRISE_TAUX)}+ of the time there). Below that, Brickognize answers.`
+    : `Learning mode: Brickognize answers, our model guesses in the background. It takes over once it is right ≥${pc(PRISE_TAUX)} of the time over ${PRISE_MIN} figures.`;
+  $("#sauver").disabled = !base.length;
+}
+// Sauvegarde : un fichier JSON avec photos, empreintes et score (à garder pour entraîner un vrai modèle)
+const b64 = (u8) => { let s = ""; for (let i = 0; i < u8.length; i += 32768) s += String.fromCharCode.apply(null, u8.subarray(i, i + 32768)); return btoa(s); };
+const deB64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+$("#sauver").addEventListener("click", async () => {
+  msg("Preparing the backup…");
+  const photos = await Promise.all((await toutes()).map(async (x) => ({
+    code: x.code, nom: x.nom, img: x.img, quand: x.quand, qui: x.qui,
+    e1: b64(new Uint8Array(x.e1.buffer)), e2: b64(new Uint8Array(x.e2.buffer)),
+    photo: x.photo ? b64(new Uint8Array(await x.photo.arrayBuffer())) : null,
+  })));
+  const blob = new Blob([JSON.stringify({ v: 1, date: new Date().toISOString(), stats, corrections: corr, photos })], { type: "application/json" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `lego-scan-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  msg(`✓ Backup of ${photos.length} photo${photos.length > 1 ? "s" : ""} ready.`, true);
+});
+$("#restaurer").addEventListener("change", async (e) => {
+  const f = e.target.files && e.target.files[0]; e.target.value = ""; if (!f) return;
+  try {
+    const d = JSON.parse(await f.text()); if (!d.photos) throw 0;
+    const deja = new Set(base.map((x) => x.quand + x.code)); let n = 0;
+    for (const p of d.photos) {
+      if (deja.has(p.quand + p.code)) continue;
+      const x = { code: p.code, nom: p.nom, img: p.img, quand: p.quand, qui: p.qui,
+        e1: new Float32Array(deB64(p.e1).buffer), e2: new Float32Array(deB64(p.e2).buffer),
+        photo: p.photo ? new Blob([deB64(p.photo)], { type: "image/jpeg" }) : null };
+      x.id = await tx("readwrite", (s) => s.add(x)); base.push(x); n++;
+    }
+    if (!stats.api[1] && !stats.nous[1] && d.stats) { stats = d.stats; ecrire("stats", stats); }
+    corr = Object.assign({}, d.corrections || {}, corr); ecrire("corrections", corr);
+    rendreIA(); msg(`✓ ${n} photo${n > 1 ? "s" : ""} restored.`, true);
+  } catch (err) { msg("This file is not a LEGO Scan backup.", false); }
+});
+
+rendreListe(); chargerBase();
+</script>
+</body>
+</html>
