@@ -371,7 +371,7 @@ h2.sec:first-child{margin-top:4px}
 .pf-ligne.passe{opacity:.6}
 .pf-ic{flex:none;width:22px;text-align:center} .pf-lt{flex:1;min-width:0} .pf-lt span{display:block;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 dialog.confirmer{border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);padding:16px;max-width:min(340px,calc(100vw - 32px));font:15px/1.4 var(--body)}
-dialog.confirmer::backdrop{background:rgba(0,0,0,.45)} dialog.confirmer p{margin:0 0 14px} dialog.confirmer .row{display:flex;gap:8px;justify-content:flex-end}
+dialog.confirmer::backdrop{background:rgba(0,0,0,.45)} dialog.confirmer p{margin:0 0 14px} dialog.confirmer .row{display:flex;gap:8px;justify-content:flex-end} dialog.confirmer .col{display:flex;flex-direction:column;gap:8px} dialog.confirmer .col .btn{width:100%;justify-content:center}
 .sv{flex:none;width:48px;height:48px;border-radius:6px;overflow:hidden;background:#fff;border:1px solid var(--line);display:flex;align-items:center;justify-content:center}
 .sv .adth{transform:scale(.75);transform-origin:center} .sv .ref{font:700 10px var(--display);color:#5d6472;word-break:break-all;text-align:center}
 .scan-l>span:nth-child(2){flex:1;min-width:0}
@@ -829,7 +829,6 @@ function rendreTodo(){
         return `<li class="tl${x.pret ? " pret" : ""}" data-lid="${esc(x.id)}"><div class="tlh"><span>${x.pret ? `<span class="pill warn">📦 Pick up</span> ` : ""}<b>${esc(x.titre)}</b>${x.sous ? ` <span class="sub">· ${esc(x.sous)}</span>` : ""}</span>
           ${x.action ? (ax ? `<span class="sent">✓ Noted</span>` : `<button class="btn yes" data-a="lig" ${db ? "" : "disabled"}>${esc(x.action.label)}</button>`) : ""}</div>
           ${x.etape != null ? `<ol class="steps">${["Ordered", "Shipped", x.arrivee || "Arrived", "Received"].map((n, i) => `<li class="${i < x.etape ? "fait" : i === x.etape ? "ici" : ""}"><i></i><span>${esc(n)}</span></li>`).join("")}</ol>` : ""}
-          ${t.type === "livraison" && x.sets && !ax ? `<div class="row"><button class="btn yes" data-scan="${esc(x.id)}">📷 Scan this parcel</button></div>` : ""}
           ${x.suivi ? `<div class="sub suivi">Tracking ${x.suivi_url ? `<a href="${esc(x.suivi_url)}" target="_blank" rel="noopener">${esc(x.suivi)} ↗</a>` : esc(x.suivi)}</div>` : ""}
           ${x.url ? `<div class="row"><a class="btn" href="${esc(x.url)}" target="_blank" rel="noopener">Open the email ↗</a></div>` : ""}
           ${x.choix ? (ax ? `<span class="sent">✓ Noted</span>` : `<div class="row choix">${x.choix.map((c, i) => `<button class="btn ${i < x.choix.length - 1 ? "yes" : ""}" data-a="choix" data-i="${i}" ${db ? "" : "disabled"}>${esc(c.label)}</button>`).join("")}</div>`) : ""}
@@ -868,6 +867,16 @@ function nomSet(s){
   const a = ANNONCES.find((x) => x.n === s); return a ? a.t : "";
 }
 // confirm() est bloqué dans claude.ai : petite fenêtre dans la page à la place
+// Petite fenêtre à plusieurs choix : renvoie la valeur du bouton touché, ou null
+function choisir(texte, choix){
+  return new Promise((ok) => {
+    const d = document.createElement("dialog"); d.className = "confirmer";
+    d.innerHTML = `<p></p><div class="col">${choix.map((c) => `<button class="btn${c.oui ? " yes" : ""}" value="${esc(c.v)}">${esc(c.label)}</button>`).join("")}<button class="btn" value="">Cancel</button></div>`;
+    d.querySelector("p").textContent = texte;
+    d.addEventListener("click", (e) => { const b = e.target.closest("button"); if (b || e.target === d){ d.close(); d.remove(); ok(b?.value || null); } });
+    document.body.appendChild(d); d.showModal();
+  });
+}
 function confirmer(texte, oui = "Yes"){
   return new Promise((ok) => {
     const d = document.createElement("dialog"); d.className = "confirmer";
@@ -1215,7 +1224,6 @@ function lignesCashback(l){
 }
 $("#todo").addEventListener("click", async (e) => {
   const b = e.target.closest("button"); if (!b) return;
-  if (b.dataset.scan){ montrer("scan"); await choisirMode("delivery"); if (SC.mode === "delivery"){ SC.cmd = b.dataset.scan; SC.choisi = true; sauverScan(); rendreScanVue(); } return; }
   if (b.dataset.cb){
     const id = b.dataset.cb, act = { type: id.startsWith("cbc-") ? "cashback_confirme" : "cashback_recu", achat_id: +id.slice(4) };
     actions[id] = act; rendreTodo();
@@ -1234,6 +1242,13 @@ $("#todo").addEventListener("click", async (e) => {
   if (b.dataset.a === "lig"){
     const lid = b.closest(".tl").dataset.lid, t = ETAT.a_faire.find((x) => x.id === b.closest(".task").dataset.id);
     const x = t && t.lignes.find((y) => y.id === lid); if (!x || !db) return;
+    if (t.type === "livraison" && x.sets){
+      // Réception d'un colis : vérifier les boîtes au scan, ou valider directement
+      const r = await choisir(`${x.titre}: check the boxes before marking it received?`,
+        [{ v: "scan", label: "📷 Scan this parcel", oui: true }, { v: "ok", label: "Validate without scanning" }]);
+      if (r === "scan"){ montrer("scan"); await choisirMode("delivery"); if (SC.mode === "delivery"){ SC.cmd = lid; SC.choisi = true; sauverScan(); rendreScanVue(); } return; }
+      if (r !== "ok") return;
+    }
     const { label, ...act } = x.action;
     actions[lid] = { ...act, tache: lid }; rendreTodo(); if (typeof rendreHist === "function") rendreHist();
     try { await db.doc("actions/" + lid).set({ ...act, tache: lid, le: new Date().toISOString(), fait: false }); note(""); }
