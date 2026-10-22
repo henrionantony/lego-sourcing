@@ -138,7 +138,7 @@ def automatisations() -> list[dict]:
             detail = detail.replace(fr, en)
         detail = detail.replace("0 geste", "no button tapped").replace(" geste(s) appliqué(s)", " button action(s) applied").replace("en erreur", "failed")
         if tache == "application":
-            detail = "Every 5 min and on each new deal" + (" · " + detail if detail else "")
+            detail = "Every 5 min, and right away on a new deal or a button tap" + (" · " + detail if detail else "")
         out.append({"nom": nom, "etat": etat, "detail": detail.rstrip(" :"), "quand": e["fin"] or e["debut"]})
     if "actions_semaine" not in {x["tache"] for x in ex}:
         d = lundi().get("date")
