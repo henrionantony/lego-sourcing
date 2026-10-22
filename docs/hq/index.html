@@ -1496,7 +1496,7 @@ let afiltre = "masqué", aouvert = null, amax = 60;
 const lbcMarques = {};
 // Baisses de prix de la liste du lundi (etat.baisses), cochées « faites » dans db "baisses"
 const baissesFaites = {};
-const nouveauPrix = (a) => { const p = ETAT?.baisses?.prix?.[a.id]; return p && !baissesFaites[a.id] ? p : null; };
+const nouveauPrix = (a) => { const p = ETAT?.baisses?.prix?.[a.id]; return p && !baissesFaites[a.id] && !(a.p <= p) ? p : null; };  // déjà à ce prix dans le dernier export : fait
 const surLbc = (a) => lbcMarques[a.id] !== undefined ? lbcMarques[a.id] : !!LBC.lien?.[a.id];
 // Leboncoin : boîte neuve = « Neuf & Scellé » dans le titre et l'état ; remise en main propre en tête ; 3 premiers hashtags.
 const ETAT_NEUF = /^(\s*✅\s*[ÉE]tat\s*:\s*)(jamais ouverts?|neuf (?:&|et) scell[ée]s?)\.?/im;
