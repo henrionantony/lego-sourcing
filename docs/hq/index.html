@@ -829,13 +829,14 @@ function rendreTodo(){
         return `<li class="tl${x.pret ? " pret" : ""}" data-lid="${esc(x.id)}"><div class="tlh"><span>${x.pret ? `<span class="pill warn">📦 Pick up</span> ` : ""}<b>${esc(x.titre)}</b>${x.sous ? ` <span class="sub">· ${esc(x.sous)}</span>` : ""}</span>
           ${x.action ? (ax ? `<span class="sent">✓ Noted</span>` : `<button class="btn yes" data-a="lig" ${db ? "" : "disabled"}>${esc(x.action.label)}</button>`) : ""}</div>
           ${x.etape != null ? `<ol class="steps">${["Ordered", "Shipped", x.arrivee || "Arrived", "Received"].map((n, i) => `<li class="${i < x.etape ? "fait" : i === x.etape ? "ici" : ""}"><i></i><span>${esc(n)}</span></li>`).join("")}</ol>` : ""}
+          ${t.type === "livraison" && x.sets ? `<div class="row"><button class="btn yes" data-scan="${esc(x.id)}">📷 Scan this parcel</button></div>` : ""}
           ${x.suivi ? `<div class="sub suivi">Tracking ${x.suivi_url ? `<a href="${esc(x.suivi_url)}" target="_blank" rel="noopener">${esc(x.suivi)} ↗</a>` : esc(x.suivi)}</div>` : ""}
           ${x.url ? `<div class="row"><a class="btn" href="${esc(x.url)}" target="_blank" rel="noopener">Open the email ↗</a></div>` : ""}
           ${x.choix ? (ax ? `<span class="sent">✓ Noted</span>` : `<div class="row choix">${x.choix.map((c, i) => `<button class="btn ${i < x.choix.length - 1 ? "yes" : ""}" data-a="choix" data-i="${i}" ${db ? "" : "disabled"}>${esc(c.label)}</button>`).join("")}</div>`) : ""}
           ${x.articles && x.articles.length === 1 ? `<div class="sub">${esc(x.articles[0])}</div>` : x.articles && x.articles.length ? `<details class="more"><summary>${x.articles.length} line${x.articles.length > 1 ? "s" : ""}</summary><ul>${x.articles.map((y) => `<li>${esc(y)}</li>`).join("")}</ul></details>` : ""}</li>`; };
       const vus = li.slice(0, 3), reste = li.slice(3);
       return `<article class="task ${t.type}" data-id="${t.id}"><div class="kind">${GENRE[t.type] || ""}</div><h3>${esc(t.titre)}</h3>
-        <div class="sub">${esc(t.detail || "")}</div>${t.type === "livraison" ? `<div class="row"><button class="btn yes" data-scan="1">📷 Scan this delivery</button></div>` : ""}<ul class="tls">${vus.map(ligne).join("")}</ul>
+        <div class="sub">${esc(t.detail || "")}</div><ul class="tls">${vus.map(ligne).join("")}</ul>
         ${reste.length ? `<details class="more"><summary>${reste.length} more</summary><ul class="tls">${reste.map(ligne).join("")}</ul></details>` : ""}</article>`;
     }
     return `<article class="task ${t.type}${t.calme ? " calme" : ""}" data-id="${t.id}"><div class="kind">${GENRE[t.type] || ""}</div><h3>${esc(t.titre)}</h3>
@@ -1214,7 +1215,7 @@ function lignesCashback(l){
 }
 $("#todo").addEventListener("click", async (e) => {
   const b = e.target.closest("button"); if (!b) return;
-  if (b.dataset.scan){ montrer("scan"); choisirMode("delivery"); return; }
+  if (b.dataset.scan){ montrer("scan"); await choisirMode("delivery"); if (SC.mode === "delivery"){ SC.cmd = b.dataset.scan; SC.choisi = true; sauverScan(); rendreScanVue(); } return; }
   if (b.dataset.cb){
     const id = b.dataset.cb, act = { type: id.startsWith("cbc-") ? "cashback_confirme" : "cashback_recu", achat_id: +id.slice(4) };
     actions[id] = act; rendreTodo();
