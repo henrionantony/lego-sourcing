@@ -11,8 +11,9 @@ passage suivant le cherche.
 
 Usage :
   python3 noms_fr.py                  reconstruit stock/app/noms_fr.json
-  python3 noms_fr.py demandes [N]     sets à chercher : demandes de l'appli, puis
-                                      jusqu'à N sets en stock sans nom (défaut 0)
+  python3 noms_fr.py demandes [N]     sets à chercher : demandes de l'appli, articles
+                                      « à traiter » (colis reçus d'abord), puis jusqu'à
+                                      N autres sets en stock sans nom (défaut 0)
   python3 noms_fr.py ecrire SET "Nom" enregistre le nom officiel trouvé
 """
 import csv
@@ -79,6 +80,12 @@ def demandes(n_stock: int = 0) -> list[str]:
     noms = json.loads(SORTIE.read_text()) if SORTIE.exists() else construire()
     att = [x["chemin"].split("/", 1)[1] for x in base.docs("noms_fr/") or []
            if (x.get("data") or {}).get("demande") and not (x.get("data") or {}).get("nom")]
+    # Articles « à traiter » (pas encore en vente) : colis reçus d'abord, puis en livraison
+    arts = base.lire("articles", "select=id_set,livre&statut=eq.%C3%A0%20traiter&categorie=eq.SET&order=livre.desc,id.desc") or []
+    for x in arts:
+        s = re.sub(r"-\d+$", "", str(x.get("id_set") or "")).strip()
+        if re.fullmatch(r"\d{3,7}", s) and s not in noms and s not in att:
+            att.append(s)
     if n_stock:
         apub = LEGO / "stock" / "app" / "a_publier.json"
         stock = json.load(open(apub)) if apub.exists() else {}
