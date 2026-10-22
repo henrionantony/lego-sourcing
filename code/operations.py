@@ -32,7 +32,8 @@ def _nombre(x: str) -> float:
 def taux(titre: str, prix: float | None) -> tuple[float, str] | None:
     """(taux de remise par set, explication) si le titre décrit une opération, sinon None."""
     t = titre.lower()
-    m = re.search(r"(\d{2})\s*%[^()]*?(?:sur|au)\s+(?:le|la)?\s*(?:2|deuxi|second)", t)
+    m = re.search(r"(\d{2})\s*%[^()]*?(?:sur|au)\s+(?:le|la)?\s*(?:2|deuxi|second)", t) \
+        or re.search(r"(?:\b2\s*(?:e|è|ème|eme|nd)|deuxi[eè]me|second)\w*[^()%]{0,25}?-\s*(\d{2})\s*%", t)
     if m:
         p = int(m.group(1)) / 100
         return p / 2, f"-{m.group(1)} % sur le 2e set, soit -{p * 50:.0f} % par set en les prenant par deux"

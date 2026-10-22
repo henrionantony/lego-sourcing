@@ -662,6 +662,16 @@ dialog.confirmer::backdrop{background:rgba(0,0,0,.45)} dialog.confirmer p{margin
   // Images privées (vignettes) : lues avec le jeton, servies en adresses locales
   const urls = new Map();
   window.HQIMG = (chemin) => urls.get(chemin) || "";
+  // Photos des annonces : chargées seulement quand on ouvre une annonce
+  const photos = new Map();
+  window.HQPHOTO = (chemin) => {
+    if (!photos.has(chemin)) photos.set(chemin, (async () => {
+      const r = await fetch(CFG.u + "/storage/v1/object/authenticated/app/" + chemin, { headers: { apikey: CFG.k, Authorization: "Bearer " + await jeton() } });
+      if (!r.ok) throw new Error("photo " + r.status);
+      return URL.createObjectURL(await r.blob());
+    })().catch((e) => { photos.delete(chemin); throw e; }));
+    return photos.get(chemin);
+  };
   async function images(liste) {
     await Promise.all(liste.map(async (c) => {
       try {
@@ -1731,7 +1741,7 @@ let telech;
 function bande(id){
   if (!bandes.has(id)) bandes.set(id, new Promise((ok, ko) => {
     const im = new Image(); im.onload = () => ok(im); im.onerror = () => { bandes.delete(id); ko(new Error("photo")); };
-    im.src = "/_blob/" + id;
+    HQPHOTO(id).then((u) => { im.src = u; }, () => { bandes.delete(id); ko(new Error("photo")); });
   }));
   return bandes.get(id);
 }

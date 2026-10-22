@@ -15,6 +15,22 @@ mkdir -p "$DEPOT/docs" && cp "$ICI/../scan/index.html" "$DEPOT/docs/index.html"
 # Application LEGO HQ : code seul (connexion), les données restent dans Supabase
 python3 "$ICI/../app-source/build_pages.py" >/dev/null
 mkdir -p "$DEPOT/docs/hq" && cp "$ICI/../app-source/pages/page.html" "$DEPOT/docs/hq/index.html"
+# Données de l'appli (stock, annonces, photos…) : dans la base privée, envoyées seulement si elles ont changé
+(cd "$ICI" && python3 - "$ICI/../app-source/pages" <<'P3'
+import hashlib, json, sys
+from pathlib import Path
+import base
+d = Path(sys.argv[1])
+brut = (d / "static_page.json").read_bytes()
+h = hashlib.sha256(brut).hexdigest()
+f = d / "static_envoye.sha"
+if not f.exists() or f.read_text() != h:
+    if not base.doc_ecrire("static/page", json.loads(brut)):
+        sys.exit("envoi des données de l'appli refusé")
+    f.write_text(h)
+    print("données de l'appli envoyées")
+P3
+)
 # Table des prix (sous-ensemble utile aux alertes) et réglages : envoyés dans
 # l'espace privé de Supabase, jamais dans le dépôt public (même chiffrés).
 TMP=$(mktemp -d)
