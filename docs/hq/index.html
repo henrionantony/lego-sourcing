@@ -1918,15 +1918,23 @@ function boutonsPlateforme(x){
 }
 // Poster tout de suite ou garder jusqu'à la retraite : les chiffres du référentiel, puis ton choix (un tap, gardé dans la base)
 const finAnnee = () => new Date().getFullYear() + "-12-31";
+/* Date de retour d'un set gardé (règles d'le vendeur) : retiré en cours d'année (vague du 31/07) → revient le 20/11,
+   une semaine avant le Black Friday ; retiré au 31/12 → revient mi-janvier. Jamais une date déjà passée. */
+function dateGarde(ret){
+  const auj = new Date().toISOString().slice(0, 10), an = +auj.slice(0, 4);
+  let d = !ret ? "" : ret.slice(5, 7) === "12" ? (+ret.slice(0, 4) + 1) + "-01-15" : ret.slice(0, 4) + "-11-20";
+  if (!d || d <= auj) d = auj < an + "-11-20" ? an + "-11-20" : (an + 1) + "-01-15";
+  return d;
+}
 function blocPlan(x){
   const P = APUB[x.it.s] || {}, ret = P.retrait || "";
   const date = ret ? new Date(ret).toLocaleDateString("en-GB", { month: "short", year: "numeric" }) : "";
   const info = P.st === "retiré"
-    ? `Already retired${date ? " (" + date + ")" : ""}: nothing to wait for.`
+    ? `Already retired${date ? " (" + date + ")" : ""}.`
     : `Still sold by LEGO${date ? ", retiring " + date : ""}. ${P.rapide ? "Now ≈ " + eur(P.rapide) : ""}${P.garde ? " · after retirement ≈ " + eur(P.garde) : ""}${P.cout != null ? " · your cost " + eur(P.cout) : ""}.`;
   return `<div class="plan"><div class="adl">Your plan for this set</div><p>${info}</p>
     <div class="adbtns"><button class="btn yes" data-y="hz" data-h="Rotation">🚀 Post now</button>
-    <button class="btn" data-y="hz" data-h="Retirement" data-v="${esc(P.st === "retiré" || !ret || ret < new Date().toISOString().slice(0, 10) ? finAnnee() : ret)}">📦 Keep until ${P.st === "retiré" || !ret ? "end of year" : esc(date)}</button></div></div>`;
+    <button class="btn" data-y="hz" data-h="Retirement" data-v="${dateGarde(ret)}">📦 Keep until ${new Date(dateGarde(ret)).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}${dateGarde(ret).slice(5) === "11-20" ? " (Black Friday)" : ""}</button></div></div>`;
 }
 function carteAction(x){
   const T = PTYPES[x.type], a = x.a, lb = x.pf === "Leboncoin" && a && x.type !== "retirer";
@@ -1943,7 +1951,7 @@ function carteAction(x){
       ${x.choix && x.choix.length && x.it ? blocPlan(x) : ""}
       ${x.type !== "retirer" && x.prix ? `<div class="adf"><div class="adl">Price</div><div class="pf-prix">${x.avant ? `<s>${eur(x.avant)}</s> ` : ""}${eur(x.prix)}
         ${x.type !== "baisse" ? `<button class="btn" data-y="copie" data-c="prix">Copy price</button>` : ""}</div>
-        ${apub ? `<div class="sub">Estimate ${apub.estime ? eur(apub.estime) : "unknown"}${apub.douteux ? `. Check: the cost in the database (${eur(apub.cout)}) looks like a whole lot, not this set alone.` : apub.cout ? ` · floor ${eur(apub.cout * PLANCHER)} (your cost ×${PLANCHER})` : " · free gift"}</div>` : ""}</div>` : ""}
+        ${apub ? `<div class="sub">${apub.cout != null ? `Bought at ${apub.cout ? eur(apub.cout) : "0 € (free gift)"} · ` : ""}Estimate ${apub.estime ? eur(apub.estime) : "unknown"}${apub.douteux ? `. Check: the cost in the database (${eur(apub.cout)}) looks like a whole lot, not this set alone.` : apub.cout ? ` · floor ${eur(apub.cout * PLANCHER)} (your cost ×${PLANCHER})` : " · free gift"}</div>` : ""}</div>` : ""}
       ${x.type !== "retirer" && x.type !== "baisse" && x.type !== "remettre" ? `<div class="adf"><div class="adl">${x.pf} title</div><div class="adv">${esc(titre)}</div><button class="btn yes" data-y="copie" data-c="titre">Copy title</button></div>
       <div class="adf"><div class="adl">${x.pf} text</div><pre class="adv">${esc(texte)}</pre><button class="btn yes" data-y="copie" data-c="texte">Copy text</button></div>` : ""}
       ${x.type !== "retirer" && x.type !== "baisse" ? `<div class="adf"><div class="adl">Photos</div>${photos}</div>` : ""}
