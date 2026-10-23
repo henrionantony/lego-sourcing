@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="7399d91e04"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="cfd15883ed"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -593,7 +593,7 @@ dialog.confirmer::backdrop{background:rgba(0,0,0,.45)} dialog.confirmer p{margin
      privées (jamais dans la page publique) et lancement de l'application. -->
 <style>
 #hqlogin{position:fixed;inset:0;z-index:99;display:flex;align-items:center;justify-content:center;background:var(--bg,#f6f4ef);padding:16px}
-#hqlogin form{display:flex;flex-direction:column;gap:10px;width:100%;max-width:320px}
+#hqlogin form:not([hidden]){display:flex;flex-direction:column;gap:10px;width:100%;max-width:320px}
 #hqlogin h1{margin:0 0 6px;font-size:22px}
 #hqlogin input,#hqlogin button{font:inherit;font-size:16px;padding:12px;border-radius:10px;border:1px solid #bbb}
 #hqlogin button{background:#d01012;color:#fff;border:0;font-weight:600}
@@ -607,6 +607,13 @@ dialog.confirmer::backdrop{background:rgba(0,0,0,.45)} dialog.confirmer p{margin
     <input id="hqmdp" type="password" autocomplete="current-password" placeholder="Password" required>
     <button>Sign in</button>
     <p id="hqmsg"></p>
+    <a href="#" id="hqoubli" style="font-size:14px;color:inherit">Forgot password?</a>
+  </form>
+  <form id="hqneuf" hidden>
+    <h1>New password</h1>
+    <input id="hqmdp2" type="password" autocomplete="new-password" placeholder="New password (8+ characters)" minlength="8" required>
+    <button>Save and sign in</button>
+    <p id="hqmsg2"></p>
   </form>
 </div>
 <script>
@@ -615,6 +622,10 @@ dialog.confirmer::backdrop{background:rgba(0,0,0,.45)} dialog.confirmer p{margin
   // Réglage unique : lien privé « …/hq/#cfg=<base64 de {u, k}> » (adresse du projet + clé publique)
   const m = location.hash.match(/cfg=([A-Za-z0-9+/=_-]+)/);
   if (m) { try { L("hq_cfg", JSON.parse(atob(m[1].replace(/-/g, "+").replace(/_/g, "/")))); } catch (e) {} history.replaceState(null, "", location.pathname); }
+  // Lien « mot de passe oublié » reçu par mail : …/hq/#access_token=…&type=recovery
+  const rec = new URLSearchParams(location.hash.slice(1));
+  const RECUP = rec.get("type") === "recovery" && rec.get("access_token") ? { a: rec.get("access_token"), r: rec.get("refresh_token"), exp: Date.now() / 1000 + Number(rec.get("expires_in") || 3600) } : null;
+  if (RECUP) history.replaceState(null, "", location.pathname);
   let CFG = L("hq_cfg");
   let ses = L("hq_ses");
   const $ = (s) => document.querySelector(s);
@@ -774,7 +785,32 @@ dialog.confirmer::backdrop{background:rgba(0,0,0,.45)} dialog.confirmer p{margin
     try { await auth("password", { email: $("#hqmail").value.trim(), password: $("#hqmdp").value }); $("#hqmdp").value = ""; document.activeElement?.blur(); $("#hqlogin").hidden = true; await lancer(); }
     catch (e) { $("#hqmsg").textContent = e.message; }
   });
+  $("#hqoubli").addEventListener("click", async (ev) => {
+    ev.preventDefault();
+    const mail = $("#hqmail").value.trim();
+    if (!CFG) { $("#hqmsg").textContent = "Paste the setup link from the chat first."; return; }
+    if (!mail) { $("#hqmsg").textContent = "Type your e-mail first."; return; }
+    $("#hqmsg").textContent = "…";
+    try {
+      const r = await fetch(CFG.u + "/auth/v1/recover?redirect_to=" + encodeURIComponent(location.origin + location.pathname), { method: "POST", headers: { apikey: CFG.k, "Content-Type": "application/json" }, body: JSON.stringify({ email: mail }) });
+      $("#hqmsg").textContent = r.ok ? "If this e-mail has an account, a reset link is on its way. Open it on this device." : "Could not send the e-mail (try again later).";
+    } catch (e) { $("#hqmsg").textContent = "Could not send the e-mail."; }
+  });
+  $("#hqneuf").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    $("#hqmsg2").textContent = "…";
+    try {
+      const r = await fetch(CFG.u + "/auth/v1/user", { method: "PUT", headers: { apikey: CFG.k, Authorization: "Bearer " + RECUP.a, "Content-Type": "application/json" }, body: JSON.stringify({ password: $("#hqmdp2").value }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.msg || j.error_description || "Could not save the password");
+      $("#hqmdp2").value = "";
+      ses = RECUP; L("hq_ses", ses);
+      $("#hqlogin").hidden = true;
+      await lancer();
+    } catch (e) { $("#hqmsg2").textContent = e.message; }
+  });
   window.addEventListener("DOMContentLoaded", async () => {
+    if (RECUP && CFG) { $("#hqlogin").hidden = false; $("#hqlogin form").hidden = true; $("#hqneuf").hidden = false; return; }
     if (!CFG || !ses) return connexion();
     try { await jeton(); await lancer(); } catch (e) { connexion(); }
   });
