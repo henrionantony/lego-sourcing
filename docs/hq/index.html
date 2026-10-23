@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="0f6959d146"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="8aee2bbef3"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -2046,10 +2046,80 @@ const MISSIONS = [
   { m: "ancien", ic: "📦", t: "Older stock never listed", d: "Bought before your last logged sale. Check you still have it before posting: some may be sold but not logged yet." },
   { m: "republier", ic: "🔁", t: "Fresh start", d: "At the floor price for 30 days without selling. Delete the listing and post it again at the starting price: a new listing gets seen again." },
   { m: "baisses", ic: "↘", t: "Monday price drops", d: "Listed too long at this price." },
+  { m: "reposts", ic: "🔁", t: "Repost by theme", d: "Live for a long time with few favourites. Delete and post again, one theme at a time: buyers see several sets of the same theme together and ask for bundles." },
   { m: "attente", ic: "⏳", t: "Not the right time", d: () => `Still sold by LEGO, and selling now would not reach your floor: ${ATTENTE.size > 1 ? "these sets wait" : "this set waits"} for retirement. Nothing to do. Tap Post now only for a bad buy you want out, even at a loss.` },
 ];
 const PAR_MISSION = 10;
-let pmission = null;
+const REPOST_FAVORIS_MAX = 10;
+/* Mission du jour (le vendeur 23/10) : 10 articles par soir. D'abord les nouveaux articles (Vinted + Leboncoin le même soir),
+   puis ce qui n'a pas été fait les jours d'avant, puis les reposts d'UNE gamme, 2 à 3 soirs de suite (les acheteurs voient
+   plusieurs sets de la même gamme et demandent des lots). Une mission est supposée faite le lendemain : Leboncoin est vérifié
+   par les mails (2 jours), Vinted par l'export suivant ; ce qui n'est pas fait revient en tête. Gardée dans db "missions/<jour>". */
+const MISSION_N = 10, BLOC_SOIRS = 3, LBC_DELAI = 2;
+const MJOURS = {};
+let missionsLues = false, missionEcrite = "";
+const jourLocal = (d = new Date()) => new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+const plusJours = (j, n) => jourLocal(new Date(new Date(j + "T12:00:00").getTime() + n * 864e5));
+const gammeAction = (x) => (x.a && x.a.g) || (x.it && x.it.g) || "";
+const estLbc = (k) => /^(lbc|lbcnew|rm-l)-/.test(k);
+// Supposé fait : Leboncoin jusqu'à 2 jours après (les mails confirment avant), Vinted tant qu'aucun export n'est plus récent que la mission
+function supposeFait(k, j){
+  return estLbc(k) ? jourLocal() <= plusJours(j, LBC_DELAI) : !(ANN_DATE && ANN_DATE > j);
+}
+function missionsPassees(){
+  const auj = jourLocal();
+  return Object.entries(MJOURS).filter(([j]) => j < auj).sort((a, b) => a[0] < b[0] ? -1 : 1);
+}
+function clesSupposees(){
+  const S = new Set();
+  for (const [j, m] of missionsPassees()) for (const k of m.k || []) if (supposeFait(k, j)) S.add(k);
+  return S;
+}
+function construireMission(L){
+  const auj = jourLocal(), passees = missionsPassees(), supposees = clesSupposees();
+  const pool = L.filter((x) => !supposees.has(x.k) && !["doubles", "attente", "baisses"].includes(x.m) && pfaits[x.k]?.etat !== "passe");
+  const parK = new Map(pool.map((x) => [x.k, x]));
+  const k = [], compte = { n: 0 };
+  const prendre = (x) => {
+    if (!x || k.includes(x.k) || compte.n >= MISSION_N) return false;
+    k.push(x.k); compte.n++;
+    // Le même soir, la copie Leboncoin d'un nouvel article (ne compte pas dans les 10)
+    if (x.k.startsWith("new-") && parK.has("lbc" + x.k)) k.push("lbc" + x.k);
+    return true;
+  };
+  // 1. Nouveaux articles : achats reçus (les plus récents d'abord) et figurines de part-out
+  for (const x of pool) if (x.m === "achats" || x.m === "figs") prendre(x);
+  // 2. Pas faits les jours d'avant (vérifiés par les mails ou l'export) : en tête de ce qui reste
+  for (const [, m] of passees) for (const c of m.k || []) if (!c.startsWith("lbcnew-")) prendre(parK.get(c));
+  // 3. Bloc de gamme : la même 2 à 3 soirs de suite, puis la gamme qui a le plus à republier (pas reprise depuis 14 jours)
+  const candidats = (g) => pool.filter((x) => gammeAction(x) === g && ["reposts", "republier", "lbc", "masques"].includes(x.m))
+    .sort((x, y) => (x.m === "lbc") - (y.m === "lbc") || (x.age ?? 1e9) - (y.age ?? 1e9) || (y.pr || 0) - (x.pr || 0));
+  const derniere = passees[passees.length - 1]?.[1];
+  let bloc = derniere?.b || "", soir = (derniere?.s || 0) + 1;
+  if (!bloc || soir > BLOC_SOIRS || !candidats(bloc).length){
+    const recentes = new Set(passees.filter(([j]) => j >= plusJours(auj, -14)).map(([, m]) => m.b).filter(Boolean));
+    const nb = {};
+    for (const x of pool) if (["reposts", "republier"].includes(x.m)){ const g = gammeAction(x); if (g && !/^(Lots|Merch)/.test(g)) nb[g] = (nb[g] || 0) + 1; }
+    const tri = Object.entries(nb).sort((a, b) => b[1] - a[1]);
+    bloc = (tri.find(([g]) => !recentes.has(g)) || tri[0] || [""])[0]; soir = 1;
+  }
+  const avant = compte.n;
+  if (bloc) for (const x of candidats(bloc)) prendre(x);
+  const blocPris = compte.n > avant;
+  // 4. S'il reste de la place : annonces masquées, Leboncoin, vieux stock
+  for (const m of ["masques", "republier", "lbc", "ancien"]) for (const x of pool) if (x.m === m) prendre(x);
+  return { k, b: blocPris ? bloc : (derniere?.b || ""), s: blocPris ? soir : (derniere?.s || 0), le: new Date().toISOString() };
+}
+function missionDuJour(L){
+  const auj = jourLocal();
+  if (!MJOURS[auj] && missionsLues && db && missionEcrite !== auj){
+    missionEcrite = auj;
+    MJOURS[auj] = construireMission(L);
+    db.doc("missions/" + auj).set(MJOURS[auj]).catch(() => { missionEcrite = ""; });
+  }
+  return MJOURS[auj] || null;
+}
+let pmission = null, pmissionChoisie = false;
 let DERNIERE_VENTE = "", GARDES = new Set(), ATTENTE = new Set();  // date de la dernière vente enregistrée : un achat plus récent est sûrement encore là
 let PO = null;              // etat/decoupe : sets à découper, leurs figurines, celles déjà rattachées
 // Pas le bon moment de vendre : encore vendu par LEGO et la revente rapide ne passe pas ton floor
@@ -2102,6 +2172,7 @@ function listeActions(){
     const sansChoix = copies.filter((c) => !c[5]).map((c) => c[0]);
     if (!pfaits["new-" + s]) L.push({ k: "new-" + s, type: "publier", pf: "Vinted", a, it, titre: a.t, prix: a.p, q, d, v, m: attend ? "attente" : d >= DERNIERE_VENTE ? "achats" : "ancien", choix: sansChoix,
       pourquoi: attend ? `${q > 1 ? q + " in stock" : "In stock"}, bought ${d || "?"}. Still sold by LEGO: selling now would not reach your floor.` : `${q > 1 ? q + " in stock" : "In stock"}, bought ${d || "?"}, ${surLbc ? "on Leboncoin only. Post it on Vinted too." : "listed nowhere. Post it on Vinted first."}` });
+    if (!pfaits["new-" + s] && !surLbc && !attend) L.push({ k: "lbcnew-" + s, type: "lbc", pf: "Leboncoin", a, it, titre: a.t, prix: a.p, q, v: 0, m: "lbcneuf", pourquoi: "Same evening: post it on Leboncoin too." });
     else if (!surLbc) L.push({ k: "lbcnew-" + s, type: "lbc", pf: "Leboncoin", a, it, titre: a.t, prix: a.p, q, v, m: "lbc", pourquoi: "Posted on Vinted. Now the Leboncoin copy." });
   }
   // Figurines rattachées à un set découpé, pas encore vendues et publiées nulle part
@@ -2142,7 +2213,16 @@ function listeActions(){
     if (p && a.s === "en ligne") L.push({ k: "repost-" + a.id, type: "republier", pf: "Vinted", a, titre: a.t, prix: p, avant: a.p, u: a.u, m: "republier", v: p,
       pourquoi: `At ${eur(a.p)}, the floor, for 30 days. Delete it, then post it again at ${eur(p)}.` });
   }
+  /* Reposts par gamme : en ligne depuis longtemps (la moitié la plus ancienne, ids Vinted croissants dans le temps)
+     avec peu de favoris (republier les ferait perdre) ; ni baisse de prix cette semaine, ni « Fresh start » déjà prévu */
+  const vivantes = ANNONCES.filter((a) => a.s === "en ligne" && /^\d+$/.test(a.id)).sort((x, y) => x.id.length - y.id.length || (x.id < y.id ? -1 : 1));
+  for (const a of vivantes.slice(0, Math.floor(vivantes.length / 2))){
+    if ((a.f || 0) >= REPOST_FAVORIS_MAX || nouveauPrix(a) || ETAT?.republier?.prix?.[a.id] || counts["v" + a.id]?.n === 0) continue;
+    L.push({ k: "rep-" + a.id, type: "republier", pf: "Vinted", a, titre: a.t, prix: a.p, u: a.u, m: "reposts", v: +a.p || 0, age: vivantes.indexOf(a),
+      pourquoi: `One of your oldest listings, ${a.f || 0} favourite${a.f === 1 ? "" : "s"}. Delete it and post it again at the same price: it comes back on top of the feed.` });
+  }
   const rang = Object.fromEntries(MISSIONS.map((M, i) => [M.m, i]));
+  rang.lbcneuf = 99;
   const ok = L.filter((x) => pfaits[x.k]?.etat !== "fait");
   const douteux = (z) => z.type === "publier" && z.it && !!prixDouteux(z.it.s);
   ok.sort((x, y) => rang[x.m] - rang[y.m] || (pfaits[x.k]?.etat === "passe") - (pfaits[y.k]?.etat === "passe") || douteux(x) - douteux(y)
@@ -2246,7 +2326,10 @@ function scoreJour(){
 }
 function rendrePlateformes(){
   if (!$("#p-actions")) return;
-  const L = listeActions(), n = L.filter((x) => pfaits[x.k]?.etat !== "passe").length;
+  const L = listeActions(), MJ = MJOURS[jourLocal()];
+  // Pastille : ce qui reste de la mission du soir (+ doubles ventes urgentes), pas toute la file
+  const n = MJ ? L.filter((x) => x.m === "doubles" || (MJ.k || []).includes(x.k) && !x.k.startsWith("lbcnew-")).length
+    : L.filter((x) => pfaits[x.k]?.etat !== "passe" && x.m !== "lbcneuf" && x.m !== "reposts").length;
   $("#pf-n").textContent = n ? " (" + n + ")" : "";
   $("#b-pf").textContent = n || "";
   document.querySelectorAll("#pseg button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.p === pvue));
@@ -2267,19 +2350,36 @@ function rendrePlateformes(){
   if (x.a && x.a.ph.length) afficherPhotos(x.a);
 }
 function rendreMissions(L){
-  const groupes = MISSIONS.map((M) => ({ ...M, L: L.filter((y) => y.m === M.m) })).filter((M) => M.L.length);
-  if (!pmission || !groupes.some((M) => M.m === pmission)) pmission = groupes[0].m;
+  const MJ = missionDuJour(L), supposees = clesSupposees();
+  const enJour = MJ ? (MJ.k || []).map((k) => L.find((y) => y.k === k)).filter(Boolean) : [];
+  const Lr = L.filter((y) => !supposees.has(y.k) && y.m !== "lbcneuf");
+  const groupes = MISSIONS.map((M) => ({ ...M, L: Lr.filter((y) => y.m === M.m) })).filter((M) => M.L.length);
+  if (MJ){
+    const total = (MJ.k || []).filter((k) => !k.startsWith("lbcnew-")).length;
+    const reste = enJour.filter((y) => !y.k.startsWith("lbcnew-")).length;
+    const jour = { m: "jour", ic: "🌙", t: "Tonight's mission", L: enJour, total, fait: total - reste,
+      d: `${MJ.b ? `${esc(MJ.b)} evening ${MJ.s} of ${BLOC_SOIRS}. ` : ""}New items first (Vinted and Leboncoin the same evening), then reposts of one theme. Not done tonight? It comes back: Leboncoin is checked by its e-mails, Vinted by your next export.` };
+    if (enJour.length || total) groupes.splice(groupes[0]?.m === "doubles" ? 1 : 0, 0, jour);
+  }
+  if (!groupes.length){ $("#p-actions").innerHTML = `<p class="empty">Nothing to do on the platforms. 🎉</p>`; return; }
+  if (!pmissionChoisie || !groupes.some((M) => M.m === pmission)) pmission = groupes[0].m;
   const M = groupes.find((g) => g.m === pmission), rang = groupes.indexOf(M);
-  const lot = M.L.slice(0, PAR_MISSION), x = lot.find((y) => y.k === pcourant) || lot[0];
+  const lot = M.m === "jour" ? M.L : M.L.slice(0, PAR_MISSION), x = lot.find((y) => y.k === pcourant) || lot[0];
+  const sc = scoreJour();
+  if (!x){  // mission du soir terminée
+    $("#p-actions").innerHTML = `<section class="ms-carte"><div class="ms-tete"><span class="ms-ic" aria-hidden="true">🌙</span><div><div class="ms-n">Done for tonight</div><h2>${M.total} of ${M.total} 🎉</h2></div></div><p class="sub">Tomorrow's mission is ready tomorrow. Want more? Pick another mission below.</p></section>
+      <div class="ms-liste">${groupes.filter((g) => g.m !== "jour").map((g, i) => `<button class="ms-l" data-ms="${g.m}"><span aria-hidden="true">${g.ic}</span><span class="pf-lt"><b>${g.t}</b><span>${g.L.length} action${g.L.length > 1 ? "s" : ""}</span></span></button>`).join("")}</div>`;
+    return;
+  }
   pcourant = x.k;
-  const sc = scoreJour(), faits = sc.parM[M.m] || 0, total = faits + lot.length;
+  const faits = M.m === "jour" ? M.fait : sc.parM[M.m] || 0, total = M.m === "jour" ? M.total : faits + lot.length;
   const euros = lot.reduce((s, y) => s + (y.v || 0), 0);
   $("#p-actions").innerHTML = `<div class="ms-score">${sc.n ? `🔥 Today: <b>${sc.n} done</b>${sc.e ? ` · <b>${eur(Math.round(sc.e))}</b> put online` : ""}` : "Today: nothing done yet. One mission at a time 💪"}</div>
     <section class="ms-carte">
       <div class="ms-tete"><span class="ms-ic" aria-hidden="true">${M.ic}</span><div><div class="ms-n">Mission ${rang + 1} of ${groupes.length}</div><h2>${M.t}</h2></div></div>
       <p class="sub">${typeof M.d === "function" ? M.d() : M.d}</p>
       <div class="ms-barre" role="progressbar" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${faits}"><i style="width:${Math.round(faits / total * 100)}%"></i></div>
-      <div class="ms-chiffres"><span>${faits} / ${total} done</span><span>${M.L.length > lot.length ? `${M.L.length - lot.length} more after these` : "last batch"}${euros ? ` · ≈ ${eur(Math.round(euros))} at stake` : ""}</span></div>
+      <div class="ms-chiffres"><span>${faits} / ${total} done</span><span>${M.m === "jour" ? "10 a night" : M.L.length > lot.length ? `${M.L.length - lot.length} more after these` : "last batch"}${euros ? ` · ≈ ${eur(Math.round(euros))} at stake` : ""}</span></div>
     </section>
     ${carteAction(x)}
     ${lot.length > 1 ? `<h2 class="sec">Next in this mission</h2><div class="pf-file">${lot.filter((y) => y !== x).map(ligneAction).join("")}</div>` : ""}
@@ -2309,7 +2409,7 @@ $("#pseg").addEventListener("click", (e) => {
 });
 $("#p-actions").addEventListener("click", async (e) => {
   const ms = e.target.closest(".ms-l");
-  if (ms){ pmission = ms.dataset.ms; pcourant = null; rendrePlateformes(); window.scrollTo(0, 0); return; }
+  if (ms){ pmission = ms.dataset.ms; pmissionChoisie = true; pcourant = null; rendrePlateformes(); window.scrollTo(0, 0); return; }
   const l = e.target.closest(".pf-ligne");
   if (l){ pcourant = l.dataset.k; rendrePlateformes(); window.scrollTo(0, 0); return; }
   const b = e.target.closest("[data-y]"); if (!b) return;
@@ -3030,6 +3130,11 @@ $("#po").addEventListener("click", async (e) => {
     if (NAD && !NAD.frSaisi && nomsLive[NAD.s]?.nom && NAD.fr !== nomsLive[NAD.s].nom){
       NAD.fr = nomsLive[NAD.s].nom; NAD.source = nomsLive[NAD.s].source || "lego.com"; rendreNad();
     }
+  }, () => {});
+  db.collection("missions").onSnapshot((snap) => {
+    for (const ch of snap.docChanges()){ if (ch.type === "removed") delete MJOURS[ch.doc.id]; else MJOURS[ch.doc.id] = ch.doc.data() || {}; }
+    missionsLues = true;
+    rendrePlateformes();
   }, () => {});
   db.collection("plateformes").onSnapshot((snap) => {
     for (const ch of snap.docChanges()){
