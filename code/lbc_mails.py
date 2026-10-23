@@ -68,6 +68,14 @@ def appliquer(s: str, etat: str, titre: str, url: str = ""):
         if a:
             base.doc_ecrire("leboncoin/" + a["id"], {"on": on, "le": le, **({"url": url} if url else {}), "mail": True})
             fait.append(f"Vinted {a['id']} {'sur' if on else 'retiré de'} Leboncoin")
+        elif on and url:
+            # Toutes les copies sont déjà marquées : c'est une republication (suppression groupée sans titres
+            # dans le mail). On remplace le lien de la marque la plus ancienne, sauf si ce lien est déjà connu.
+            connus = {(marques.get(x["id"]) or {}).get("url") or lbc.get("lien", {}).get(x["id"]) for x in annonces}
+            if url not in connus:
+                a = min(annonces, key=lambda x: (marques.get(x["id"]) or {}).get("le") or "")
+                base.doc_ecrire("leboncoin/" + a["id"], {"on": True, "le": le, "url": url, "mail": True})
+                fait.append(f"Vinted {a['id']} : lien Leboncoin remplacé (republication)")
     elif on:
         base.doc_ecrire("plateformes/lbcnew-" + s, {"etat": "fait", "type": "lbc", "pf": "Leboncoin", "titre": titre[:200], "le": le})
         fait.append("set neuf publié sur Leboncoin")
