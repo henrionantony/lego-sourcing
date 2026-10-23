@@ -407,11 +407,19 @@ def construire(xlsx: str, rafraichir: bool = False) -> pd.DataFrame:
     # Sets à vérifier en premier (ex. candidats d'une promo Lego.com), un par ligne.
     prio = DATA / "brickeconomy_prioritaires.txt"
     prio = [l.strip() for l in prio.read_text().split()] if prio.exists() else []
-    ordre = prio + deja_vendus + sorted(set(recents.set_num) - set(deja_vendus), key=lambda s: -pp.get(s, 0))
+    # Puis ton stock (pour bien le prix de tes annonces), d'abord les sets jamais relevés
+    try:
+        stock = [s + "-1" for s in json.loads((DATA.parent / "stock" / "app" / "exemplaires.json").read_text())]
+    except (OSError, ValueError):
+        stock = []
+    stock = sorted(stock, key=lambda s: s in be.cache)
+    ordre = list(dict.fromkeys(prio + stock + deja_vendus
+                               + sorted(set(recents.set_num) - set(deja_vendus), key=lambda s: -pp.get(s, 0))))
+    # Rafraîchir une valeur au bout de 30 jours suffit : les appels servent à couvrir plus de sets
     for s in ordre:
         if be.restant() <= 0:
             break
-        be.valeur(s)
+        be.valeur(s, max_age_jours=7 if s in prio else 30)
 
     # Cotes des figurines des sets déjà relevés (scénario « découpe » des alertes),
     # dans le même ordre de priorité, sur la réserve d'appels des figurines.

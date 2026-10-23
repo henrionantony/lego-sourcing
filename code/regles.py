@@ -125,6 +125,7 @@ BUDGET = 1000.0
 # Valeurs tirées des ventes réelles : neutres ici, les vraies sont dans le fichier privé.
 GWP_DEFAUT = 25.0                 # revente d'un cadeau Lego.com non chiffré
 MARGE_BRUTE_PLANCHER = 1.30       # prix plancher d'annonce tant que le lot n'est pas remboursé
+PRIX_DEPART = 1.15                # prix de départ d'une nouvelle annonce = estimation × ça, puis −5 % / 30 j jusqu'au plancher
 TELEGRAM_CHAT_ID = None           # destinataire des alertes (privé)
 # Part de la trésorerie qu'un deal peut engager : PART_MAX_DEAL pour un deal
 # risqué, plus quand la revente est sûre, et encore plus pour une vraie

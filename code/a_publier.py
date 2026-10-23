@@ -56,7 +56,8 @@ def main():
         # Coût bien au-dessus de l'estimation : souvent le prix d'un lot entier
         # posé sur un seul article. On garde l'estimation et on le signale.
         douteux = bool(estime) and cout > 2 * estime
-        prix = estime if douteux else max(estime, plancher, regles.GWP_DEFAUT if cout == 0 and not estime else 0)
+        # Départ au-dessus de l'estimation, puis la liste du lundi baisse de 5 % tous les 30 jours jusqu'au plancher
+        prix = estime if douteux else max(estime * regles.PRIX_DEPART, plancher, regles.GWP_DEFAUT if cout == 0 and not estime else 0)
         prix = arrondi(prix) if prix else None
         # Encore au catalogue : prix + frais acheteur + port sous le prix LEGO, jamais sous le plancher
         cap = regles.plafond_catalogue(float(r.get("prix_public") or 0)) if r.get("statut") == "en vente" else None
