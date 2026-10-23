@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="4d777c8605"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -734,6 +734,16 @@ dialog.confirmer::backdrop{background:rgba(0,0,0,.45)} dialog.confirmer p{margin
   async function lancer() {
     const [st] = await rest("GET", "app_docs?select=data&chemin=eq.static/page");
     if (!st) throw new Error("App data not published yet");
+    // Nouvelle version publiée mais page en cache : on recharge une fois avec une adresse neuve
+    const v = st.data.__PAGE__, ici = document.documentElement.dataset.v;
+    if (v && ici && v !== ici) {
+      let deja = ""; try { deja = sessionStorage.getItem("hq_v") || ""; } catch (e) {}
+      if (deja !== v) {
+        try { sessionStorage.setItem("hq_v", v); } catch (e) {}
+        location.replace(location.pathname + "?v=" + v + location.hash);
+        return;
+      }
+    }
     await images(st.data.__IMAGES__ || []);
     let code = document.getElementById("hqcode").textContent;
     for (const [k, v] of Object.entries(st.data)) if (k !== "__IMAGES__") code = code.split(k).join(JSON.stringify(v));
