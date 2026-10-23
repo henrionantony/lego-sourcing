@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="cfd15883ed"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="0f6959d146"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -1704,6 +1704,26 @@ function analyserExport(txt, nom){
     if (plat(x.titre) !== plat(a.t) || (!a.type && x.description && plat(x.description) !== plat(a.d))){ res.texte.push({ id: a.id, t: x.titre, avant: a.t }); change = true; }
     if (!change) res.pareil++;
   }
+  // Republications (Clemz ou à la main) : l'ancienne annonce disparaît, une nouvelle prend sa place
+  // avec un autre identifiant. Même titre → même annonce ; sinon même set, s'il n'y en a qu'une de chaque côté.
+  const cleT = (t) => String(t || "").toLowerCase().replace(/\s+/g, " ").trim();
+  res.repub = [];
+  const pris = new Set();
+  const apparier = (cle) => {
+    for (const x of res.nouv){
+      if (pris.has(x.id) || !cle(x)) continue;
+      const cands = res.disparues.filter((a) => !pris.has(a.id) && cle(a) === cle(x));
+      if (!cands.length) continue;
+      const a = cands.sort((u, v) => Math.abs(u.p - x.p) - Math.abs(v.p - x.p))[0];
+      pris.add(x.id); pris.add(a.id);
+      res.repub.push({ ancien: a.id, id: x.id, t: x.t, avant: a.p, p: x.p, n: x.n || a.n });
+    }
+  };
+  apparier((o) => cleT(o.t));
+  const seul = (n) => n && res.nouv.filter((x) => !pris.has(x.id) && x.n === n).length === 1 && res.disparues.filter((a) => !pris.has(a.id) && a.n === n).length === 1;
+  apparier((o) => seul(o.n) ? o.n : "");
+  res.nouv = res.nouv.filter((x) => !pris.has(x.id));
+  res.disparues = res.disparues.filter((a) => !pris.has(a.id));
   // Garde-fous
   const part = ANNONCES.length ? res.disparues.length / ANNONCES.length : 0;
   if (part > SEUIL_DISPARUES) res.alertes.push(`${res.disparues.length} listings (${Math.round(part * 100)} %) are gone without being sold. Your export may be incomplete: on Vinted, scroll until the end of your wardrobe, then export again.`);
@@ -1721,7 +1741,7 @@ function rendreImport(){
   const logs = Object.entries(IMPLOG).sort((a, b) => b[0] < a[0] ? -1 : 1);
   const dernierOk = logs.find(([, x]) => x.etat === "appliqué");
   const ETATS = { "en attente": "⏳ waiting for the next hourly pass", "appliqué": "✓ applied", "refusé": "🛑 refused", "annulé": "↩ undone", "à annuler": "⏳ undo at the next hourly pass" };
-  const hist = logs.slice(0, 5).map(([k, x]) => `<li><b>${esc(x.nom || "export")}</b> · ${ETATS[x.etat] || esc(x.etat || "")}${x.r ? ` · +${x.r.nouv} new, −${x.r.disparues + x.r.vendues} gone, ${x.r.prix} prices` : ""}${x.motif ? `<div class="sub">${esc(x.motif)}</div>` : ""}</li>`).join("");
+  const hist = logs.slice(0, 5).map(([k, x]) => `<li><b>${esc(x.nom || "export")}</b> · ${ETATS[x.etat] || esc(x.etat || "")}${x.r ? ` · +${x.r.nouv} new, ${x.r.repub || 0} reposted, −${x.r.disparues + x.r.vendues} gone, ${x.r.prix} prices` : ""}${x.motif ? `<div class="sub">${esc(x.motif)}</div>` : ""}</li>`).join("");
   if (!IMP){
     el.innerHTML = `<article class="task imp"><h3>Import a Vinted export</h3>
       <p class="sub" style="margin:0">Choose the CSV file from the extension. You see what changes before anything is applied. Only your listings change here: never purchases, sales or stock.</p>
@@ -1741,6 +1761,7 @@ function rendreImport(){
     <p class="sub" style="margin:0">${r.total} rows in the file · ${r.vivants} live or hidden, against ${r.avant} in the app now.</p>
     <div class="imp-l">
       ${bloc("➕", "New listings", r.nouv, (x) => `${esc(x.t)} · ${eur(x.p)}${x.s === "masqué" ? " · hidden" : ""}`)}
+      ${bloc("🔁", "Reposted (same listing, new Vinted id)", r.repub, (x) => `${esc(x.t)} · ${Math.abs(x.avant - x.p) > 0.004 ? `${eur(x.avant)} → <b>${eur(x.p)}</b>` : eur(x.p)}`)}
       ${bloc("💰", "Sold", r.vendues, (x) => `${esc(x.t)} · ${eur(x.p)}`)}
       ${bloc("➖", "Gone (deleted, not sold)", r.disparues, (x) => `${esc(x.t)}${x.s ? ` · now ${esc(x.s)}` : ""}`)}
       ${bloc("💶", "Price changed", r.prix, (x) => `${esc(x.t)} · ${eur(x.avant)} → <b>${eur(x.p)}</b>`)}
@@ -1777,7 +1798,7 @@ $("#imp").addEventListener("click", async (e) => {
     try {
       await db.doc("imports_csv/" + k).set({ csv: r.txt, nom: r.nom });
       await db.doc("imports_log/" + k).set({ nom: r.nom, date: r.date, le: new Date().toISOString(), etat: "en attente", force: !!(r.alertes.length || r.douteux.length),
-        r: { nouv: r.nouv.length, vendues: r.vendues.length, disparues: r.disparues.length, prix: r.prix.length, statut: r.statut.length, texte: r.texte.length } });
+        r: { nouv: r.nouv.length, repub: r.repub.length, vendues: r.vendues.length, disparues: r.disparues.length, prix: r.prix.length, statut: r.statut.length, texte: r.texte.length } });
       IMP = null; rendreImport();
     } catch (err) { b.disabled = false; note("Could not send the file. Try again."); }
   }

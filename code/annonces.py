@@ -45,6 +45,17 @@ def gamme(titre: str) -> str:
     return g
 
 
+def numeros(titre: str) -> list[str]:
+    nums = re.findall(r"(?<!\w)(?<!\d[.,])(\d{4,7})(?:-\d)?(?!\w|[.,]\d)", titre)
+    nums = [x for x in nums if not 1949 <= int(x) <= 2030] or nums   # « … - 1999 » = l'année, pas le set
+    return [] if re.search(r"-\s*Figurine\b", titre) else nums
+
+
+def numero(titre: str) -> str:
+    n = numeros(titre)
+    return n[-1] if n else ""
+
+
 def construire() -> list[dict]:
     v = pd.read_csv(dernier("**/vinted_annonces_*.csv"), sep=";", dtype={"id": str}).fillna("")
     v = v[v.statut.isin(["en ligne", "masqué"])]
@@ -61,9 +72,7 @@ def construire() -> list[dict]:
         desc = str(r.get("description") or "").strip() or textes.get(r.id) or texte_type(r.titre)
         # Numéro du set n'importe où dans le titre (« LEGO Ninjago 71834 – … », « … - 21037 - Rare ») : le dernier
         # nombre de 4 à 7 chiffres collé à aucune lettre ; jamais pour une figurine seule. Un lot garde tous ses numéros (ns)
-        nums = re.findall(r"(?<!\w)(?<!\d[.,])(\d{4,7})(?:-\d)?(?!\w|[.,]\d)", r.titre)
-        nums = [x for x in nums if not 1949 <= int(x) <= 2030] or nums   # « … - 1999 » = l'année, pas le set
-        if re.search(r"-\s*Figurine\b", r.titre): nums = []
+        nums = numeros(r.titre)
         num = nums[-1] if nums else None
         out.append({"id": r.id, "t": r.titre, "p": float(r.prix or 0), "s": r.statut, "u": r.url,
                     "n": num or "", **({"ns": sorted(set(nums))} if len(set(nums)) > 1 else {}), "d": desc, "g": gamme(r.titre),
