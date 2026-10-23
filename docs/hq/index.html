@@ -1790,7 +1790,17 @@ function annonceNeuve(it){
   const d = `🔔 Vends set LEGO ${it.s} - ${nom} de la gamme LEGO ${gamme}.\n\nℹ️ Prix ferme\n\n🎁 Parfait pour compléter une collection/offrir.\n\n✅ Etat : ${etat}\n\n📦 Envoi soigné\n\n${tags.join(" ")}`;
   return { id: "n" + it.s, t, d, n: it.s, p: APUB[it.s]?.prix || null, ph: [], u: "", s: "nouveau" };
 }
+function annonceFig(x, f){
+  const gamme = ((CAT[x.s] || [])[1] || "LEGO").split(" / ")[0];
+  const nom = f[1].split(" - ")[0], ref = f[0];
+  const nomSet = (NOMSFR[x.s] && NOMSFR[x.s].nom) || poNom(x);
+  const tags = ["#lego", "#" + sansAccent(gamme).replace(/[^a-z0-9]/g, ""), ...motsTag(nom).slice(0, 3).map((m) => "#" + m), "#figurine", "#minifigure"];
+  const t = `LEGO ${gamme} - Figurine ${nom} - ${ref} - Complet`;
+  const d = `🔔 Vends figurine LEGO ${nom} de la gamme LEGO ${gamme}.\n\n✅ 💯 % LEGO\n\nℹ️ Cette figurine vient du set ${x.s} - ${nomSet}.\n\n🔎 Détails de la figurine :\n- N° : ${ref}\n- Nom figurine : ${nom}\n- Gamme : LEGO ${gamme} - Minifigure\n\n⚠️ Important (à lire attentivement) :\n- Le support n'est pas vendu avec la figurine\n\nℹ️ La figurine est vendue avec les accessoires que vous voyez en photo.\n\n🎁 Parfait pour compléter un set, une collection/offrir.\n\n✅ Etat : 👌👌👌👌👌👌👌\n\n📦 Envoi soigné.\n\n${[...new Set(tags)].join(" ")}`;
+  return { id: "f" + x.id + "-" + ref, t, d, n: ref, p: null, ph: [], u: "", s: "nouveau" };
+}
 const numeroDans = (t, n) => new RegExp("(^|\\D)" + n + "(\\D|$)").test(t || "");
+let PO = null;              // etat/decoupe : sets à découper, leurs figurines, celles déjà rattachées
 function listeActions(){
   const L = [], vus = new Set(ANNONCES.map((a) => a.n));
   const seules = LBC.seules || [];
@@ -1811,6 +1821,15 @@ function listeActions(){
     if (!pfaits["new-" + it.s]) L.push({ k: "new-" + it.s, type: "publier", pf: "Vinted", a, it, titre: a.t, prix: a.p, q,
       pourquoi: `${q > 1 ? q + " in stock" : "In stock"} and listed nowhere. Post it on Vinted first.` });
     else L.push({ k: "lbcnew-" + it.s, type: "lbc", pf: "Leboncoin", a, it, titre: a.t, prix: a.p, q, pourquoi: "Posted on Vinted. Now the Leboncoin copy." });
+  }
+  // Figurines rattachées à un set découpé, pas encore vendues et publiées nulle part
+  for (const x of (PO && PO.sets) || []){
+    for (const f of x.figs || []){
+      const p = (x.pub || {})[f[0]]; if (!p) continue;
+      const manque = p.r - p.v.length - (p.lo || 0);
+      if (manque > 0) L.push({ k: "newfig-" + x.id + "-" + f[0], type: "publier", pf: "Vinted", a: annonceFig(x, f), titre: annonceFig(x, f).t, q: manque,
+        pourquoi: `Minifig from your part-out set ${x.s}${manque > 1 ? ` (${manque} in stock)` : ""}, listed nowhere. Post it on Vinted first.` });
+    }
   }
   for (const a of ANNONCES){
     if (a.s !== "masqué") continue;
@@ -2489,7 +2508,6 @@ hauteurBarre();
 rendre(); rendreHome(); rendreTodo(); rendreDeals(); rendreHist();
 
 /* ---------- Part-out : figurines rattachées à leur achat ---------- */
-let PO = null;              // etat/decoupe : sets à découper, leurs figurines, celles déjà rattachées
 const poOff = {};           // "<article>|<code>" -> true : figurine décochée (pas dans la boîte)
 const poOuvert = {};
 function poAttente(id){
@@ -2519,10 +2537,12 @@ function rendrePo(){
     const etatTxt = att ? `<span class="pill n">Saving…</span>` : nLies ? `<span class="pill ok">Linked · ${nLies - nVendus} left · ${nVendus} sold</span>`
       : figs.length ? `<span class="pill warn">Not linked yet${nv ? ` · ${nv} sold` : ""}</span>` : `<span class="pill n">No minifig list</span>`;
     const lignes = figs.map((f) => {
-      const k = x.id + "|" + f[0], n = f[2] * x.q, v = vendu(f);
+      const k = x.id + "|" + f[0], n = f[2] * x.q, v = vendu(f), p = (x.pub || {})[f[0]];
+      const ou = !p ? "" : p.v.length ? (" · " + (p.v.some((i) => (ANNONCES.find((a) => a.id === i) || {}).s === "en ligne") ? "on Vinted" : "hidden on Vinted") + (p.l ? " + Leboncoin" : ""))
+        : p.lo ? " · on Leboncoin" : " · not listed";
       return `<label class="po-f${v >= n ? " vendu" : ""}"><input type="checkbox" data-k="${esc(k)}" ${poOff[k] ? "" : "checked"}>
         <img alt="" loading="lazy" src="https://img.bricklink.com/ItemImage/MN/0/${esc(f[0])}.png" onerror="this.style.visibility='hidden'">
-        <span><b>${esc(f[1])}</b><small>${esc(f[0])}${n > 1 ? " · ×" + n : ""}${v ? (v >= n ? " · sold" : ` · ${v}/${n} sold`) : ""}</small></span></label>`;
+        <span><b>${esc(f[1])}</b><small>${esc(f[0])}${n > 1 ? " · ×" + n : ""}${v ? (v >= n ? " · sold" : ` · ${v}/${n} sold`) : ""}${v < n ? ou : ""}</small></span></label>`;
     }).join("");
     const autres = (x.autres || []).length ? `<p class="sub" style="margin:0">Also sold from this set, not matched to a minifig: ${x.autres.map(esc).join(" · ")}</p>` : "";
     const bouton = !figs.length ? "" : `<button class="btn yes" data-po="${x.id}" ${db && total && !att ? "" : "disabled"}>${nLies ? "✓ Update the list" : nv ? `✓ Confirm: ${reste} left in the box` : coches.length === figs.length ? `✓ I have them all (${total})` : `✓ Link the ${total} checked`}</button>`;
@@ -2560,7 +2580,7 @@ $("#po").addEventListener("click", async (e) => {
     $("#fresh").textContent = ETAT ? "Updated " + depuis(ETAT.maj) : "";
     rendreHome(); rendreTodo(); rendreDeals(); if (vue === "scan") rendreScanVue();
   }, () => note("The dashboard could not be loaded right now. Reload the page."));
-  db.doc("etat/decoupe").onSnapshot((snap) => { PO = snap.exists ? snap.data() : null; rendrePo(); }, () => {});
+  db.doc("etat/decoupe").onSnapshot((snap) => { PO = snap.exists ? snap.data() : null; rendrePo(); rendrePlateformes(); }, () => {});
   db.doc("etat/historique").onSnapshot((snap) => {
     HIST = snap.exists ? snap.data() : null;
     // Quantités de la base rafraîchies à chaque passage (sinon : copie figée à la publication)

@@ -33,7 +33,7 @@ def lire(nom, defaut):
 def donnees() -> tuple[list[dict], dict]:
     """(annonces Vinted {id, n, s}, {lien, seules}) : fichiers locaux, sinon résumé partagé."""
     if (APP / "annonces.json").exists():
-        an = [{"id": a["id"], "n": a.get("n"), "s": a.get("s")} for a in lire("annonces.json", [])]
+        an = [{"id": a["id"], "n": a.get("n"), "s": a.get("s"), "t": (a.get("t") or "")[:120]} for a in lire("annonces.json", [])]
         lbc = lire("leboncoin.json", {})
         return an, {"lien": lbc.get("lien", {}), "seules": [{"id": x["id"], "t": x.get("t"), "vendu": x.get("vendu")} for x in lbc.get("seules", [])]}
     d = base.doc("fichiers/lbc_index") or {}

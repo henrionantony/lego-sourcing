@@ -96,7 +96,65 @@ def etat() -> dict:
                     "q": int(r.get("quantite") or 1), "d": str(r.get("date_achat") or "")[:10], "l": str(r.get("lieu") or "")[:30],
                     "figs": connus.get(s), "lies": lies.get(r["id"], {}), "vendus": vendus,
                     "autres": [str(v.get("nom_article") or "")[:90] for v in non]})
+    publies(out)
     return {"maj": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), "sets": out}
+
+
+def _nom_annonce(titre: str) -> str:
+    m = re.search(r"Figurine\s+(.+?)\s+-\s", titre or "", re.I)
+    return m.group(1) if m else ""
+
+
+def publies(sets: list):
+    """Pour chaque figurine rattachée pas encore vendue : ses annonces Vinted (en ligne
+    ou masquées, reconnues au code BrickLink du titre, sinon au nom) et Leboncoin.
+    Ajoute à chaque set « pub » {code: {r: en stock, v: [ids Vinted], l: nb aussi sur Leboncoin, lo}}."""
+    import lbc_mails
+    try:
+        annonces, lbc = lbc_mails.donnees()
+    except Exception as e:
+        print("annonces indisponibles :", type(e).__name__)
+        return
+    restes = {}  # clé -> [(set, code, nb en stock)], achats les plus anciens d'abord
+    noms = {}
+    for x in sorted(sets, key=lambda x: x["d"]):
+        nomfig = {f[0]: f[1] for f in x.get("figs") or []}
+        for ref, (n, v) in (x.get("lies") or {}).items():
+            if n - v > 0:
+                restes.setdefault(cle(ref), []).append([x, ref, n - v])
+                noms.setdefault(cle(ref), re.sub(r"[^a-z0-9 ]", " ", _sans_accent(str(nomfig.get(ref, "")).split(" - ")[0])))
+    def code_de(titre):
+        codes = re.findall(r"\b[A-Za-z]{2,5}\d{2,4}[a-z]?\b", titre or "")
+        if codes:  # un code dans le titre : on ne devine pas par le nom
+            return next((cle(c) for c in codes if cle(c) in restes), None)
+        essais = [_nom_annonce(titre).split("(")[0]] + re.findall(r"\(([^)]*)\)", _nom_annonce(titre))
+        for e in essais:
+            mots = set(re.sub(r"[^a-z0-9 ]", " ", _sans_accent(e)).split())
+            cand = [k for k, n in noms.items() if mots and mots <= set(n.split())]
+            if len(cand) == 1:
+                return cand[0]
+        return None
+    vinted, seules = {}, {}
+    for a in annonces:
+        if a.get("s") in ("en ligne", "masqué") and "igurine" in (a.get("t") or ""):
+            k = code_de(a.get("t"))
+            if k:
+                vinted.setdefault(k, []).append(a["id"])
+    for a in lbc.get("seules") or []:
+        if not a.get("vendu"):
+            k = code_de(a.get("t"))
+            if k:
+                seules[k] = seules.get(k, 0) + 1
+    lien = lbc.get("lien") or {}
+    for k, lst in restes.items():
+        v, l = list(vinted.get(k, [])), seules.get(k, 0)
+        for x, ref, n in lst:
+            mes = v[:n]
+            v = v[n:]
+            nl = sum(1 for i in mes if lien.get(i))
+            pris = min(n - nl, l)
+            l -= pris
+            x.setdefault("pub", {})[ref] = {"r": n, "v": mes, "l": nl, "lo": pris}  # lo : sur Leboncoin seulement
 
 
 def cle(code) -> str:
