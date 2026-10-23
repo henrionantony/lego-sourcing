@@ -235,7 +235,7 @@ h2.sec:first-child{margin-top:4px}
 .po{gap:10px} .po:not([open]){gap:0} .pill.ok{background:var(--ok-bg);color:var(--ok)}
 .po-l{display:grid;gap:6px}
 .po-f{display:grid;grid-template-columns:22px 44px minmax(0,1fr);gap:8px;align-items:center;font-size:13.5px}
-.po-f input{width:20px;height:20px;margin:0}
+.po-f input{width:20px;height:20px;margin:0} .po-f.vendu b{text-decoration:line-through;color:var(--muted)} .po-f.vendu img{opacity:.45}
 .po-f img{width:44px;height:52px;object-fit:contain;background:#fff;border-radius:6px}
 .po-f b{display:block;font-weight:500;line-height:1.25;overflow-wrap:anywhere} .po-f small{color:var(--muted)}
 .nad .sale{margin:0} .nad-src{margin:-6px 0 0;font-size:12.5px}
@@ -540,7 +540,7 @@ dialog.confirmer::backdrop{background:rgba(0,0,0,.45)} dialog.confirmer p{margin
 </section>
 <section class="view" id="v-po" hidden>
   <h2 class="scan-titre">Part-out sets</h2>
-  <p class="sub" style="margin:0 0 10px">Your sets bought to part out. Check the minifigs and tap <b>I have them all</b>: each minifig is tied to this purchase, so when you sell it, the sale counts for this set.</p>
+  <p class="sub" style="margin:0 0 10px">Your sets bought to part out, and sets you already started selling in pieces. Minifigs you already sold are marked from your sales. Uncheck any minifig missing from the box, then confirm: each minifig is tied to this purchase, so when you sell it, the sale counts for this set.</p>
   <div class="find" id="po-w"><input id="po-q" type="search" placeholder="Find a set: name or number" autocomplete="off" enterkeyhint="search" aria-label="Find a part-out set"></div>
   <div id="po" aria-live="polite"><p class="empty">Loading…</p></div>
 </section>
@@ -2510,22 +2510,27 @@ function rendrePo(){
     const nLies = Object.values(x.lies || {}).reduce((s, v) => s + v[0], 0);
     const nVendus = Object.values(x.lies || {}).reduce((s, v) => s + v[1], 0);
     const att = poAttente(x.id);
-    const etatTxt = att ? `<span class="pill n">Saving…</span>` : nLies ? `<span class="pill ok">${nLies} minifig${nLies > 1 ? "s" : ""} linked · ${nVendus} sold</span>`
-      : figs.length ? `<span class="pill warn">Not linked yet</span>` : `<span class="pill n">No minifig list</span>`;
+    // Vendues d'après tes ventes (avant le rattachement) ou d'après les lignes rattachées
+    const vendu = (f) => Math.min(f[2] * x.q, nLies ? ((x.lies || {})[f[0]] || [0, 0])[1] : ((x.vendus || {})[f[0]] || 0));
     const coches = figs.filter((f) => !poOff[x.id + "|" + f[0]]);
     const total = coches.reduce((s, f) => s + f[2] * x.q, 0);
+    const reste = coches.reduce((s, f) => s + f[2] * x.q - vendu(f), 0);
+    const nv = figs.reduce((s, f) => s + vendu(f), 0);
+    const etatTxt = att ? `<span class="pill n">Saving…</span>` : nLies ? `<span class="pill ok">Linked · ${nLies - nVendus} left · ${nVendus} sold</span>`
+      : figs.length ? `<span class="pill warn">Not linked yet${nv ? ` · ${nv} sold` : ""}</span>` : `<span class="pill n">No minifig list</span>`;
     const lignes = figs.map((f) => {
-      const k = x.id + "|" + f[0], n = f[2] * x.q, li = (x.lies || {})[f[0]];
-      return `<label class="po-f"><input type="checkbox" data-k="${esc(k)}" ${poOff[k] ? "" : "checked"}>
+      const k = x.id + "|" + f[0], n = f[2] * x.q, v = vendu(f);
+      return `<label class="po-f${v >= n ? " vendu" : ""}"><input type="checkbox" data-k="${esc(k)}" ${poOff[k] ? "" : "checked"}>
         <img alt="" loading="lazy" src="https://img.bricklink.com/ItemImage/MN/0/${esc(f[0])}.png" onerror="this.style.visibility='hidden'">
-        <span><b>${esc(f[1])}</b><small>${esc(f[0])}${n > 1 ? " · ×" + n : ""}${li ? ` · ${li[1]}/${li[0]} sold` : ""}</small></span></label>`;
+        <span><b>${esc(f[1])}</b><small>${esc(f[0])}${n > 1 ? " · ×" + n : ""}${v ? (v >= n ? " · sold" : ` · ${v}/${n} sold`) : ""}</small></span></label>`;
     }).join("");
-    const bouton = !figs.length ? "" : `<button class="btn yes" data-po="${x.id}" ${db && total && !att ? "" : "disabled"}>${coches.length === figs.length ? `✓ I have them all (${total})` : `✓ Link the ${total} checked`}${nLies ? " again" : ""}</button>`;
+    const autres = (x.autres || []).length ? `<p class="sub" style="margin:0">Also sold from this set, not matched to a minifig: ${x.autres.map(esc).join(" · ")}</p>` : "";
+    const bouton = !figs.length ? "" : `<button class="btn yes" data-po="${x.id}" ${db && total && !att ? "" : "disabled"}>${nLies ? "✓ Update the list" : nv ? `✓ Confirm: ${reste} left in the box` : coches.length === figs.length ? `✓ I have them all (${total})` : `✓ Link the ${total} checked`}</button>`;
     return `<details class="nad po" data-id="${x.id}" ${poOuvert[x.id] ? "open" : ""}>
       <summary class="nad-h"><img class="nad-img" alt="" loading="lazy" src="https://cdn.rebrickable.com/media/sets/${esc(x.s)}-1.jpg" onerror="this.hidden=true">
         <span class="nad-id"><b>${esc(poNom(x))}</b><span class="sub">${esc(x.s)}${x.q > 1 ? " · ×" + x.q : ""} · bought ${esc(x.d)}${x.l ? " · " + esc(x.l) : ""}</span>${etatTxt}</span></summary>
       ${figs.length ? `<div class="po-l">${lignes}</div>` : `<p class="sub" style="margin:0">Brickset lists no minifigure for this set.</p>`}
-      ${bouton}${att ? `<p class="sub" style="margin:0">Goes into your base within 30 minutes.</p>` : ""}</details>`;
+      ${autres}${bouton}${att ? `<p class="sub" style="margin:0">Goes into your base within 30 minutes.</p>` : ""}</details>`;
   }).join("") || `<p class="empty">${q ? "No part-out set matches." : "No set to part out in stock."}</p>`;
 }
 $("#po-q").addEventListener("input", rendrePo);
