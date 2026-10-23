@@ -293,6 +293,8 @@ def lire(mail_id: str, expediteur: str, sujet: str, corps: str, jour: str, url: 
     e = leboncoin(adresse, sujet, t, corps)
     if e:
         return {**base, **e, "d": jour}
+    if "vinted" in adresse and re.search(r"vendu|vente|achet|commande|bordereau|envo", sujet, re.I):
+        return None  # vente Vinted : pour Claude (enregistrement de la vente)
     if any(k in adresse for k in IGNORES):
         return {**base, "ignore": True}
     if re.search(r"facture|re[çc]u lego", sujet, re.I) and magasin(adresse):
