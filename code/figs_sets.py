@@ -15,6 +15,7 @@ Usage : python3 figs_sets.py              met à jour etat/decoupe
 """
 import datetime as dt
 import html
+import json
 import re
 import statistics
 import sys
@@ -156,6 +157,26 @@ def publies(sets: list):
             if cle(c) in restes:
                 prix.setdefault(cle(c), []).append(float(v["prix_vente"]) / max(1, int(v.get("quantite") or 1)))
                 break
+    # Sinon : cote BrickEconomy (neuf) × ce que tu en tires d'habitude (tes ventes / cote, par gamme si ≥ 20 ventes)
+    # Le cache BrickEconomy n'existe que sur le poste de collecte : il publie ses cotes dans la base
+    # (fichiers/cotes_figs), que le passage GitHub relit.
+    cotes = {}
+    try:
+        import cotes_figs
+        f = cotes_figs.FIGS
+        if f.exists():
+            coef = cotes_figs.coefficient()
+            tous = coef.get("TOUTES", (1.0, 0))[0]
+            for c, b in json.loads(f.read_text()).items():
+                if b.get("valeur_neuf"):
+                    r, n = coef.get(b.get("gamme") or "", (tous, 0))
+                    cotes[cle(c)] = round(float(b["valeur_neuf"]) * (r if n >= 20 else tous), 2)
+            if cotes:
+                base.doc_ecrire("fichiers/cotes_figs", {"c": cotes})
+        else:
+            cotes = (base.doc("fichiers/cotes_figs") or {}).get("c") or {}
+    except Exception as e:
+        print("cotes figurines :", e)
     for k, lst in restes.items():
         v, l = list(vinted.get(k, [])), seules.get(k, 0)
         for x, ref, n in lst:
@@ -167,6 +188,8 @@ def publies(sets: list):
             x.setdefault("pub", {})[ref] = {"r": n, "v": mes, "l": nl, "lo": pris}  # lo : sur Leboncoin seulement
             if prix.get(k):
                 x["pub"][ref]["px"] = round(statistics.median(prix[k]), 2)
+            elif cotes.get(k):
+                x["pub"][ref].update(px=cotes[k], be=1)  # pas encore vendue : cote BrickEconomy × ton coefficient
 
 
 def cle(code) -> str:

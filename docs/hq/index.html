@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="364b78b496"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="c82c488f81"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -1900,7 +1900,7 @@ function listeActions(){
       const manque = p.r - p.v.length - (p.lo || 0);
       if (manque > 0) L.push({ k: "newfig-" + x.id + "-" + f[0], type: "publier", pf: "Vinted", a: annonceFig(x, f), titre: annonceFig(x, f).t, q: manque,
         fig: f[0], prix: p.px || null, v: (p.px || 0) * manque, m: "figs",
-        pourquoi: `Minifig from your part-out set ${x.s}${manque > 1 ? ` (${manque} in stock)` : ""}, listed nowhere. Post it on Vinted first.` });
+        pourquoi: `Minifig from your part-out set ${x.s}${manque > 1 ? ` (${manque} in stock)` : ""}, listed nowhere. Post it on Vinted first.${p.px ? p.be ? ` Price: BrickEconomy value × what you usually get (never sold one yet).` : ` Price: your usual sale price for it.` : ""}` });
     }
   }
   for (const a of ANNONCES){
