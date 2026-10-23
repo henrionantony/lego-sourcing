@@ -1965,7 +1965,9 @@ const ligneAction = (y) => `<button class="pf-ligne ${PTYPES[y.type].cl}${pfaits
 function scoreJour(){
   const j = new Date().toISOString().slice(0, 10);
   const f = Object.values(pfaits).filter((p) => p.etat === "fait" && (p.le || "").slice(0, 10) === j);
-  return { n: f.length, e: f.reduce((s, p) => s + (+p.prix || 0) * (p.q || 1), 0), parM: f.reduce((o, p) => (o[p.m] = (o[p.m] || 0) + 1, o), {}) };
+  // « Mis en ligne » = publications seulement (pas les suppressions ni les baisses de prix)
+  const enLigne = f.filter((p) => ["publier", "remettre", "lbc"].includes(p.type));
+  return { n: f.length, e: enLigne.reduce((s, p) => s + (+p.prix || 0) * (p.q || 1), 0), parM: f.reduce((o, p) => (o[p.m] = (o[p.m] || 0) + 1, o), {}) };
 }
 function rendrePlateformes(){
   if (!$("#p-actions")) return;
@@ -2011,7 +2013,7 @@ function rendreMissions(L){
 }
 async function marquerPf(x, etat){
   const av = pfaits[x.k];
-  pfaits[x.k] = { etat, le: new Date().toISOString(), m: x.m || "", prix: +x.prix || 0, q: x.q || 1 };
+  pfaits[x.k] = { etat, le: new Date().toISOString(), m: x.m || "", type: x.type, prix: +x.prix || 0, q: x.q || 1 };
   pcourant = null;
   rendrePlateformes(); window.scrollTo(0, 0);
   try {
