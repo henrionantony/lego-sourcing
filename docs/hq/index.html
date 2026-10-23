@@ -1790,6 +1790,7 @@ const PTYPES = {
   remettre: { ic: "👁", lib: "Relist", cl: "t-relist" },
   lbc: { ic: "➕", lib: "Post on Leboncoin", cl: "t-lbc" },
   baisse: { ic: "↘", lib: "Lower the price", cl: "t-drop" },
+  republier: { ic: "🔁", lib: "Repost at full price", cl: "t-new" },
 };
 const majuscule = (t) => t ? t[0].toUpperCase() + t.slice(1) : t;
 const ETATS_FR = { SCELLE: "Jamais ouvert", "SCELLÉ": "Jamais ouvert" };
@@ -1822,6 +1823,7 @@ const MISSIONS = [
   { m: "lbc", ic: "➕", t: "Leboncoin, best first", d: "Live on Vinted, missing on Leboncoin. Big sets first: they sell best there." },
   { m: "masques", ic: "👁", t: "Hidden listings you counted", d: "Hidden on Vinted, but you counted them at the inventory." },
   { m: "ancien", ic: "📦", t: "Older stock never listed", d: "Bought before your last logged sale. Check you still have it before posting: some may be sold but not logged yet." },
+  { m: "republier", ic: "🔁", t: "Fresh start", d: "At the floor price for 30 days without selling. Delete the listing and post it again at the starting price: a new listing gets seen again." },
   { m: "baisses", ic: "↘", t: "Monday price drops", d: "Listed too long at this price." },
 ];
 const PAR_MISSION = 10;
@@ -1890,6 +1892,12 @@ function listeActions(){
       L.push({ k: "lbc-" + a.id, type: "lbc", pf: "Leboncoin", a, titre: a.t, prix: a.p, pr: a.pr || 0, m: "lbc", v: +a.p || 0, pourquoi: "Live on Vinted, missing on Leboncoin." });
   }
   for (const a of ANNONCES) if (nouveauPrix(a)) L.push({ k: "drop-" + a.id, type: "baisse", pf: "Vinted", a, titre: a.t, prix: nouveauPrix(a), avant: a.p, u: a.u, m: "baisses", v: +a.p || 0, pourquoi: "Monday list: it has been listed too long at this price." });
+  // Au plancher depuis 30 jours : on supprime et on reposte (l'action disparaît quand l'ancienne annonce n'est plus dans l'export)
+  for (const a of ANNONCES){
+    const p = ETAT?.republier?.prix?.[a.id];
+    if (p && a.s === "en ligne") L.push({ k: "repost-" + a.id, type: "republier", pf: "Vinted", a, titre: a.t, prix: p, avant: a.p, u: a.u, m: "republier", v: p,
+      pourquoi: `At ${eur(a.p)}, the floor, for 30 days. Delete it, then post it again at ${eur(p)}.` });
+  }
   const rang = Object.fromEntries(MISSIONS.map((M, i) => [M.m, i]));
   const ok = L.filter((x) => pfaits[x.k]?.etat !== "fait");
   const douteux = (z) => z.type === "publier" && z.it && !!prixDouteux(z.it.s);
@@ -1912,6 +1920,10 @@ function boutonsPlateforme(x){
   } else if (x.type === "lbc"){
     b.push(`<a class="btn" href="https://www.leboncoin.fr/deposer-une-annonce" target="_blank" rel="noopener">Open Leboncoin ↗</a>`);
     b.push(`<button class="btn yes" data-y="fait">✓ Done, posted on Leboncoin</button>`);
+  } else if (x.type === "republier"){
+    b.push(`<a class="btn" href="${esc(x.u)}" target="_blank" rel="noopener">Open the old listing ↗</a>`);
+    b.push(`<a class="btn" href="https://www.vinted.fr/items/new" target="_blank" rel="noopener">Post it again ↗</a>`);
+    b.push(`<button class="btn yes" data-y="fait">✓ Done, reposted</button>`);
   } else if (x.type === "baisse"){
     b.push(`<button class="btn yes" data-y="baisse">📋 Copy ${prixTexte(x.prix)} and open on Vinted</button>`);
     b.push(`<button class="btn" data-y="fait">✓ Done, price changed</button>`);
@@ -1985,7 +1997,7 @@ function scoreJour(){
   const j = new Date().toISOString().slice(0, 10);
   const f = Object.values(pfaits).filter((p) => p.etat === "fait" && (p.le || "").slice(0, 10) === j);
   // « Mis en ligne » = publications seulement (pas les suppressions ni les baisses de prix)
-  const enLigne = f.filter((p) => ["publier", "remettre", "lbc"].includes(p.type));
+  const enLigne = f.filter((p) => ["publier", "remettre", "lbc", "republier"].includes(p.type));
   return { n: f.length, e: enLigne.reduce((s, p) => s + (+p.prix || 0) * (p.q || 1), 0), parM: f.reduce((o, p) => (o[p.m] = (o[p.m] || 0) + 1, o), {}) };
 }
 function rendrePlateformes(){
