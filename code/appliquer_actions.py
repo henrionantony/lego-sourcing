@@ -301,6 +301,20 @@ def figurine_vendue(v: dict):
         base.modifier("ventes", f"id=eq.{v['id']}", {"article_id": art, "notes": str(v.get("notes") or "").replace(" (origine inconnue)", "")})
 
 
+def horizon(a):
+    """Mission « derniers achats » : poster tout de suite (Rotation) ou garder jusqu'à la retraite (Retirement)."""
+    h = a.get("horizon")
+    if h not in ("Rotation", "Retirement"):
+        raise ValueError("horizon inconnu")
+    ids = ",".join(str(int(i)) for i in a.get("article_ids") or [])
+    if not ids:
+        return
+    vise = str(a.get("vise_le") or "")[:10] if h == "Retirement" else None
+    if vise and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", vise):
+        vise = None
+    base.modifier("articles", f"id=in.({ids})", {"horizon": h, "vise_le": vise})
+
+
 def figs_lier(a):
     """« I have them all » de l'onglet Part-out : figurines rattachées à l'article."""
     figs_sets.lier(int(a["article_id"]), a.get("figs") or [])
@@ -462,7 +476,7 @@ def noter_scan(a):
     base.json_partage_ecrire("scans", SCANS, tout)
 
 
-GESTES = {"perte": perte, "stock_trouve": noter_scan, "expedition": noter_scan, "colis_lien": colis_lien, "recu": recu, "cashback_recu": cashback_recu, "cashback_confirme": cashback_confirme, "achete": achete, "achat_libre": achat_libre, "vente": vente, "vente_lot": vente_lot, "vire": vire, "corrige": corrige, "supprime": supprime, "figs_lier": figs_lier}
+GESTES = {"perte": perte, "stock_trouve": noter_scan, "expedition": noter_scan, "colis_lien": colis_lien, "recu": recu, "cashback_recu": cashback_recu, "cashback_confirme": cashback_confirme, "achete": achete, "achat_libre": achat_libre, "vente": vente, "vente_lot": vente_lot, "vire": vire, "corrige": corrige, "supprime": supprime, "figs_lier": figs_lier, "horizon": horizon}
 
 
 def appliquer(liste: list[dict]) -> dict:

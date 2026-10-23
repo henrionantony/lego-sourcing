@@ -16,6 +16,7 @@ Usage : python3 figs_sets.py              met à jour etat/decoupe
 import datetime as dt
 import html
 import re
+import statistics
 import sys
 import time
 import urllib.request
@@ -146,6 +147,15 @@ def publies(sets: list):
             if k:
                 seules[k] = seules.get(k, 0) + 1
     lien = lbc.get("lien") or {}
+    # Prix habituel : médiane de tes ventes de cette figurine (seules, pas co-investies), sinon rien
+    prix = {}
+    for v in base.lire("ventes", "select=nom_article,id_minifig,prix_vente,quantite,co_investisseur&produit=eq.FIGURINE&limit=20000") or []:
+        if v.get("co_investisseur") or not v.get("prix_vente"):
+            continue
+        for c in re.findall(r"\b[A-Za-z]{2,5}\d{2,4}[a-z]?\b", (v.get("id_minifig") or "") + " " + (v.get("nom_article") or "")):
+            if cle(c) in restes:
+                prix.setdefault(cle(c), []).append(float(v["prix_vente"]) / max(1, int(v.get("quantite") or 1)))
+                break
     for k, lst in restes.items():
         v, l = list(vinted.get(k, [])), seules.get(k, 0)
         for x, ref, n in lst:
@@ -155,6 +165,8 @@ def publies(sets: list):
             pris = min(n - nl, l)
             l -= pris
             x.setdefault("pub", {})[ref] = {"r": n, "v": mes, "l": nl, "lo": pris}  # lo : sur Leboncoin seulement
+            if prix.get(k):
+                x["pub"][ref]["px"] = round(statistics.median(prix[k]), 2)
 
 
 def cle(code) -> str:

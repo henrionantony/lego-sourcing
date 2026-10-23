@@ -383,7 +383,19 @@ h2.sec:first-child{margin-top:4px}
 .pf-prix{display:flex;align-items:center;gap:10px;font:700 22px var(--display)} .pf-prix s{opacity:.5;font-size:16px}
 .pf-sansph{display:flex;gap:10px;align-items:center;font-size:14px;color:var(--muted)}
 .pf-passer{justify-self:start}
+.plan{border:1px dashed var(--warn);background:var(--warn-bg);border-radius:10px;padding:10px 12px;display:grid;gap:6px} .plan p{margin:0;font-size:14px}
 .pf-file{display:grid;gap:6px;margin-bottom:12px}
+.pf-ligne .sv{width:44px;height:44px} .pf-ligne .sv img{max-width:100%;max-height:100%;object-fit:contain}
+.ms-score{font-size:14px;color:var(--muted);margin:2px 0 10px} .ms-score b{color:var(--ink)}
+.ms-carte{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px;display:grid;gap:8px}
+.ms-tete{display:flex;gap:12px;align-items:center} .ms-ic{font-size:28px;line-height:1} .ms-tete h2{margin:0;font:700 19px/1.2 var(--display)}
+.ms-n{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.ms-carte .sub{margin:0}
+.ms-barre{height:10px;border-radius:6px;background:var(--chip);overflow:hidden} .ms-barre i{display:block;height:100%;background:var(--ok);border-radius:6px;transition:width .3s}
+.ms-chiffres{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.ms-liste{display:grid;gap:6px;margin-bottom:16px} .pf-file,.ms-liste{grid-template-columns:minmax(0,1fr)}
+.ms-l{display:flex;gap:10px;align-items:center;text-align:left;width:100%;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--ink);font:13.5px/1.3 var(--body);cursor:pointer}
+.ms-l>span:first-child{font-size:20px} .ms-l.on{border-color:var(--ok);box-shadow:inset 4px 0 0 var(--ok)}
 .pf-ligne{display:flex;gap:10px;align-items:center;text-align:left;width:100%;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--ink);font:13.5px/1.3 var(--body);cursor:pointer}
 .pf-ligne.t-rm{border-left-color:var(--gap)} .pf-ligne.t-new{border-left-color:var(--warn)} .pf-ligne.t-relist,.pf-ligne.t-lbc{border-left-color:var(--ok)}
 .pf-ligne.passe{opacity:.6}
@@ -1800,27 +1812,59 @@ function annonceFig(x, f){
   return { id: "f" + x.id + "-" + ref, t, d, n: ref, p: null, ph: [], u: "", s: "nouveau" };
 }
 const numeroDans = (t, n) => new RegExp("(^|\\D)" + n + "(\\D|$)").test(t || "");
+/* Missions : les actions rangées par étapes, la plus utile d'abord ; dans chaque mission, ce qui vaut le plus d'abord.
+   On n'en montre que 10 à la fois pour que la liste reste faisable. */
+const MISSIONS = [
+  { m: "doubles", ic: "🚨", t: "Stop double sales", d: "Delete these ads first: the item is already sold, or you counted 0." },
+  { m: "achats", ic: "🛒", t: "Your recent buys", d: () => `Bought ${DERNIERE_VENTE ? "after " + DERNIERE_VENTE + " (your last logged sale)" : "recently"} and listed nowhere. For each one, pick your plan first: post now, or keep until it retires.${GARDES.size ? ` ${GARDES.size} set${GARDES.size > 1 ? "s" : ""} kept for later ${GARDES.size > 1 ? "stay" : "stays"} out of the missions.` : ""}` },
+  { m: "figs", ic: "🧍", t: "Part-out minifigs", d: "Minifigs from the sets you confirmed in Part-out, listed nowhere. Shoot them in one batch, post them one by one." },
+  { m: "lbc", ic: "➕", t: "Leboncoin, best first", d: "Live on Vinted, missing on Leboncoin. Big sets first: they sell best there." },
+  { m: "masques", ic: "👁", t: "Hidden listings you counted", d: "Hidden on Vinted, but you counted them at the inventory." },
+  { m: "ancien", ic: "📦", t: "Older stock never listed", d: "Bought before your last logged sale. Check you still have it before posting: some may be sold but not logged yet." },
+  { m: "baisses", ic: "↘", t: "Monday price drops", d: "Listed too long at this price." },
+];
+const PAR_MISSION = 10;
+let pmission = null;
+let DERNIERE_VENTE = "", GARDES = new Set();  // date de la dernière vente enregistrée : un achat plus récent est sûrement encore là
 let PO = null;              // etat/decoupe : sets à découper, leurs figurines, celles déjà rattachées
 function listeActions(){
   const L = [], vus = new Set(ANNONCES.map((a) => a.n));
   const seules = LBC.seules || [];
-  for (const x of seules) if (x.vendu) L.push({ k: "rm-lbc-" + x.id, type: "retirer", pf: "Leboncoin", titre: x.t, prix: x.p, u: x.u,
+  for (const x of seules) if (x.vendu) L.push({ k: "rm-lbc-" + x.id, type: "retirer", pf: "Leboncoin", titre: x.t, prix: x.p, u: x.u, m: "doubles",
     pourquoi: "This set is already sold on Vinted. Delete the Leboncoin ad so nobody buys it twice." });
   for (const a of ANNONCES){
     const c = counts["v" + a.id];
     if (c && c.n === 0){
-      L.push({ k: "rm-v-" + a.id, type: "retirer", pf: "Vinted", a, titre: a.t, prix: a.p, u: a.u, pourquoi: "You counted 0 at the inventory. Delete this Vinted listing." });
-      if (surLbc(a)) L.push({ k: "rm-l-" + a.id, type: "retirer", pf: "Leboncoin", a, titre: a.t, prix: a.p, u: LBC.lien?.[a.id] || "", pourquoi: "You counted 0 at the inventory. Delete it on Leboncoin too." });
+      L.push({ k: "rm-v-" + a.id, type: "retirer", pf: "Vinted", a, titre: a.t, prix: a.p, u: a.u, m: "doubles", pourquoi: "You counted 0 at the inventory. Delete this Vinted listing." });
+      if (surLbc(a)) L.push({ k: "rm-l-" + a.id, type: "retirer", pf: "Leboncoin", a, titre: a.t, prix: a.p, u: LBC.lien?.[a.id] || "", m: "doubles", pourquoi: "You counted 0 at the inventory. Delete it on Leboncoin too." });
     }
   }
-  for (const it of ITEMS){
-    if (it.src !== "base" || vus.has(it.s) || seules.some((x) => numeroDans(x.t, it.s))) continue;
-    const c = counts[it.id], q = c && c.n != null ? c.n : attendu(it);
+  // Sets de la base (achetés − vendus, à jour toutes les 30 min) publiés nulle part. Les boîtes passées en part-out
+  // ne comptent pas : leurs figurines ont leurs propres actions juste en dessous.
+  const enPo = new Set(((PO && PO.sets) || []).map((x) => x.id));
+  const aujourdhui = new Date().toISOString().slice(0, 10);
+  GARDES = new Set();
+  for (const [s, e] of Object.entries(EXEMP)){
+    if (vus.has(s) || seules.some((x) => numeroDans(x.t, s))) continue;
+    // Gardés jusqu'à la retraite (choix fait dans l'appli) : hors missions jusqu'à leur date
+    const vivants = (e.c || []).filter((c) => !enPo.has(c[0]) && c[4] > 0);
+    const copies = vivants.filter((c) => !(c[5] === "Retirement" && (c[6] || "9999") > aujourdhui));
+    for (const c of vivants) if (!copies.includes(c)) GARDES.add(s);
+    let q = copies.reduce((n, c) => n + c[4], 0);
     if (q < 1) continue;
-    const a = annonceNeuve(it);
-    if (!pfaits["new-" + it.s]) L.push({ k: "new-" + it.s, type: "publier", pf: "Vinted", a, it, titre: a.t, prix: a.p, q,
-      pourquoi: `${q > 1 ? q + " in stock" : "In stock"} and listed nowhere. Post it on Vinted first.` });
-    else L.push({ k: "lbcnew-" + it.s, type: "lbc", pf: "Leboncoin", a, it, titre: a.t, prix: a.p, q, pourquoi: "Posted on Vinted. Now the Leboncoin copy." });
+    const it = ITEMS.find((x) => x.src === "base" && x.s === s) || (() => {
+      const C = CAT[s] || [];
+      return { id: "b" + s, s, t: C[0] || s, g: (C[1] || "").split(" / ")[0], fr: NOMSFR[s]?.nom ? "x - " + NOMSFR[s].nom : "", q, src: "base", f: "" };
+    })();
+    const c = counts[it.id];
+    if (c && c.n != null) q = Math.min(q, c.n);
+    if (q < 1) continue;
+    const a = annonceNeuve(it), d = copies.map((c) => c[2] || "").sort().pop();
+    const v = (APUB[s]?.prix || APUB[s]?.estime || e.pp || 0) * q;
+    const sansChoix = copies.filter((c) => !c[5]).map((c) => c[0]);
+    if (!pfaits["new-" + s]) L.push({ k: "new-" + s, type: "publier", pf: "Vinted", a, it, titre: a.t, prix: a.p, q, d, v, m: d >= DERNIERE_VENTE ? "achats" : "ancien", choix: sansChoix,
+      pourquoi: `${q > 1 ? q + " in stock" : "In stock"}, bought ${d || "?"}, listed nowhere. Post it on Vinted first.` });
+    else L.push({ k: "lbcnew-" + s, type: "lbc", pf: "Leboncoin", a, it, titre: a.t, prix: a.p, q, v, m: "lbc", pourquoi: "Posted on Vinted. Now the Leboncoin copy." });
   }
   // Figurines rattachées à un set découpé, pas encore vendues et publiées nulle part
   for (const x of (PO && PO.sets) || []){
@@ -1828,24 +1872,25 @@ function listeActions(){
       const p = (x.pub || {})[f[0]]; if (!p) continue;
       const manque = p.r - p.v.length - (p.lo || 0);
       if (manque > 0) L.push({ k: "newfig-" + x.id + "-" + f[0], type: "publier", pf: "Vinted", a: annonceFig(x, f), titre: annonceFig(x, f).t, q: manque,
+        fig: f[0], prix: p.px || null, v: (p.px || 0) * manque, m: "figs",
         pourquoi: `Minifig from your part-out set ${x.s}${manque > 1 ? ` (${manque} in stock)` : ""}, listed nowhere. Post it on Vinted first.` });
     }
   }
   for (const a of ANNONCES){
     if (a.s !== "masqué") continue;
     const c = counts["v" + a.id];
-    if (c && c.n >= 1) L.push({ k: "relist-" + a.id, type: "remettre", pf: "Vinted", a, titre: a.t, prix: a.p, u: a.u, pourquoi: "Hidden on Vinted, but you counted it at the inventory. Buyers can't see it." });
+    if (c && c.n >= 1) L.push({ k: "relist-" + a.id, type: "remettre", pf: "Vinted", a, titre: a.t, prix: a.p, u: a.u, m: "masques", v: +a.p || 0, pourquoi: "Hidden on Vinted, but you counted it at the inventory. Buyers can't see it." });
   }
   for (const a of ANNONCES){
     const relistee = pfaits["relist-" + a.id]?.etat === "fait";
     if ((a.s === "en ligne" || relistee) && !surLbc(a) && !(counts["v" + a.id]?.n === 0))
-      L.push({ k: "lbc-" + a.id, type: "lbc", pf: "Leboncoin", a, titre: a.t, prix: a.p, pr: a.pr || 0, pourquoi: "Live on Vinted, missing on Leboncoin." });
+      L.push({ k: "lbc-" + a.id, type: "lbc", pf: "Leboncoin", a, titre: a.t, prix: a.p, pr: a.pr || 0, m: "lbc", v: +a.p || 0, pourquoi: "Live on Vinted, missing on Leboncoin." });
   }
-  for (const a of ANNONCES) if (nouveauPrix(a)) L.push({ k: "drop-" + a.id, type: "baisse", pf: "Vinted", a, titre: a.t, prix: nouveauPrix(a), avant: a.p, u: a.u, pourquoi: "Monday list: it has been listed too long at this price." });
-  const rang = { retirer: 0, publier: 1, remettre: 2, lbc: 3, baisse: 4 };
+  for (const a of ANNONCES) if (nouveauPrix(a)) L.push({ k: "drop-" + a.id, type: "baisse", pf: "Vinted", a, titre: a.t, prix: nouveauPrix(a), avant: a.p, u: a.u, m: "baisses", v: +a.p || 0, pourquoi: "Monday list: it has been listed too long at this price." });
+  const rang = Object.fromEntries(MISSIONS.map((M, i) => [M.m, i]));
   const ok = L.filter((x) => pfaits[x.k]?.etat !== "fait");
-  ok.sort((x, y) => (pfaits[x.k]?.etat === "passe") - (pfaits[y.k]?.etat === "passe") || rang[x.type] - rang[y.type]
-    || (y.pr || 0) - (x.pr || 0) || (+y.prix || 0) - (+x.prix || 0));
+  ok.sort((x, y) => rang[x.m] - rang[y.m] || (pfaits[x.k]?.etat === "passe") - (pfaits[y.k]?.etat === "passe")
+    || (y.pr || 0) - (x.pr || 0) || (y.v || 0) - (x.v || 0) || (y.d || "").localeCompare(x.d || ""));
   return ok;
 }
 const prixTexte = (p) => String(p).replace(".", ",");
@@ -1869,6 +1914,18 @@ function boutonsPlateforme(x){
   }
   return b.join("");
 }
+// Poster tout de suite ou garder jusqu'à la retraite : les chiffres du référentiel, puis ton choix (un tap, gardé dans la base)
+const finAnnee = () => new Date().getFullYear() + "-12-31";
+function blocPlan(x){
+  const P = APUB[x.it.s] || {}, ret = P.retrait || "";
+  const date = ret ? new Date(ret).toLocaleDateString("en-GB", { month: "short", year: "numeric" }) : "";
+  const info = P.st === "retiré"
+    ? `Already retired${date ? " (" + date + ")" : ""}: nothing to wait for.`
+    : `Still sold by LEGO${date ? ", retiring " + date : ""}. ${P.rapide ? "Now ≈ " + eur(P.rapide) : ""}${P.garde ? " · after retirement ≈ " + eur(P.garde) : ""}${P.cout != null ? " · your cost " + eur(P.cout) : ""}.`;
+  return `<div class="plan"><div class="adl">Your plan for this set</div><p>${info}</p>
+    <div class="adbtns"><button class="btn yes" data-y="hz" data-h="Rotation">🚀 Post now</button>
+    <button class="btn" data-y="hz" data-h="Retirement" data-v="${esc(P.st === "retiré" || !ret || ret < new Date().toISOString().slice(0, 10) ? finAnnee() : ret)}">📦 Keep until ${P.st === "retiré" || !ret ? "end of year" : esc(date)}</button></div></div>`;
+}
 function carteAction(x){
   const T = PTYPES[x.type], a = x.a, lb = x.pf === "Leboncoin" && a && x.type !== "retirer";
   const titre = a ? (lb ? lbcTitre(a) : a.t) : x.titre, texte = a ? (lb ? lbc(a) : a.d) : "";
@@ -1881,6 +1938,7 @@ function carteAction(x){
     <div class="adbody">
       <div class="pf-titre">${esc(x.titre)}</div>
       <div class="sub">${esc(x.pourquoi)}</div>
+      ${x.choix && x.choix.length && x.it ? blocPlan(x) : ""}
       ${x.type !== "retirer" && x.prix ? `<div class="adf"><div class="adl">Price</div><div class="pf-prix">${x.avant ? `<s>${eur(x.avant)}</s> ` : ""}${eur(x.prix)}
         ${x.type !== "baisse" ? `<button class="btn" data-y="copie" data-c="prix">Copy price</button>` : ""}</div>
         ${apub ? `<div class="sub">Estimate ${apub.estime ? eur(apub.estime) : "unknown"}${apub.douteux ? `. Check: the cost in the database (${eur(apub.cout)}) looks like a whole lot, not this set alone.` : apub.cout ? ` · floor ${eur(apub.cout * PLANCHER)} (your cost ×${PLANCHER})` : " · free gift"}</div>` : ""}</div>` : ""}
@@ -1890,6 +1948,22 @@ function carteAction(x){
       <div class="adbtns">${boutonsPlateforme(x)}</div>
       <button class="btn ghost pf-passer" data-y="passe">Skip for now</button>
     </div></article>`;
+}
+function vignetteAction(y){
+  if (y.a && y.a.th) return `<span class="sv">${vignetteAnnonce(y.a)}</span>`;
+  if (y.fig) return `<span class="sv"><img alt="" loading="lazy" src="https://img.bricklink.com/ItemImage/MN/0/${esc(y.fig)}.png" onerror="this.style.visibility='hidden'"></span>`;
+  if (y.it) return vignetteSet(y.it.s);
+  const n = String(y.titre || "").match(/\b(\d{4,7})\b/);
+  return n ? vignetteSet(n[1]) : `<span class="sv"></span>`;
+}
+const ligneAction = (y) => `<button class="pf-ligne ${PTYPES[y.type].cl}${pfaits[y.k]?.etat === "passe" ? " passe" : ""}" data-k="${esc(y.k)}">
+      ${vignetteAction(y)}<span class="pf-lt"><b>${PTYPES[y.type].ic} ${PTYPES[y.type].lib}</b> · ${y.pf}${pfaits[y.k]?.etat === "passe" ? " · skipped" : ""}<span>${esc(y.titre)}</span></span>
+      <span class="adp">${y.prix ? eur(y.prix) : ""}</span></button>`;
+// Score du jour : ce que tu as fait aujourd'hui (boutons « Done » ou actions disparues après un export)
+function scoreJour(){
+  const j = new Date().toISOString().slice(0, 10);
+  const f = Object.values(pfaits).filter((p) => p.etat === "fait" && (p.le || "").slice(0, 10) === j);
+  return { n: f.length, e: f.reduce((s, p) => s + (+p.prix || 0) * (p.q || 1), 0), parM: f.reduce((o, p) => (o[p.m] = (o[p.m] || 0) + 1, o), {}) };
 }
 function rendrePlateformes(){
   if (!$("#p-actions")) return;
@@ -1902,28 +1976,47 @@ function rendrePlateformes(){
   const q = sansAccent($("#pq").value.trim());
   const Lf = q ? L.filter((y) => sansAccent([y.titre, y.a?.t, y.a?.n, y.it?.s, y.it?.t].join(" ")).includes(q)) : L;
   if (!Lf.length){ $("#p-actions").innerHTML = q ? `<p class="empty">No action for “${esc($("#pq").value.trim())}”. All your listings, with their Vinted and Leboncoin texts, are in My listings.</p>` : `<p class="empty">Nothing to do on the platforms. 🎉</p>`; return; }
+  if (!q){ rendreMissions(L); return; }
   const x = Lf.find((y) => y.k === pcourant) || Lf[0];
   pcourant = x.k;
   const autres = Lf.filter((y) => y !== x), vus = autres.slice(0, pmax);
   const compte = {}; for (const y of Lf) compte[y.type] = (compte[y.type] || 0) + 1;
   $("#p-actions").innerHTML = `<p class="sub pf-resume">${Object.entries(PTYPES).filter(([k]) => compte[k]).map(([k, T]) => `${T.ic} ${compte[k]} ${T.lib.toLowerCase()}`).join(" · ")}</p>
     ${carteAction(x)}
-    ${autres.length ? `<h2 class="sec">Next</h2><div class="pf-file">${vus.map((y) => `<button class="pf-ligne ${PTYPES[y.type].cl}${pfaits[y.k]?.etat === "passe" ? " passe" : ""}" data-k="${esc(y.k)}">
-      <span class="pf-ic" aria-hidden="true">${PTYPES[y.type].ic}</span><span class="pf-lt"><b>${PTYPES[y.type].lib}</b> · ${y.pf}${pfaits[y.k]?.etat === "passe" ? " · skipped" : ""}<span>${esc(y.titre)}</span></span>
-      <span class="adp">${y.prix ? eur(y.prix) : ""}</span></button>`).join("")}</div>
+    ${autres.length ? `<h2 class="sec">Next</h2><div class="pf-file">${vus.map(ligneAction).join("")}</div>
       ${autres.length > vus.length ? `<button class="btn" data-y="plus">Show ${Math.min(30, autres.length - vus.length)} more (${autres.length - vus.length} left)</button>` : ""}` : ""}`;
+  if (x.a && x.a.ph.length) afficherPhotos(x.a);
+}
+function rendreMissions(L){
+  const groupes = MISSIONS.map((M) => ({ ...M, L: L.filter((y) => y.m === M.m) })).filter((M) => M.L.length);
+  if (!pmission || !groupes.some((M) => M.m === pmission)) pmission = groupes[0].m;
+  const M = groupes.find((g) => g.m === pmission), rang = groupes.indexOf(M);
+  const lot = M.L.slice(0, PAR_MISSION), x = lot.find((y) => y.k === pcourant) || lot[0];
+  pcourant = x.k;
+  const sc = scoreJour(), faits = sc.parM[M.m] || 0, total = faits + lot.length;
+  const euros = lot.reduce((s, y) => s + (y.v || 0), 0);
+  $("#p-actions").innerHTML = `<div class="ms-score">${sc.n ? `🔥 Today: <b>${sc.n} done</b>${sc.e ? ` · <b>${eur(Math.round(sc.e))}</b> put online` : ""}` : "Today: nothing done yet. One mission at a time 💪"}</div>
+    <section class="ms-carte">
+      <div class="ms-tete"><span class="ms-ic" aria-hidden="true">${M.ic}</span><div><div class="ms-n">Mission ${rang + 1} of ${groupes.length}</div><h2>${M.t}</h2></div></div>
+      <p class="sub">${typeof M.d === "function" ? M.d() : M.d}</p>
+      <div class="ms-barre" role="progressbar" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${faits}"><i style="width:${Math.round(faits / total * 100)}%"></i></div>
+      <div class="ms-chiffres"><span>${faits} / ${total} done</span><span>${M.L.length > lot.length ? `${M.L.length - lot.length} more after these` : "last batch"}${euros ? ` · ≈ ${eur(Math.round(euros))} at stake` : ""}</span></div>
+    </section>
+    ${carteAction(x)}
+    ${lot.length > 1 ? `<h2 class="sec">Next in this mission</h2><div class="pf-file">${lot.filter((y) => y !== x).map(ligneAction).join("")}</div>` : ""}
+    ${groupes.length > 1 ? `<h2 class="sec">All missions</h2><div class="ms-liste">${groupes.map((g, i) => `<button class="ms-l${g.m === M.m ? " on" : ""}" data-ms="${g.m}"><span aria-hidden="true">${g.ic}</span><span class="pf-lt"><b>${i + 1}. ${g.t}</b><span>${g.L.length} action${g.L.length > 1 ? "s" : ""}${g.L.reduce((s, y) => s + (y.v || 0), 0) ? ` · ≈ ${eur(Math.round(g.L.reduce((s, y) => s + (y.v || 0), 0)))}` : ""}</span></span></button>`).join("")}</div>` : ""}`;
   if (x.a && x.a.ph.length) afficherPhotos(x.a);
 }
 async function marquerPf(x, etat){
   const av = pfaits[x.k];
-  pfaits[x.k] = { etat, le: new Date().toISOString() };
+  pfaits[x.k] = { etat, le: new Date().toISOString(), m: x.m || "", prix: +x.prix || 0, q: x.q || 1 };
   pcourant = null;
   rendrePlateformes(); window.scrollTo(0, 0);
   try {
     if (etat === "fait" && x.type === "lbc" && x.a && !x.it) await marquerLbc(x.a, true);
     if (etat === "fait" && x.type === "baisse") await marquerBaisse(x.a);
     if (etat === "fait" && x.k.startsWith("rm-l")) { if (x.a) await marquerLbc(x.a, false); }
-    await db.doc("plateformes/" + x.k).set({ etat, type: x.type, pf: x.pf, titre: String(x.titre).slice(0, 200), le: pfaits[x.k].le });
+    await db.doc("plateformes/" + x.k).set({ etat, type: x.type, pf: x.pf, titre: String(x.titre).slice(0, 200), le: pfaits[x.k].le, m: x.m || "", prix: +x.prix || 0, q: x.q || 1 });
   } catch (e) {
     if (av) pfaits[x.k] = av; else delete pfaits[x.k];
     rendrePlateformes(); note("This was not saved. Check your connection and try again.");
@@ -1935,7 +2028,9 @@ $("#pseg").addEventListener("click", (e) => {
   pvue = b.dataset.p; try { localStorage.setItem("pvue", pvue); } catch (e2) {}
   rendrePlateformes();
 });
-$("#p-actions").addEventListener("click", (e) => {
+$("#p-actions").addEventListener("click", async (e) => {
+  const ms = e.target.closest(".ms-l");
+  if (ms){ pmission = ms.dataset.ms; pcourant = null; rendrePlateformes(); window.scrollTo(0, 0); return; }
   const l = e.target.closest(".pf-ligne");
   if (l){ pcourant = l.dataset.k; rendrePlateformes(); window.scrollTo(0, 0); return; }
   const b = e.target.closest("[data-y]"); if (!b) return;
@@ -1951,6 +2046,15 @@ $("#p-actions").addEventListener("click", (e) => {
   if (b.dataset.y === "tout") return partager(a, a.ph.map((p, i) => i), b);
   if (!db){ note("Not connected: this can't be saved right now."); return; }
   if (b.dataset.y === "fait" || b.dataset.y === "passe") return marquerPf(x, b.dataset.y === "fait" ? "fait" : "passe");
+  if (b.dataset.y === "hz"){
+    const h = b.dataset.h, v = h === "Retirement" ? b.dataset.v : "";
+    b.disabled = true;
+    const ok = await envoyerAction("hz-" + x.it.s + "-" + Date.now().toString(36), { type: "horizon", article_ids: x.choix, horizon: h, vise_le: v });
+    if (!ok){ b.disabled = false; return note("Not saved: check your connection and try again."); }
+    for (const c of EXEMP[x.it.s]?.c || []) if (x.choix.includes(c[0])){ c[5] = h; c[6] = v; }
+    if (h === "Retirement") pcourant = null;
+    rendrePlateformes(); return;
+  }
 });
 
 rendreAnnonces();
@@ -2585,7 +2689,8 @@ $("#po").addEventListener("click", async (e) => {
     HIST = snap.exists ? snap.data() : null;
     // Quantités de la base rafraîchies à chaque passage (sinon : copie figée à la publication)
     if (HIST && HIST.ex) { EXEMP = HIST.ex; EXEMP_LE = new Date(HIST.maj).toISOString(); }
-    rendreHist(); if (vue === "scan") rendreScanVue();
+    if (HIST && HIST.ventes) DERNIERE_VENTE = HIST.ventes.reduce((m, v) => v.d > m ? v.d : m, "");
+    rendreHist(); rendrePlateformes(); if (vue === "scan") rendreScanVue();
   }, () => {});
   db.collection("archives").onSnapshot((snap) => {
     for (const ch of snap.docChanges()){

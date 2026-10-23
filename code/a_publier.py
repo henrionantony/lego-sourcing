@@ -33,6 +33,9 @@ def main():
         for r in csv.DictReader(f):
             ref.setdefault(r["set_num"].split("-")[0], r)
     stock = base.lire("stock", "select=*&reste=gt.0&id_set=not.is.null&categorie=eq.SET&limit=10000")
+    # Stratégie choisie dans l'appli (Post now / Keep until it retires), par article
+    hz = {r["id"]: (r.get("horizon") or "", r.get("vise_le") or "")
+          for r in base.lire("articles", "select=id,horizon,vise_le&horizon=not.is.null&limit=10000") or []}
     couts: dict[str, list] = {}
     ex: dict[str, list] = {}
     for l in stock:
@@ -41,7 +44,7 @@ def main():
         # prix_achat = prix de la ligne entière : on le ramène à un exemplaire
         cout = 0.0 if l.get("offert") else float(l["prix_achat"] or 0) / part / max(1, int(l.get("quantite") or 1))
         couts.setdefault(s, []).append((cout, l.get("details_etat") or ""))
-        ex.setdefault(s, []).append([l["id"], round(cout, 2), l.get("date_achat") or "", l.get("lieu") or "", int(l.get("reste") or 1)])
+        ex.setdefault(s, []).append([l["id"], round(cout, 2), l.get("date_achat") or "", l.get("lieu") or "", int(l.get("reste") or 1), *hz.get(l["id"], ("", ""))])
     out = {}
     for s, c in couts.items():
         r = ref.get(s, {})
@@ -59,7 +62,10 @@ def main():
         cap = regles.plafond_catalogue(float(r.get("prix_public") or 0)) if r.get("statut") == "en vente" else None
         if prix and cap and prix > cap:
             prix = max(cap, float(math.ceil(plancher)))
-        out[s] = {"prix": prix, "estime": round(estime, 2) or None,
+        # Pour choisir « poster maintenant » ou « garder » : revente rapide, revente après retraite, date de retraite
+        conseil = {"st": r.get("statut") or "", "rapide": float(r.get("pv_rapide") or 0) or None,
+                   "garde": float(r.get("pv_garde") or 0) or None, "retrait": r.get("retrait_croise") or r.get("retrait") or ""}
+        out[s] = {"prix": prix, "estime": round(estime, 2) or None, **conseil,
                   "cout": round(cout, 2), "etat": c[0][1], **({"douteux": True} if douteux else {})}
     SORTIE.write_text(json.dumps(out, ensure_ascii=False))
     pp = lambda s: float(ref.get(s, {}).get("prix_public") or 0) or None
