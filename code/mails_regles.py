@@ -126,7 +126,7 @@ def etape(sujet: str, p: str) -> str | None:
     s = sujet.lower()
     tout = (s + " " + p[:1500].lower())
     relais = re.search(r"relais|point de retrait|pickup|consigne|bureau de poste|magasin", tout)
-    if re.search(r"arriv[ée]+ en relais|arriv[ée]+ au point|est arriv[ée]e|disponible|pr[êe]t à être retir|à retirer|changement de votre point", s):
+    if re.search(r"arriv[ée]+ en relais|arriv[ée]+ au point|est arriv[ée]e|disponible|pr[êe]t à être retir|à retirer|pour retirer|vous attend|changement de votre point", s):
         return "a_retirer"
     if re.search(r"a été livr[ée]|est livr[ée]|livraison effectu", s):
         return "a_retirer" if relais else "livre"
@@ -146,8 +146,11 @@ def colis(adresse: str, sujet: str, t: str, jour: str, connus: list[dict]) -> di
     m = re.search(SUIVI, sujet + " " + p)
     if m:
         e["suivi"] = m.group(1)
+    n = num_commande(sujet, p)
+    if n:
+        e["num"] = n
     # Numéro de commande : un numéro déjà connu (commande ou colis précédent) cité dans le mail
-    for c in connus:
+    for c in ([] if "num" in e else connus):
         n = c.get("num")
         if n and len(str(n)) >= 6 and re.search(r"(?<![A-Z0-9])" + re.escape(str(n)) + r"(?![0-9])", sujet + " " + p):
             e["num"] = n
@@ -156,18 +159,69 @@ def colis(adresse: str, sujet: str, t: str, jour: str, connus: list[dict]) -> di
         n = next((c.get("num") for c in connus if c.get("suivi") == e["suivi"] and c.get("num")), None)
         if n:
             e["num"] = n
-    mag = magasin(adresse) or next((v for k, v in MAGASINS.items() if k.split(".")[0].upper() in sujet.upper()), None)
+    # Les mails du transporteur (Chronopost, Pickup) ne citent pas le magasin : on le reprend
+    # d'un mail déjà lu du même colis ou de la même commande
+    meme = [c for c in connus if (e.get("suivi") and c.get("suivi") == e["suivi"]) or (e.get("num") and str(c.get("num")) == str(e["num"]))]
+    if "num" not in e:
+        n = next((c.get("num") for c in meme if c.get("num")), None)
+        if n:
+            e["num"] = n
+    mag = magasin(adresse) or next((v for k, v in MAGASINS.items() if k.split(".")[0].upper() in sujet.upper()), None) \
+        or next((c.get("magasin") for c in meme if c.get("magasin")), None)
     if mag and mag != "LEGO.COM" or (mag == "LEGO.COM" and "lego" in adresse):
         e["magasin"] = mag
     tr = next((v for k, v in TRANSPORTEURS.items() if k in adresse or k in p.lower()[:2000]), None)
     if tr:
         e["transporteur"] = tr
-    j = re.search(r"(?:jusqu'?au|avant le|au plus tard le)\s*(?:[a-zé]+\s+)?(\d{1,2})(?:/(\d{1,2})/|\s+([a-zéû]+)\s+)(\d{4})", p, re.I)
+    j = re.search(r"(?:jusqu['’]?au|avant le|au plus tard le)\s*(?:[a-zé]+\s+)?(\d{1,2})(?:/(\d{1,2})/|\s+([a-zéû]+)\s+)(\d{4})", p, re.I)
     if j and (j.group(2) or j.group(3).lower() in MOIS):
         e["jusqu"] = date_fr(j.group(1), j.group(2) or MOIS[j.group(3).lower()], j.group(4))
+    l = lieu(p)
+    if l:
+        e["lieu"] = l
+    # « Livré » sans mot de relais dans le mail, mais la même commande allait en point de retrait : à retirer
+    if et == "livre" and (l or any(c.get("lieu") or c.get("colis") == "a_retirer" for c in meme)):
+        e["colis"] = "a_retirer"
     if not (e.get("num") or e.get("suivi")):
         return None
     return e
+
+
+NUM_COMMANDE = [r"commande\s*LEGO\s*(T\d{9})\b",
+                r"(?:N[º°o]\.?|num[ée]ro)\s*(?:de\s*)?commande\s*:?\s*([A-Z0-9]{6,14}?)(?=$|[^A-Za-z0-9]|[A-Z][a-z])",
+                r"commande\s*n[º°o]\s*:?\s*(\d{6,14})\b"]
+
+
+def num_commande(sujet: str, p: str) -> str | None:
+    """Numéro de commande du marchand écrit dans le mail (jamais un numéro de suivi)."""
+    for rx in NUM_COMMANDE:
+        m = re.search(rx, sujet + " " + p, re.I if rx.startswith("commande\\s*n") else 0)
+        if m and not re.fullmatch(SUIVI, m.group(1)):
+            return m.group(1)
+    return None
+
+
+# Nom du point de retrait (jamais une adresse de domicile : seulement un nom qui contient un mot de magasin ou de relais)
+LIEU = [r"Adresse de point relais\s*:\s*([^|\d]{3,60})",
+        r"Livraison en point relais\s*\|\s*([^|\d]{3,60})",
+        r"Détails du relais Pickup\s*\|\s*([^|\d]{3,60})",
+        r"Votre point de retrait [^|]{0,20}\|\s*([^|\d]{3,60})",
+        r"(?:dans votre|au) point de retrait\s+([A-Z][A-Z .'’-]{3,50}?)\s+(?:jusqu|avant|\.|$)",
+        r"Adresse de livraison\s*([^|\d]{3,60})"]
+MOTS_LIEU = r"LECLERC|CARREFOUR|LA POSTE|BUREAU|RELAIS|PICKUP|CONSIGNE|LOCKER|TABAC|PRESSE|INFORMATIQUE|ATELIER|BOUTIQUE|MAGASIN|HYPER|SUPER|SHOP"
+
+
+def lieu(p: str) -> str | None:
+    for rx in LIEU:
+        m = re.search(rx, p)
+        if not m:
+            continue
+        nom = re.split(r"\s+(?:ESPACE|BOULEVARD|AVENUE|RUE|PLACE|CENTRE|BD|AV)\b|\s*(?:Date|SOUS-TOTAL|Hyper)\b", m.group(1).strip(" :|"))[0].strip(" ,.-")
+        if re.search(MOTS_LIEU, nom, re.I) and 3 <= len(nom) <= 60:
+            mots = nom.lower().split()
+            return " ".join(w if i and w in ("de", "la", "du", "des", "le", "les", "et") else
+                            "E." + w[2:].capitalize() if w.startswith("e.") else w.capitalize() for i, w in enumerate(mots))
+    return None
 
 
 # ---------- iGraal ----------
@@ -188,18 +242,22 @@ def igraal(adresse: str, sujet: str, t: str) -> dict | None:
 OPERATION = r"-\s*\d{2}\s*%|\d{2}\s*%\s*(?:de remise|cagnott|offert|sur)|cagnott|points? doubl|offert|2e à|2ème à|deuxième à"
 
 
+def nom_enseigne(e: str) -> str:
+    return "LEGO.COM" if e.startswith("LEGO") else e.title()
+
+
 def newsletter(adresse: str, sujet: str, t: str) -> dict | None:
     if not any(k in adresse for k in NEWSLETTERS):
         return None
     if re.search(r"commande|colis|facture|re[çc]u|livraison|cashback", sujet, re.I):
         return None
-    enseigne = magasin(adresse) or adresse.split("@")[-1].split(".")[0].upper()
+    enseigne = (magasin(adresse) or adresse.split("@")[-1].split(".")[0].upper()).replace(".FR", "")
     p = plat(t)
     phrases = [x.strip() for x in re.split(r"(?<=[.!?|\n])\s+", sujet + ". " + t) if "lego" in x.lower()]
     op = next((plat(x)[:200] for x in phrases if re.search(OPERATION, x, re.I)), None)
     if "lego" not in p.lower() or not op:
-        return {"pub": enseigne.title(), "lego": False}
-    return {"pub": enseigne.title(), "lego": True, "op": op}
+        return {"pub": nom_enseigne(enseigne), "lego": False}
+    return {"pub": nom_enseigne(enseigne), "lego": True, "op": op}
 
 
 # ---------- Leboncoin : annonce en ligne / supprimée ----------
@@ -245,8 +303,10 @@ def lire(mail_id: str, expediteur: str, sujet: str, corps: str, jour: str, url: 
             if "colis" in e:
                 e["url"] = url
             return {**base, **e}
-    if re.search(r"confirm", sujet, re.I) and magasin(adresse):
-        return None  # commande d'un magasin pas (ou plus) lisible par les règles : pour Claude
+    if re.search(r"confirm|annul|rembours|retour", sujet, re.I) and magasin(adresse):
+        return None  # commande d'un magasin pas (ou plus) lisible par les règles, annulation, remboursement : pour Claude
+    if re.search(r"code (?:à usage unique|d.authentification|de (?:vérification|connexion|sécurité))|votre avis|satisfaction|enquête|mot de passe", sujet, re.I):
+        return {**base, "ignore": True}
     e = newsletter(adresse, sujet, t)
     if e:
         return {**base, **e}

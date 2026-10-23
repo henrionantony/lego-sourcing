@@ -1,7 +1,8 @@
-name: Mails Leboncoin
+name: Mails
 
-# Lit les mails « annonce en ligne / supprimée » de Leboncoin dans la boîte dédiée
-# et coche l'onglet Platforms de l'application. Lecture seule de la boîte ;
+# Lit par règles fixes les mails de la boîte dédiée : annonces Leboncoin en ligne /
+# supprimées, suivis de colis, cashbacks iGraal en attente (code/mails_imap.py).
+# Le reste est laissé au passage de Claude. Lecture seule de la boîte ;
 # le journal n'affiche que des nombres (dépôt public).
 on:
   schedule:
@@ -29,6 +30,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Mails Leboncoin
+      - name: Mails
         working-directory: code
         run: python3 mails_imap.py
