@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="bd5e09b719"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="7399d91e04"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -149,6 +149,12 @@ h2.sec:first-child{margin-top:4px}
 .task ul.cbs{list-style:none;padding:0;margin:4px 0;display:grid;gap:6px;color:var(--ink)}
 .cb{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;font-size:13.5px}
 .task.calme{opacity:.85}
+.task.imp{border-left-color:var(--brick);display:grid;gap:8px;margin-bottom:12px} .task.imp.attention{border-left-color:var(--warn)} .task.imp.bloque{border-left-color:var(--gap)}
+.imp-l{display:grid;gap:4px} .imp-c{border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+.imp-c summary,.imp-c.pareil{display:flex;justify-content:space-between;gap:8px;cursor:pointer;list-style:none} .imp-c summary::-webkit-details-marker{display:none}
+.imp-c[disabled] summary{cursor:default;color:var(--muted)} .imp-c ul,.imp-a ul,.imp-h{margin:6px 0 0;padding-left:18px;display:grid;gap:4px;font-size:13px}
+.imp-a{background:var(--warn-bg);color:var(--ink);border-radius:8px;padding:8px 10px;margin:0} .imp-a summary{cursor:pointer;font-weight:600}
+.imp-ok{display:flex;gap:8px;align-items:center;font-weight:600}
 .pill{display:inline-block;font-size:11.5px;padding:1px 7px;border-radius:99px;background:var(--line);color:var(--muted);margin-left:4px}
 .pill.warn{background:var(--warn);color:#fff}
 .task h3{margin:0;font:600 15px/1.3 var(--body)}
@@ -519,6 +525,7 @@ dialog.confirmer::backdrop{background:rgba(0,0,0,.45)} dialog.confirmer p{margin
   <div class="find" id="pq-w"><input id="pq" type="search" placeholder="Find a set: name or number" autocomplete="off" enterkeyhint="search" aria-label="Find a set"></div>
   <div id="p-actions" aria-live="polite"></div>
   <div id="p-listes" hidden>
+  <div id="imp"></div>
   <div class="tools">
     <div class="filters" role="group" aria-label="Status" id="afilters">
       <button class="chip" data-a="masqué" aria-pressed="true">Hidden on Vinted<span id="a-masqué"></span></button>
@@ -780,6 +787,7 @@ const ITEMS = __ITEMS__;
 const ANNONCES = __ANNONCES__;  // annonces Vinted en ligne ou masquées, texte Vinted
 const PLANCHES = __PLANCHES__;
 const LBC = __LBC__;
+const ANN_DATE = __ANNDATE__;  // date de l'export Vinted affiché
 const APUB = __APUB__;
 let EXEMP = __EXEMP__;
 let EXEMP_LE = __EXEMP_LE__;  // date de l'extraction des exemplaires : les ventes d'après sont décomptées ici  // set -> {pp: prix public, c: [[article, coût, date, magasin, reste]]}, le moins cher d'abord  // set en stock -> {prix proposé, estimation, coût, état} (a_publier.py)  // export Leboncoin : {lien: {id Vinted: url Leboncoin}, seules: annonces Leboncoin sans annonce Vinted}  // ids des planches de vignettes
@@ -1604,6 +1612,141 @@ async function copier(txt, b){
 }
 $("#afilters").addEventListener("click", (e) => { const c = e.target.closest(".chip"); if (!c) return; afiltre = c.dataset.a;
   $("#afilters").querySelectorAll(".chip").forEach((x) => x.setAttribute("aria-pressed", x === c)); rendreAnnonces(); });
+/* ---------- Import d'un export Vinted (extension) : état des lieux, alertes, puis Appliquer ----------
+   Ne touche qu'à la liste des annonces : jamais aux achats, ventes, stock ni trésorerie. Le passage
+   horaire revérifie le fichier avec les mêmes règles (import_vinted.py) avant de remplacer la liste. */
+let IMP = null, IMPLOG = {}, impOk = false;
+const SEUIL_DISPARUES = 0.10;  // part des annonces disparues (ni vendues) au-delà de laquelle l'export est suspect
+function lireCsv(txt){
+  const L = []; let r = [], c = "", q = false;
+  for (let i = 0; i < txt.length; i++){
+    const ch = txt[i];
+    if (q){ if (ch === '"'){ if (txt[i + 1] === '"'){ c += '"'; i++; } else q = false; } else c += ch; }
+    else if (ch === '"') q = true;
+    else if (ch === ";"){ r.push(c); c = ""; }
+    else if (ch === "\n" || ch === "\r"){ if (ch === "\r" && txt[i + 1] === "\n") i++; r.push(c); L.push(r); r = []; c = ""; }
+    else c += ch;
+  }
+  if (c || r.length){ r.push(c); L.push(r); }
+  return L.filter((x) => x.some((y) => y.trim()));
+}
+// Numéro de set d'un titre, comme annonces.py
+function numeroTitre(t){
+  let n = [...t.matchAll(/(?<![\p{L}\d_])(?<!\d[.,])(\d{4,7})(?:-\d)?(?![\p{L}\d_]|[.,]\d)/gu)].map((m) => m[1]);
+  const sansAn = n.filter((x) => !(+x >= 1949 && +x <= 2030));
+  if (sansAn.length) n = sansAn;
+  return /-\s*Figurine\b/.test(t) ? "" : n[n.length - 1] || "";
+}
+function dernierImport(){
+  const ok = Object.values(IMPLOG).filter((x) => x.etat === "appliqué").map((x) => x.date || "").sort();
+  return [ANN_DATE, ...ok].sort().pop() || "";
+}
+function analyserExport(txt, nom){
+  const rows = lireCsv(txt.replace(/^﻿/, ""));
+  const tete = (rows.shift() || []).map((x) => x.trim());
+  const manque = ["id", "titre", "prix", "statut", "url"].filter((c) => !tete.includes(c));
+  if (manque.length) return { bloque: `This is not a Vinted export from the extension (missing columns: ${manque.join(", ")}).` };
+  const L = rows.map((r) => Object.fromEntries(tete.map((c, i) => [c, (r[i] ?? "").trim()]))).filter((x) => /^\d+$/.test(x.id));
+  if (!L.length) return { bloque: "The file has no listing in it." };
+  const vus = new Set(), doublons = L.filter((x) => vus.has(x.id) || !vus.add(x.id));
+  if (doublons.length) return { bloque: `The same listing appears twice in the file (${doublons.length}×). Export again.` };
+  const date = (nom.match(/\d{4}-\d{2}-\d{2}/) || [""])[0], der = dernierImport();
+  if (date && der && date < der) return { bloque: `This export is from ${date}, older than the listings already in the app (${der}).` };
+  const vivant = (x) => x && (x.statut === "en ligne" || x.statut === "masqué");
+  const apres = new Map(L.map((x) => [x.id, x]));
+  const res = { nom, date, total: L.length, vivants: L.filter(vivant).length, avant: ANNONCES.length,
+    nouv: [], vendues: [], disparues: [], prix: [], statut: [], texte: [], pareil: 0, alertes: [], douteux: [] };
+  for (const x of L) if (vivant(x) && !ANNONCES.some((a) => a.id === x.id)) res.nouv.push({ id: x.id, t: x.titre, p: +x.prix || 0, s: x.statut, n: numeroTitre(x.titre) });
+  for (const a of ANNONCES){
+    const x = apres.get(a.id);
+    if (x && x.statut === "vendu"){ res.vendues.push({ id: a.id, t: a.t, p: a.p, n: a.n }); continue; }
+    if (!vivant(x)){ res.disparues.push({ id: a.id, t: a.t, p: a.p, n: a.n, s: x ? x.statut : "" }); continue; }
+    let change = false;
+    if (Math.abs((+x.prix || 0) - a.p) > 0.004){ res.prix.push({ id: a.id, t: a.t, avant: a.p, p: +x.prix || 0 }); change = true; }
+    if (x.statut !== a.s){ res.statut.push({ id: a.id, t: a.t, avant: a.s, s: x.statut }); change = true; }
+    const plat = (t) => String(t || "").replace(/\s+/g, " ").trim();
+    if (plat(x.titre) !== plat(a.t) || (!a.type && x.description && plat(x.description) !== plat(a.d))){ res.texte.push({ id: a.id, t: x.titre, avant: a.t }); change = true; }
+    if (!change) res.pareil++;
+  }
+  // Garde-fous
+  const part = ANNONCES.length ? res.disparues.length / ANNONCES.length : 0;
+  if (part > SEUIL_DISPARUES) res.alertes.push(`${res.disparues.length} listings (${Math.round(part * 100)} %) are gone without being sold. Your export may be incomplete: on Vinted, scroll until the end of your wardrobe, then export again.`);
+  if (res.vivants < ANNONCES.length * 0.5) res.alertes.push(`Only ${res.vivants} live or hidden listings, against ${ANNONCES.length} before.`);
+  if (!date) res.alertes.push("No date in the file name: I can't check it is newer than the listings already in the app.");
+  const vivantsN = new Set(L.filter(vivant).flatMap((x) => [numeroTitre(x.titre)]).filter(Boolean));
+  for (const a of res.disparues) if (a.n && (enBase(a.n) || 0) > 0 && !vivantsN.has(a.n))
+    res.douteux.push({ ...a, pourquoi: `Gone from Vinted, but the database says you still have ${enBase(a.n)}. Deleted by mistake?` });
+  for (const x of res.nouv) if (x.n && !enBase(x.n))
+    res.douteux.push({ ...x, pourquoi: "New listing for a set the database says you don't have. A purchase to log?" });
+  return res;
+}
+function rendreImport(){
+  const el = $("#imp"); if (!el) return;
+  const logs = Object.entries(IMPLOG).sort((a, b) => b[0] < a[0] ? -1 : 1);
+  const dernierOk = logs.find(([, x]) => x.etat === "appliqué");
+  const ETATS = { "en attente": "⏳ waiting for the next hourly pass", "appliqué": "✓ applied", "refusé": "🛑 refused", "annulé": "↩ undone", "à annuler": "⏳ undo at the next hourly pass" };
+  const hist = logs.slice(0, 5).map(([k, x]) => `<li><b>${esc(x.nom || "export")}</b> · ${ETATS[x.etat] || esc(x.etat || "")}${x.r ? ` · +${x.r.nouv} new, −${x.r.disparues + x.r.vendues} gone, ${x.r.prix} prices` : ""}${x.motif ? `<div class="sub">${esc(x.motif)}</div>` : ""}</li>`).join("");
+  if (!IMP){
+    el.innerHTML = `<article class="task imp"><h3>Import a Vinted export</h3>
+      <p class="sub" style="margin:0">Choose the CSV file from the extension. You see what changes before anything is applied. Only your listings change here: never purchases, sales or stock.</p>
+      <div class="adbtns"><label class="btn yes">📄 Choose the file<input type="file" accept=".csv,text/csv" id="imp-f" hidden ${db ? "" : "disabled"}></label>
+      ${dernierOk && db ? `<button class="btn" data-imp="annuler" data-k="${esc(dernierOk[0])}">↩ Undo the last import</button>` : ""}</div>
+      ${hist ? `<details><summary class="sub">Last imports</summary><ul class="imp-h">${hist}</ul></details>` : ""}</article>`;
+    return;
+  }
+  const r = IMP;
+  if (r.bloque){
+    el.innerHTML = `<article class="task imp bloque"><h3>🛑 Can't import this file</h3><p>${esc(r.bloque)}</p><div class="adbtns"><button class="btn" data-imp="fermer">OK</button></div></article>`;
+    return;
+  }
+  const bloc = (ic, titre, l, ligne) => `<details class="imp-c"${l.length ? "" : " disabled"}><summary><span>${ic} ${titre}</span><b>${l.length}</b></summary>${l.length ? `<ul>${l.slice(0, 80).map((x) => `<li>${ligne(x)}</li>`).join("")}${l.length > 80 ? `<li class="sub">… and ${l.length - 80} more</li>` : ""}</ul>` : ""}</details>`;
+  const alerte = r.alertes.length || r.douteux.length;
+  el.innerHTML = `<article class="task imp${alerte ? " attention" : ""}"><h3>What changes with ${esc(r.nom)}</h3>
+    <p class="sub" style="margin:0">${r.total} rows in the file · ${r.vivants} live or hidden, against ${r.avant} in the app now.</p>
+    <div class="imp-l">
+      ${bloc("➕", "New listings", r.nouv, (x) => `${esc(x.t)} · ${eur(x.p)}${x.s === "masqué" ? " · hidden" : ""}`)}
+      ${bloc("💰", "Sold", r.vendues, (x) => `${esc(x.t)} · ${eur(x.p)}`)}
+      ${bloc("➖", "Gone (deleted, not sold)", r.disparues, (x) => `${esc(x.t)}${x.s ? ` · now ${esc(x.s)}` : ""}`)}
+      ${bloc("💶", "Price changed", r.prix, (x) => `${esc(x.t)} · ${eur(x.avant)} → <b>${eur(x.p)}</b>`)}
+      ${bloc("👁", "Hidden ↔ live", r.statut, (x) => `${esc(x.t)} · ${x.avant === "masqué" ? "hidden → live" : "live → hidden"}`)}
+      ${bloc("✏️", "Title or text edited", r.texte, (x) => esc(x.t))}
+      <div class="imp-c pareil"><span>= Unchanged</span><b>${r.pareil}</b></div>
+    </div>
+    ${r.alertes.map((a) => `<p class="imp-a">⚠️ ${esc(a)}</p>`).join("")}
+    ${r.douteux.length ? `<details class="imp-a" open><summary>🔎 ${r.douteux.length} to check against the database</summary><ul>${r.douteux.slice(0, 40).map((x) => `<li>${esc(x.t)}<div class="sub">${esc(x.pourquoi)}</div></li>`).join("")}</ul></details>` : ""}
+    ${r.vendues.length ? `<p class="sub">Sold listings are not logged as sales here: that stays your call.</p>` : ""}
+    ${alerte ? `<label class="imp-ok"><input type="checkbox" id="imp-ok" ${impOk ? "checked" : ""}> I checked the warnings, apply anyway</label>` : ""}
+    <div class="adbtns"><button class="btn yes" data-imp="appliquer" ${!db || (alerte && !impOk) ? "disabled" : ""}>Apply</button><button class="btn" data-imp="fermer">Cancel</button></div>
+    <p class="sub" style="margin:0">Applied at the next hourly pass, after a second check. Photos of new listings follow.</p></article>`;
+}
+$("#imp").addEventListener("change", async (e) => {
+  if (e.target.id === "imp-ok"){ impOk = e.target.checked; rendreImport(); return; }
+  if (e.target.id !== "imp-f" || !e.target.files[0]) return;
+  const f = e.target.files[0], txt = await f.text();
+  impOk = false; IMP = { ...analyserExport(txt, f.name), txt };
+  rendreImport();
+});
+$("#imp").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-imp]"); if (!b) return;
+  if (b.dataset.imp === "fermer"){ IMP = null; rendreImport(); return; }
+  if (b.dataset.imp === "annuler"){
+    const k = b.dataset.k, x = IMPLOG[k];
+    if (b.dataset.sur !== "1"){ b.dataset.sur = "1"; b.textContent = "Tap again to undo " + (x?.nom || "it"); return; }
+    try { await db.doc("imports_log/" + k).set({ ...x, etat: "à annuler" }); } catch (err) { note("Could not save. Try again."); }
+    return;
+  }
+  if (b.dataset.imp === "appliquer" && IMP && !IMP.bloque){
+    b.disabled = true;
+    const k = new Date().toISOString().replace(/[:.]/g, "-"), r = IMP;
+    try {
+      await db.doc("imports_csv/" + k).set({ csv: r.txt, nom: r.nom });
+      await db.doc("imports_log/" + k).set({ nom: r.nom, date: r.date, le: new Date().toISOString(), etat: "en attente", force: !!(r.alertes.length || r.douteux.length),
+        r: { nouv: r.nouv.length, vendues: r.vendues.length, disparues: r.disparues.length, prix: r.prix.length, statut: r.statut.length, texte: r.texte.length } });
+      IMP = null; rendreImport();
+    } catch (err) { b.disabled = false; note("Could not send the file. Try again."); }
+  }
+});
+rendreImport();
 $("#aq").addEventListener("input", rendreAnnonces);
 $("#ag").addEventListener("change", () => { amax = 60; rendreAnnonces(); });
 $("#al").addEventListener("change", () => { amax = 60; rendreAnnonces(); });
@@ -2807,6 +2950,10 @@ $("#po").addEventListener("click", async (e) => {
       if (ch.type === "removed" || (ETAT?.baisses?.liste && d.liste !== ETAT.baisses.liste)) delete baissesFaites[ch.doc.id]; else baissesFaites[ch.doc.id] = true;
     }
     rendreAnnonces();
+  }, () => {});
+  db.collection("imports_log").onSnapshot((snap) => {
+    for (const ch of snap.docChanges()) if (ch.type === "removed") delete IMPLOG[ch.doc.id]; else IMPLOG[ch.doc.id] = ch.doc.data() || {};
+    rendreImport();
   }, () => {});
   db.collection("leboncoin").onSnapshot((snap) => {
     for (const ch of snap.docChanges()){
