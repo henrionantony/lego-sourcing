@@ -95,7 +95,8 @@ def main():
                 if "lbc" in e:
                     if not re.search(r"dmarc=pass[^;]*header\.from=(?:[\w-]+\.)*leboncoin\.fr", auth):
                         continue
-                    lbc_mails.appliquer(e["set"], e["lbc"], e["titre"], e.get("url", ""))
+                    if e["lbc"] != "contact":
+                        lbc_mails.appliquer(e["set"], e["lbc"], e["titre"], e.get("url", ""))
                 elif "igraal" in e and not cashback(e):
                     continue
                 mails.ajouter(e)

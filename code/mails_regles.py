@@ -267,6 +267,11 @@ def leboncoin(adresse: str, sujet: str, t: str, corps: str) -> dict | None:
     if "leboncoin" not in adresse:
         return None
     p = plat(t)
+    c = re.search(r"nouveau contact pour\s*[«\"“](.+?)[»\"”]", sujet)
+    if c:
+        # Contact d'un acheteur (favori, message) : compté par set pour mesurer l'effet des republications
+        nums = re.findall(r"(?<!\d)(\d{4,7})(?!\d)", c.group(1))
+        return {"lbc": "contact", "set": nums[-1], "titre": c.group(1)[:200]} if nums else None
     m = re.search(r"Votre annonce\s*[«\"](.+?)[»\"]\s*(?:vient d.être validée|est en ligne)", sujet + " " + p)
     if m:
         etat = "en_ligne"
