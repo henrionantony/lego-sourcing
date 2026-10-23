@@ -89,8 +89,14 @@ def main():
     export = max((RACINE / "stock" / "vinted").glob("vinted_annonces_*.csv"))
     with open(export, encoding="utf-8-sig") as f:
         vendus = {n for r in csv.DictReader(f, delimiter=";") if r["statut"] == "vendu" for n in NUM.findall(r["titre"])}
+    # … mais seulement s'il ne t'en reste plus aucun dans la base : sinon l'annonce Leboncoin vend un autre exemplaire
+    try:
+        ex = json.loads((APP / "exemplaires.json").read_text())
+    except (OSError, ValueError):
+        ex = {}
+    reste = lambda s: sum(c[4] for c in (ex.get(s) or {}).get("c", []))
     for l in seules:
-        l["vendu"] = bool(set(l["sets"]) & vendus)
+        l["vendu"] = any(s in vendus and not reste(s) for s in l["sets"])
     (APP / "leboncoin.json").write_text(json.dumps({
         "export": chemin.name, "date": (re.search(r"\d{4}-\d{2}-\d{2}", chemin.name) or [""])[0], "lien": {v: next(l["u"] for l in lbc if l["id"] == i) for v, i in lien.items()},
         "seules": [{k: l[k] for k in ("id", "t", "p", "u", "vendu")} for l in seules]}, ensure_ascii=False))

@@ -1830,7 +1830,8 @@ let PO = null;              // etat/decoupe : sets à découper, leurs figurines
 function listeActions(){
   const L = [], vus = new Set(ANNONCES.map((a) => a.n));
   const seules = LBC.seules || [];
-  for (const x of seules) if (x.vendu) L.push({ k: "rm-lbc-" + x.id, type: "retirer", pf: "Leboncoin", titre: x.t, prix: x.p, u: x.u, m: "doubles",
+  // Vendu sur Vinted ET plus aucun exemplaire dans la base (vérifié aussi ici, la base bouge plus souvent que l'export)
+  for (const x of seules) if (x.vendu && !Object.keys(EXEMP).some((s) => numeroDans(x.t, s) && enBase(s) > 0)) L.push({ k: "rm-lbc-" + x.id, type: "retirer", pf: "Leboncoin", titre: x.t, prix: x.p, u: x.u, m: "doubles",
     pourquoi: "This set is already sold on Vinted. Delete the Leboncoin ad so nobody buys it twice." });
   for (const a of ANNONCES){
     const c = counts["v" + a.id];
@@ -1845,7 +1846,8 @@ function listeActions(){
   const aujourdhui = new Date().toISOString().slice(0, 10);
   GARDES = new Set();
   for (const [s, e] of Object.entries(EXEMP)){
-    if (vus.has(s) || seules.some((x) => numeroDans(x.t, s))) continue;
+    if (vus.has(s)) continue;
+    const surLbc = seules.some((x) => numeroDans(x.t, s));
     // Gardés jusqu'à la retraite (choix fait dans l'appli) : hors missions jusqu'à leur date
     const vivants = (e.c || []).filter((c) => !enPo.has(c[0]) && c[4] > 0);
     const copies = vivants.filter((c) => !(c[5] === "Retirement" && (c[6] || "9999") > aujourdhui));
@@ -1863,8 +1865,8 @@ function listeActions(){
     const v = (APUB[s]?.prix || APUB[s]?.estime || e.pp || 0) * q;
     const sansChoix = copies.filter((c) => !c[5]).map((c) => c[0]);
     if (!pfaits["new-" + s]) L.push({ k: "new-" + s, type: "publier", pf: "Vinted", a, it, titre: a.t, prix: a.p, q, d, v, m: d >= DERNIERE_VENTE ? "achats" : "ancien", choix: sansChoix,
-      pourquoi: `${q > 1 ? q + " in stock" : "In stock"}, bought ${d || "?"}, listed nowhere. Post it on Vinted first.` });
-    else L.push({ k: "lbcnew-" + s, type: "lbc", pf: "Leboncoin", a, it, titre: a.t, prix: a.p, q, v, m: "lbc", pourquoi: "Posted on Vinted. Now the Leboncoin copy." });
+      pourquoi: `${q > 1 ? q + " in stock" : "In stock"}, bought ${d || "?"}, ${surLbc ? "on Leboncoin only. Post it on Vinted too." : "listed nowhere. Post it on Vinted first."}` });
+    else if (!surLbc) L.push({ k: "lbcnew-" + s, type: "lbc", pf: "Leboncoin", a, it, titre: a.t, prix: a.p, q, v, m: "lbc", pourquoi: "Posted on Vinted. Now the Leboncoin copy." });
   }
   // Figurines rattachées à un set découpé, pas encore vendues et publiées nulle part
   for (const x of (PO && PO.sets) || []){
