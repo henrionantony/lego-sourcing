@@ -70,6 +70,13 @@ def _lundi():
                     prix[m.group(1)] = float(r["Nouveau prix"])
             out["baisses"] = {"liste": f.stem[-10:], "prix": prix}
             break
+    # Annonces au plancher depuis 30 jours : à supprimer puis reposter au prix de départ (liste du lundi la plus récente)
+    try:
+        df = pd.read_excel(fichiers[-1], sheet_name="Republier")
+        out["republier"] = {"liste": fichiers[-1].stem[-10:], "prix": {
+            m.group(1): float(r["Prix de départ"]) for _, r in df.iterrows() if (m := re.search(r"/items/(\d+)", str(r["Lien"])))}}
+    except Exception:
+        out["republier"] = {}
     return out
 
 
@@ -544,7 +551,7 @@ def main():
     obj = objectifs()
     etat = {"maj": maintenant().isoformat(timespec="seconds"), "automatisations": automatisations(),
             "tresorerie": base.tresorerie(), "objectifs": obj, "a_faire": a_regulariser(obj), "deals": deals(),
-            "origines": origines(), "baisses": baisses(), "seuils_gain": seuils()}
+            "origines": origines(), "baisses": baisses(), "republier": lundi().get("republier") or {}, "seuils_gain": seuils()}
     # Le document de l'application est limité à 256 Kio : on retire les vignettes
     # des deals les plus anciens tant qu'il dépasse 230 Ko.
     for d in reversed(etat["deals"]):

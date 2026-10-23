@@ -383,6 +383,7 @@ h2.sec:first-child{margin-top:4px}
 .pf-prix{display:flex;align-items:center;gap:10px;font:700 22px var(--display)} .pf-prix s{opacity:.5;font-size:16px}
 .pf-sansph{display:flex;gap:10px;align-items:center;font-size:14px;color:var(--muted)}
 .pf-passer{justify-self:start}
+.pf-alerte{font-size:13px;color:var(--warn);background:var(--warn-bg);border-radius:8px;padding:6px 10px;margin-top:6px}
 .plan{border:1px dashed var(--warn);background:var(--warn-bg);border-radius:10px;padding:10px 12px;display:grid;gap:6px} .plan p{margin:0;font-size:14px}
 .pf-file{display:grid;gap:6px;margin-bottom:12px}
 .pf-ligne .sv{width:44px;height:44px} .pf-ligne .sv img{max-width:100%;max-height:100%;object-fit:contain}
@@ -1891,7 +1892,8 @@ function listeActions(){
   for (const a of ANNONCES) if (nouveauPrix(a)) L.push({ k: "drop-" + a.id, type: "baisse", pf: "Vinted", a, titre: a.t, prix: nouveauPrix(a), avant: a.p, u: a.u, m: "baisses", v: +a.p || 0, pourquoi: "Monday list: it has been listed too long at this price." });
   const rang = Object.fromEntries(MISSIONS.map((M, i) => [M.m, i]));
   const ok = L.filter((x) => pfaits[x.k]?.etat !== "fait");
-  ok.sort((x, y) => rang[x.m] - rang[y.m] || (pfaits[x.k]?.etat === "passe") - (pfaits[y.k]?.etat === "passe")
+  const douteux = (z) => z.type === "publier" && z.it && !!prixDouteux(z.it.s);
+  ok.sort((x, y) => rang[x.m] - rang[y.m] || (pfaits[x.k]?.etat === "passe") - (pfaits[y.k]?.etat === "passe") || douteux(x) - douteux(y)
     || (y.pr || 0) - (x.pr || 0) || (y.v || 0) - (x.v || 0) || (y.d || "").localeCompare(x.d || ""));
   return ok;
 }
@@ -1936,6 +1938,14 @@ function blocPlan(x){
     <div class="adbtns"><button class="btn yes" data-y="hz" data-h="Rotation">🚀 Post now</button>
     <button class="btn" data-y="hz" data-h="Retirement" data-v="${dateGarde(ret)}">📦 Keep until ${new Date(dateGarde(ret)).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}${dateGarde(ret).slice(5) === "11-20" ? " (Black Friday)" : ""}</button></div></div>`;
 }
+// Estimation fiable = valeur BrickEconomy relevée il y a 30 jours au plus ; sinon on prévient (la collecte la refait en priorité)
+const AGE_BE_MAX = 30;
+function prixDouteux(s){
+  const P = APUB[s]; if (!P || P.cout === 0 && !P.estime) return "";
+  if (!P.be) return `Price may be off: no BrickEconomy value yet for this set, the estimate comes from the LEGO price × your theme ratio. The daily collection fetches it in the next days.`;
+  const j = Math.round((Date.now() - new Date(P.be)) / 864e5);
+  return j > AGE_BE_MAX ? `Price may be off: BrickEconomy value from ${new Date(P.be).toLocaleDateString("en-GB", { day: "numeric", month: "short" })} (${j} days old). It will be refreshed soon.` : "";
+}
 function carteAction(x){
   const T = PTYPES[x.type], a = x.a, lb = x.pf === "Leboncoin" && a && x.type !== "retirer";
   const titre = a ? (lb ? lbcTitre(a) : a.t) : x.titre, texte = a ? (lb ? lbc(a) : a.d) : "";
@@ -1951,6 +1961,7 @@ function carteAction(x){
       ${x.choix && x.choix.length && x.it ? blocPlan(x) : ""}
       ${x.type !== "retirer" && x.prix ? `<div class="adf"><div class="adl">Price</div><div class="pf-prix">${x.avant ? `<s>${eur(x.avant)}</s> ` : ""}${eur(x.prix)}
         ${x.type !== "baisse" ? `<button class="btn" data-y="copie" data-c="prix">Copy price</button>` : ""}</div>
+        ${apub && prixDouteux(x.it.s) ? `<div class="pf-alerte">⚠ ${prixDouteux(x.it.s)}</div>` : ""}
         ${apub ? `<div class="sub">${apub.cout != null ? `Bought at ${apub.cout ? eur(apub.cout) : "0 € (free gift)"} · ` : ""}Estimate ${apub.estime ? eur(apub.estime) : "unknown"}${apub.douteux ? `. Check: the cost in the database (${eur(apub.cout)}) looks like a whole lot, not this set alone.` : apub.cout ? ` · floor ${eur(apub.cout * PLANCHER)} (your cost ×${PLANCHER})` : " · free gift"}</div>` : ""}</div>` : ""}
       ${x.type !== "retirer" && x.type !== "baisse" && x.type !== "remettre" ? `<div class="adf"><div class="adl">${x.pf} title</div><div class="adv">${esc(titre)}</div><button class="btn yes" data-y="copie" data-c="titre">Copy title</button></div>
       <div class="adf"><div class="adl">${x.pf} text</div><pre class="adv">${esc(texte)}</pre><button class="btn yes" data-y="copie" data-c="texte">Copy text</button></div>` : ""}

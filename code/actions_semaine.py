@@ -9,6 +9,7 @@ Lit l'export des annonces Vinted (extension), la base et le référentiel.
 Usage : python3 actions_semaine.py [export_vinted.csv] [--essai]
 """
 import datetime as dt
+import json
 import math
 import re
 import sys
@@ -85,7 +86,18 @@ def construire(export: Path):
     recents = deja_baisse()
 
     # 1. Baisses (annonces en ligne d'un set encore en stock)
-    baisses, gardes = [], []
+    baisses, gardes, republier = [], [], []
+    # Première fois qu'on a vu chaque annonce en ligne (l'export Vinted ne donne pas sa date de création)
+    premier_vu = {}
+    for f in sorted(export.parent.glob("vinted_annonces_*.csv")):
+        m = re.search(r"\d{4}-\d{2}-\d{2}", f.name)
+        if m:
+            for u in pd.read_csv(f, sep=";", dtype=str, encoding="utf-8-sig", usecols=["url"]).url.dropna():
+                premier_vu.setdefault(u, pd.Timestamp(m.group(0)))
+    try:  # prix de départ d'une nouvelle annonce (a_publier.py : estimation + 15 %, jamais sous le plancher)
+        depart = json.loads((STOCK / "app" / "a_publier.json").read_text())
+    except (OSError, ValueError):
+        depart = {}
     par_set = st.groupby("set").agg(cout=("cout_set", "max"), age=("age", "max"), rembourse=("rembourse", "all")) \
         if not st.empty else pd.DataFrame()
     for a in ann[ann.statut == "en ligne"].itertuples():
@@ -113,6 +125,14 @@ def construire(export: Path):
                  "Plancher": round(plancher, 2), "Favoris": a.favoris, "Âge du stock (j)": int(s.age),
                  "Lot remboursé": "oui" if s.rembourse else "non", "Lien": a.url}
         (gardes if raison else baisses).append({**ligne, "Pourquoi on garde": raison} if raison else ligne)
+        # Au plancher et pas bougée depuis 30 jours : on supprime et on reposte au prix de départ (annonce « neuve »)
+        dates = [d for d in (pd.to_datetime(getattr(a, "date_creation", None), errors="coerce"), premier_vu.get(a.url))
+                 if d is not None and d == d]
+        vu = min(dates) if dates else None
+        if raison == "au plancher" and a.url not in recents and vu is not None and (auj - vu.normalize()).days >= PALIER:
+            p0 = (depart.get(a.set) or {}).get("prix") or a.prix
+            republier.append({"Annonce": a.titre, "Set": a.set, "Prix actuel": a.prix,
+                              "Prix de départ": max(p0, a.prix), "Lien": a.url})
     baisses = pd.DataFrame(baisses)
     if not baisses.empty:
         baisses = baisses.sort_values(["Favoris", "Âge du stock (j)"], ascending=False)
@@ -137,7 +157,7 @@ def construire(export: Path):
     bf = pd.DataFrame({"Set": bf.base, "Nom": bf.name, "Prix public": bf.prix_public, "Achète jusqu'à": bf.prix_max,
                        "Remise nécessaire": bf["Remise nécessaire"].round(2), "Retrait": rt[bf.index].dt.strftime("%d/%m/%Y"),
                        "Exclusivité Lego": bf.exclusif})
-    return baisses, pd.DataFrame(gardes), masq, lbc, bf
+    return baisses, pd.DataFrame(gardes), masq, lbc, bf, pd.DataFrame(republier)
 
 
 def enregistrer(export: Path, baisses: pd.DataFrame):
@@ -180,12 +200,12 @@ def main():
     essai = "--essai" in sys.argv
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     export = Path(args[0]) if args else dernier_export()
-    baisses, gardes, masq, lbc, bf = construire(export)
+    baisses, gardes, masq, lbc, bf, republier = construire(export)
     sortie = STOCK / "actions" / f"actions_semaine_{dt.date.today():%Y-%m-%d}.xlsx"
     sortie.parent.mkdir(parents=True, exist_ok=True)
     with pd.ExcelWriter(sortie) as w:
         for nom, d in [("Réafficher", masq), ("Baisser de 5 %", baisses), ("Garder le prix", gardes),
-                       ("Leboncoin", lbc), ("Black Friday", bf)]:
+                       ("Leboncoin", lbc), ("Black Friday", bf), ("Republier", republier)]:
             d.to_excel(w, sheet_name=nom, index=False)
     if not essai:
         enregistrer(export, baisses)

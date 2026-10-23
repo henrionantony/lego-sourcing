@@ -32,6 +32,11 @@ def main():
     with open(LEGO / "data" / "referentiel.csv", newline="") as f:
         for r in csv.DictReader(f):
             ref.setdefault(r["set_num"].split("-")[0], r)
+    # Date du dernier relevé BrickEconomy de chaque set : au-delà de 30 jours (ou jamais), l'estimation est moins sûre
+    try:
+        be = json.loads((LEGO / "data" / "cache" / "brickeconomy.json").read_text())
+    except (OSError, ValueError):
+        be = {}
     stock = base.lire("stock", "select=*&reste=gt.0&id_set=not.is.null&categorie=eq.SET&limit=10000")
     # Stratégie choisie dans l'appli (Post now / Keep until it retires), par article
     hz = {r["id"]: (r.get("horizon") or "", r.get("vise_le") or "")
@@ -64,7 +69,9 @@ def main():
         if prix and cap and prix > cap:
             prix = max(cap, float(math.ceil(plancher)))
         # Pour choisir « poster maintenant » ou « garder » : revente rapide, revente après retraite, date de retraite
-        conseil = {"st": r.get("statut") or "", "rapide": float(r.get("pv_rapide") or 0) or None,
+        conseil = {"be": (be.get(s + "-1") or {}).get("date") if (be.get(s + "-1") or {}).get("valeur_neuf") else None,
+                   "src": r.get("fiabilite") or "",
+                   "st": r.get("statut") or "", "rapide": float(r.get("pv_rapide") or 0) or None,
                    "garde": float(r.get("pv_garde") or 0) or None, "retrait": r.get("retrait_croise") or r.get("retrait") or ""}
         out[s] = {"prix": prix, "estime": round(estime, 2) or None, **conseil,
                   "cout": round(cout, 2), "etat": c[0][1], **({"douteux": True} if douteux else {})}
