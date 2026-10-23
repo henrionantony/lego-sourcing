@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="f9d55be731"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="364b78b496"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -1847,7 +1847,7 @@ function pasLeMoment(s){
   return P.st === "en vente" && !P.douteux && P.rapide > 0 && P.cout > 0 && P.rapide < P.cout * PLANCHER && dateGarde(P.retrait || "") > new Date().toISOString().slice(0, 10);
 }
 function listeActions(){
-  const L = [], vus = new Set(ANNONCES.map((a) => a.n));
+  const L = [], vus = new Set(ANNONCES.flatMap((a) => [a.n, ...(a.ns || [])]));  // un lot compte pour chacun de ses sets
   const seules = LBC.seules || [];
   // Vendu sur Vinted ET plus aucun exemplaire dans la base (vérifié aussi ici, la base bouge plus souvent que l'export)
   for (const x of seules) if (x.vendu && !Object.keys(EXEMP).some((s) => numeroDans(x.t, s) && enBase(s) > 0)) L.push({ k: "rm-lbc-" + x.id, type: "retirer", pf: "Leboncoin", titre: x.t, prix: x.p, u: x.u, m: "doubles",
@@ -1910,9 +1910,9 @@ function listeActions(){
   }
   /* Masqué sans comptage, mais la base dit qu'il en reste (achetés − ventes enregistrées) et aucune annonce visible :
      souvent un set vendu une fois dont il te reste un exemplaire. Une annonce masquée par exemplaire restant. */
-  const enLigne = new Set(ANNONCES.filter((a) => a.s === "en ligne").map((a) => a.n)), pris = {};
+  const enLigne = new Set(ANNONCES.filter((a) => a.s === "en ligne").flatMap((a) => [a.n, ...(a.ns || [])])), pris = {};
   for (const a of ANNONCES){
-    if (a.s !== "masqué" || counts["v" + a.id] || enLigne.has(a.n) || pasLeMoment(a.n)) continue;
+    if (a.s !== "masqué" || !a.n || counts["v" + a.id] || enLigne.has(a.n) || pasLeMoment(a.n)) continue;
     const reste = enBase(a.n) || 0;
     if ((pris[a.n] || 0) >= reste) continue;
     pris[a.n] = (pris[a.n] || 0) + 1;
