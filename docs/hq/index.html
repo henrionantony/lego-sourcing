@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="c82c488f81"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="bd5e09b719"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -1537,7 +1537,8 @@ const baissesFaites = {};
 const nouveauPrix = (a) => { const p = ETAT?.baisses?.prix?.[a.id]; return p && !baissesFaites[a.id] && !(a.p <= p) ? p : null; };  // déjà à ce prix dans le dernier export : fait
 const surLbc = (a) => lbcMarques[a.id] !== undefined ? lbcMarques[a.id] : !!LBC.lien?.[a.id];
 // Leboncoin : boîte neuve = « Neuf & Scellé » dans le titre et l'état ; remise en main propre en tête ; 3 premiers hashtags.
-const ETAT_NEUF = /^(\s*✅\s*[ÉE]tat\s*:\s*)(jamais ouverts?|neuf (?:&|et) scell[ée]s?)\.?/im;
+// Toutes tes formules d'état neuf (✅ Etat : Jamais ouvert, 🟢 Boîte neuve (jamais ouverte)…), sauf « boîte non scellée ».
+const ETAT_NEUF = /^(\s*(?:✅|🟢|ℹ\uFE0F?)\s*(?:[ÉE]tat\s*:\s*)?)(jamais ouverts?|bo[îi]te neuve (?:(?:&|et) scell[ée]e )?\(jamais ouverte\)|neuf (?:&|et) scell[ée]s?)(?!\s*\(mais bo[îi]te non scell)/im;
 const boiteNeuve = (a) => ETAT_NEUF.test(a.d);
 const lbcTitre = (a) => boiteNeuve(a) && !/neuf\s*(&|et)\s*scell/i.test(a.t) ? a.t + " - Neuf & Scellé" : a.t;
 function lbc(a){
@@ -1690,9 +1691,19 @@ function texteNad(o){
   L.push([...new Set(tags.filter((t) => t && t.length <= 30))].slice(0, 8).map((t) => "#" + t).join(" "));
   return L.join("\n\n");
 }
+// Titre à la française comme les tiens : majuscule à chaque mot sauf articles et petits mots (« La Forteresse de l’Eldorado »)
+const PETITS_MOTS = new Set("le la les de du des et à au aux en un une sur sous pour par avec dans ou ni chez vers entre".split(" "));
+function casseTitre(t){
+  let i = 0;
+  return String(t || "").replace(/[\p{L}\d'’]+/gu, (w) => {
+    const premier = i++ === 0, m = w.match(/^([ldjnmst]|qu)(['’])(.+)$/i);
+    if (m) return (premier ? m[1][0].toUpperCase() + m[1].slice(1) : m[1].toLowerCase()) + m[2] + m[3][0].toUpperCase() + m[3].slice(1);
+    return !premier && PETITS_MOTS.has(w.toLowerCase()) ? w.toLowerCase() : w[0].toUpperCase() + w.slice(1);
+  });
+}
 function titreNad(o){
   const gamme = (o.gamme || "").replace(/^LEGO\s+/i, "");
-  return `LEGO ${gamme.split("/")[0].trim()} - Set ${o.fr || o.en} - ${o.s}${o.etat.startsWith("occ") ? " - Complet" : ""}`;
+  return `LEGO ${gamme.split("/")[0].trim()} - Set ${casseTitre(o.fr || o.en)} - ${o.s}${o.etat.startsWith("occ") ? " - Complet" : ""}`;
 }
 async function demanderNom(s){
   if (!db || nomsLive[s]) return;
@@ -1810,7 +1821,7 @@ function annonceNeuve(it){
   const gamme = it.g || "LEGO";
   const etat = ETATS_FR[(APUB[it.s]?.etat || "").toUpperCase()] || "Jamais ouvert";
   const tags = ["#lego", "#" + sansAccent(gamme).replace(/[^a-z0-9]/g, ""), "#" + it.s, "#legocollection"].filter((x) => x.length > 1);
-  const t = `LEGO ${gamme} - Set ${nom} - ${it.s}`;
+  const t = `LEGO ${gamme} - Set ${casseTitre(nom)} - ${it.s}`;
   const d = `🔔 Vends set LEGO ${it.s} - ${nom} de la gamme LEGO ${gamme}.\n\nℹ️ Prix ferme\n\n🎁 Parfait pour compléter une collection/offrir.\n\n✅ Etat : ${etat}\n\n📦 Envoi soigné\n\n${tags.join(" ")}`;
   return { id: "n" + it.s, t, d, n: it.s, p: APUB[it.s]?.prix || null, ph: [], u: "", s: "nouveau" };
 }
