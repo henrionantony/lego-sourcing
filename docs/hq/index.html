@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="53e318c3d4"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="739bdd1fd4"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -1828,18 +1828,23 @@ const numeroDans = (t, n) => new RegExp("(^|\\D)" + n + "(\\D|$)").test(t || "")
    On n'en montre que 10 à la fois pour que la liste reste faisable. */
 const MISSIONS = [
   { m: "doubles", ic: "🚨", t: "Stop double sales", d: "Delete these ads first: the item is already sold, or you counted 0." },
-  { m: "achats", ic: "🛒", t: "Your recent buys", d: () => `Bought ${DERNIERE_VENTE ? "after " + DERNIERE_VENTE + " (your last logged sale)" : "recently"} and listed nowhere. For each one, pick your plan first: post now, or keep until it retires.${GARDES.size ? ` ${GARDES.size} set${GARDES.size > 1 ? "s" : ""} kept for later ${GARDES.size > 1 ? "stay" : "stays"} out of the missions.` : ""}` },
+  { m: "achats", ic: "🛒", t: "Your recent buys", d: () => `Bought ${DERNIERE_VENTE ? "after " + DERNIERE_VENTE + " (your last logged sale)" : "recently"} and listed nowhere. For each one, pick your plan first: post now, or keep until it retires.${GARDES.size ? ` ${GARDES.size} set${GARDES.size > 1 ? "s" : ""} kept for later ${GARDES.size > 1 ? "stay" : "stays"} out of the missions.` : ""}${ATTENTE.size ? ` ${ATTENTE.size} set${ATTENTE.size > 1 ? "s" : ""} still sold by LEGO ${ATTENTE.size > 1 ? "wait" : "waits"} for retirement on ${ATTENTE.size > 1 ? "their" : "its"} own: selling now would not reach your floor.` : ""}` },
   { m: "figs", ic: "🧍", t: "Part-out minifigs", d: "Minifigs from the sets you confirmed in Part-out, listed nowhere. Shoot them in one batch, post them one by one." },
   { m: "lbc", ic: "➕", t: "Leboncoin, best first", d: "Live on Vinted, missing on Leboncoin. Big sets first: they sell best there." },
-  { m: "masques", ic: "👁", t: "Hidden listings you counted", d: "Hidden on Vinted, but you counted them at the inventory." },
+  { m: "masques", ic: "👁", t: "Hidden listings still in stock", d: "Hidden on Vinted, but you counted them at the inventory or the database says you still have one." },
   { m: "ancien", ic: "📦", t: "Older stock never listed", d: "Bought before your last logged sale. Check you still have it before posting: some may be sold but not logged yet." },
   { m: "republier", ic: "🔁", t: "Fresh start", d: "At the floor price for 30 days without selling. Delete the listing and post it again at the starting price: a new listing gets seen again." },
   { m: "baisses", ic: "↘", t: "Monday price drops", d: "Listed too long at this price." },
 ];
 const PAR_MISSION = 10;
 let pmission = null;
-let DERNIERE_VENTE = "", GARDES = new Set();  // date de la dernière vente enregistrée : un achat plus récent est sûrement encore là
+let DERNIERE_VENTE = "", GARDES = new Set(), ATTENTE = new Set();  // date de la dernière vente enregistrée : un achat plus récent est sûrement encore là
 let PO = null;              // etat/decoupe : sets à découper, leurs figurines, celles déjà rattachées
+// Pas le bon moment de vendre : encore vendu par LEGO et la revente rapide ne passe pas ton floor
+function pasLeMoment(s){
+  const P = APUB[s] || {};
+  return P.st === "en vente" && !P.douteux && P.rapide > 0 && P.cout > 0 && P.rapide < P.cout * PLANCHER && dateGarde(P.retrait || "") > new Date().toISOString().slice(0, 10);
+}
 function listeActions(){
   const L = [], vus = new Set(ANNONCES.map((a) => a.n));
   const seules = LBC.seules || [];
@@ -1857,15 +1862,18 @@ function listeActions(){
   // ne comptent pas : leurs figurines ont leurs propres actions juste en dessous.
   const enPo = new Set(((PO && PO.sets) || []).map((x) => x.id));
   const aujourdhui = new Date().toISOString().slice(0, 10);
-  GARDES = new Set();
+  GARDES = new Set(); ATTENTE = new Set();
   for (const [s, e] of Object.entries(EXEMP)){
     if (vus.has(s)) continue;
     // Sur Leboncoin : annonce trouvée dans l'export, ou mail « Votre annonce est en ligne » reçu depuis
     const surLbc = seules.some((x) => numeroDans(x.t, s)) || pfaits["lbcnew-" + s]?.etat === "fait";
     // Gardés jusqu'à la retraite (choix fait dans l'appli) : hors missions jusqu'à leur date
     const vivants = (e.c || []).filter((c) => !enPo.has(c[0]) && c[4] > 0);
-    const copies = vivants.filter((c) => !(c[5] === "Retirement" && (c[6] || "9999") > aujourdhui));
-    for (const c of vivants) if (!copies.includes(c)) GARDES.add(s);
+    // Pas le bon moment : encore vendu par LEGO et la revente rapide ne passe pas ton floor → gardé tout seul jusqu'à
+    // sa date de retour, sauf si tu as choisi « Post now » (Rotation) pour cet exemplaire
+    const tropTot = pasLeMoment(s);
+    const copies = vivants.filter((c) => !(c[5] === "Retirement" && (c[6] || "9999") > aujourdhui) && !(tropTot && !c[5]));
+    for (const c of vivants) if (!copies.includes(c)) (tropTot && !c[5] ? ATTENTE : GARDES).add(s);
     let q = copies.reduce((n, c) => n + c[4], 0);
     if (q < 1) continue;
     const it = ITEMS.find((x) => x.src === "base" && x.s === s) || (() => {
@@ -1896,6 +1904,17 @@ function listeActions(){
     if (a.s !== "masqué") continue;
     const c = counts["v" + a.id];
     if (c && c.n >= 1) L.push({ k: "relist-" + a.id, type: "remettre", pf: "Vinted", a, titre: a.t, prix: a.p, u: a.u, m: "masques", v: +a.p || 0, pourquoi: "Hidden on Vinted, but you counted it at the inventory. Buyers can't see it." });
+  }
+  /* Masqué sans comptage, mais la base dit qu'il en reste (achetés − ventes enregistrées) et aucune annonce visible :
+     souvent un set vendu une fois dont il te reste un exemplaire. Une annonce masquée par exemplaire restant. */
+  const enLigne = new Set(ANNONCES.filter((a) => a.s === "en ligne").map((a) => a.n)), pris = {};
+  for (const a of ANNONCES){
+    if (a.s !== "masqué" || counts["v" + a.id] || enLigne.has(a.n) || pasLeMoment(a.n)) continue;
+    const reste = enBase(a.n) || 0;
+    if ((pris[a.n] || 0) >= reste) continue;
+    pris[a.n] = (pris[a.n] || 0) + 1;
+    L.push({ k: "relist-" + a.id, type: "remettre", pf: "Vinted", a, titre: a.t, prix: a.p, u: a.u, m: "masques", v: +a.p || 0,
+      pourquoi: `Hidden on Vinted, but the database says you still have ${reste}. Check it's on your shelf, then show it again.` });
   }
   for (const a of ANNONCES){
     const relistee = pfaits["relist-" + a.id]?.etat === "fait";
