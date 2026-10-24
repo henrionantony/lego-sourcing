@@ -120,6 +120,32 @@ def plafond_catalogue(prix_public) -> float | None:
     return float(max(0, int((float(prix_public) - PROTECTION_FIXE - PORT_ACHETEUR) / (1 + PROTECTION_PCT))))
 
 
+def estime_revente(r) -> float:
+    """Prix de revente attendu d'un set (ligne du référentiel, dict ou pandas) : revente rapide si
+    encore au catalogue, sinon l'estimation ; retiré : la valeur après retrait si elle est plus haute."""
+    f = lambda k: float(r.get(k)) if r.get(k) not in (None, "") and r.get(k) == r.get(k) else 0.0
+    e = f("pv_rapide") or f("prix_vente_estime")
+    return max(e, f("pv_garde")) if r.get("statut") == "retiré" else e
+
+
+def prix_annonce(estime: float, cout: float, prix_public=None, au_catalogue: bool = False) -> dict:
+    """LE prix d'annonce d'un set, le même partout (alerte Telegram, appli, liste du lundi).
+    Départ = estimation de revente × PRIX_DEPART (marge pour les offres et la baisse de 5 %/30 j),
+    jamais sous le plancher (coût × MARGE_BRUTE_PLANCHER) ; encore au catalogue : plafonné
+    pour que prix + frais acheteur + port reste sous le prix LEGO, sans passer sous le plancher."""
+    import math
+    arr = lambda p: float(math.ceil(p / 5) * 5) if p >= 30 else float(math.ceil(p))
+    plancher = cout * MARGE_BRUTE_PLANCHER
+    depart = estime * PRIX_DEPART
+    prix = max(depart, plancher, GWP_DEFAUT if cout == 0 and not estime else 0)
+    prix = arr(prix) if prix else None
+    cap = plafond_catalogue(prix_public) if au_catalogue else None
+    plafonne = bool(prix and cap and prix > cap)
+    if plafonne:
+        prix = max(cap, float(math.ceil(plancher)))
+    return {"prix": prix, "depart": round(depart, 2), "plancher": round(plancher, 2), "cap": cap, "plafonne": plafonne}
+
+
 # Trésorerie disponible quand la base ne la donne pas (table « tresorerie »).
 BUDGET = 1000.0
 # Valeurs tirées des ventes réelles : neutres ici, les vraies sont dans le fichier privé.

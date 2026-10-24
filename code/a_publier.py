@@ -27,6 +27,21 @@ def arrondi(p: float) -> float:
     return float(math.ceil(p / 5) * 5) if p >= 30 else float(math.ceil(p))
 
 
+def mes_ventes() -> dict[str, list]:
+    """Tes ventes de ce set entier, [[date, prix unitaire, plateforme]], de la plus ancienne à la plus récente.
+    Ventes co-investies laissées de côté : la base n'y garde que ta part du prix."""
+    sets = {x["id"]: str(x["id_set"]).split("-")[0].removesuffix(".0")
+            for x in base.lire("articles", "select=id,id_set&categorie=eq.SET&id_set=not.is.null&limit=10000") or []}
+    out: dict[str, list] = {}
+    for v in sorted(base.lire("ventes", "select=article_id,date_vente,prix_vente,quantite,co_investisseur,plateforme"
+                              "&produit=eq.SET&limit=10000") or [], key=lambda v: v.get("date_vente") or ""):
+        s = sets.get(v.get("article_id"))
+        if s and v.get("prix_vente") and not v.get("co_investisseur"):
+            out.setdefault(s, []).append([v.get("date_vente") or "", round(float(v["prix_vente"]) / max(1, int(v.get("quantite") or 1)), 2),
+                                          (v.get("plateforme") or "").title()])
+    return out
+
+
 def main():
     ref = {}
     with open(LEGO / "data" / "referentiel.csv", newline="") as f:
@@ -41,6 +56,7 @@ def main():
     # Stratégie choisie dans l'appli (Post now / Keep until it retires), par article
     hz = {r["id"]: (r.get("horizon") or "", r.get("vise_le") or "")
           for r in base.lire("articles", "select=id,horizon,vise_le&horizon=not.is.null&limit=10000") or []}
+    vendus = mes_ventes()
     couts: dict[str, list] = {}
     ex: dict[str, list] = {}
     for l in stock:
@@ -53,28 +69,22 @@ def main():
     out = {}
     for s, c in couts.items():
         r = ref.get(s, {})
-        estime = float(r.get("pv_rapide") or r.get("prix_vente_estime") or 0)
-        if r.get("statut") == "retiré" and r.get("pv_garde"):
-            estime = max(estime, float(r["pv_garde"]))
+        estime = regles.estime_revente(r)
         cout = min(x[0] for x in c)
-        plancher = cout * regles.MARGE_BRUTE_PLANCHER
         # Coût bien au-dessus de l'estimation : souvent le prix d'un lot entier
         # posé sur un seul article. On garde l'estimation et on le signale.
         douteux = bool(estime) and cout > 2 * estime
-        # Départ au-dessus de l'estimation, puis la liste du lundi baisse de 5 % tous les 30 jours jusqu'au plancher
-        prix = estime if douteux else max(estime * regles.PRIX_DEPART, plancher, regles.GWP_DEFAUT if cout == 0 and not estime else 0)
-        prix = arrondi(prix) if prix else None
-        # Encore au catalogue : prix + frais acheteur + port sous le prix LEGO, jamais sous le plancher
-        cap = regles.plafond_catalogue(float(r.get("prix_public") or 0)) if r.get("statut") == "en vente" else None
-        if prix and cap and prix > cap:
-            prix = max(cap, float(math.ceil(plancher)))
+        # Même calcul que l'alerte Telegram (regles.prix_annonce) : un seul prix partout
+        pa = regles.prix_annonce(estime, cout, float(r.get("prix_public") or 0), r.get("statut") == "en vente")
+        prix = arrondi(estime) if douteux else pa["prix"]
         # Pour choisir « poster maintenant » ou « garder » : revente rapide, revente après retraite, date de retraite
         conseil = {"be": (be.get(s + "-1") or {}).get("date") if (be.get(s + "-1") or {}).get("valeur_neuf") else None,
                    "src": r.get("fiabilite") or "",
                    "st": r.get("statut") or "", "rapide": float(r.get("pv_rapide") or 0) or None,
                    "garde": float(r.get("pv_garde") or 0) or None, "retrait": r.get("retrait_croise") or r.get("retrait") or ""}
         out[s] = {"prix": prix, "estime": round(estime, 2) or None, **conseil,
-                  "cout": round(cout, 2), "etat": c[0][1], **({"douteux": True} if douteux else {})}
+                  "cout": round(cout, 2), "plancher": pa["plancher"], "pp": float(r.get("prix_public") or 0) or None,
+                  "plafonne": pa["plafonne"], "vendus": vendus.get(s, [])[-5:], "etat": c[0][1], **({"douteux": True} if douteux else {})}
     SORTIE.write_text(json.dumps(out, ensure_ascii=False))
     pp = lambda s: float(ref.get(s, {}).get("prix_public") or 0) or None
     EXEMPLAIRES.write_text(json.dumps({s: {"pp": pp(s), "c": sorted(c, key=lambda x: (x[1], x[2]))} for s, c in ex.items()}, ensure_ascii=False))
