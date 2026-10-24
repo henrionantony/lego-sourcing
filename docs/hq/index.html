@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="a4382ed399"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="24f92971fc"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -2101,27 +2101,54 @@ function clesSupposees(){
   for (const [j, m] of missionsPassees()) for (const k of m.k || []) if (supposeFait(k, j)) S.add(k);
   return S;
 }
-function construireMission(L){
+/* Figurines et sets jamais mélangés le même soir (le vendeur 24/10) : des périodes de BLOC_SOIRS soirs « sets » puis
+   « figurines ». Les nouveaux articles décident : des boîtes reçues font un soir « sets », des figurines de part-out un
+   soir « figurines ». La mission est refaite dès qu'un nouvel article arrive (colis reçu, set découpé). */
+const RX_FIG = /figurine|minifig|\b[a-z]{2,4}\d{3,4}[a-z]?\b/i;
+function famille(x){
+  if (x.m === "figs" || x.k.startsWith("newfig-")) return "figs";
+  if (/^(new|lbcnew)-/.test(x.k)) return "sets";
+  const a = x.a || {};
+  return a.g === "Minifigures" || RX_FIG.test(a.t || x.titre || "") ? "figs" : "sets";
+}
+const estNouveau = (x) => x.m === "achats" || x.m === "figs";
+function construireMission(L, garder = []){
   const auj = jourLocal(), passees = missionsPassees(), supposees = clesSupposees();
-  const pool = L.filter((x) => !supposees.has(x.k) && !["doubles", "attente", "baisses"].includes(x.m) && pfaits[x.k]?.etat !== "passe");
+  const tout = L.filter((x) => !supposees.has(x.k) && !["doubles", "attente", "baisses"].includes(x.m) && pfaits[x.k]?.etat !== "passe");
+  const derniere = passees[passees.length - 1]?.[1];
+  // Famille du soir : celle des nouveaux articles (les boîtes reçues d'abord), sinon on continue la période en cours
+  // (BLOC_SOIRS soirs), puis on passe à l'autre
+  const nouveaux = (f) => tout.filter((x) => estNouveau(x) && famille(x) === f).length;
+  const aFaire = (f) => tout.some((x) => famille(x) === f && x.m !== "lbcneuf");
+  let fam, fs;
+  const fPrec = derniere?.f || "sets", sPrec = derniere?.f ? (derniere.fs || 1) : 0;
+  if (nouveaux("sets") || nouveaux("figs")) fam = nouveaux(fPrec) ? fPrec : nouveaux("sets") ? "sets" : "figs";
+  else {
+    const autre = fPrec === "sets" ? "figs" : "sets";
+    fam = sPrec < BLOC_SOIRS && aFaire(fPrec) ? fPrec : aFaire(autre) ? autre : fPrec;
+  }
+  fs = fam === fPrec ? sPrec + 1 : 1;
+  const pool = tout.filter((x) => famille(x) === fam);
   const parK = new Map(pool.map((x) => [x.k, x]));
-  const k = [], compte = { n: 0 };
+  const k = [...garder], nv = tout.filter(estNouveau).map((x) => x.k);
+  const max = Math.max(MISSION_N, garder.filter((c) => !c.startsWith("lbcnew-")).length + Math.min(MISSION_N, nouveaux(fam)));
+  const compte = { n: garder.filter((c) => !c.startsWith("lbcnew-")).length };
   const prendre = (x) => {
-    if (!x || k.includes(x.k) || compte.n >= MISSION_N) return false;
+    if (!x || k.includes(x.k) || compte.n >= max) return false;
     k.push(x.k); compte.n++;
     // Le même soir, la copie Leboncoin d'un nouvel article (ne compte pas dans les 10)
     if (x.k.startsWith("new-") && parK.has("lbc" + x.k)) k.push("lbc" + x.k);
     return true;
   };
-  // 1. Nouveaux articles : achats reçus (les plus récents d'abord) et figurines de part-out
-  for (const x of pool) if (x.m === "achats" || x.m === "figs") prendre(x);
+  // 1. Nouveaux articles : achats reçus (les plus récents d'abord) ou figurines de part-out
+  for (const x of pool) if (estNouveau(x)) prendre(x);
   // 2. Pas faits les jours d'avant (vérifiés par les mails ou l'export) : en tête de ce qui reste
   for (const [, m] of passees) for (const c of m.k || []) if (!c.startsWith("lbcnew-")) prendre(parK.get(c));
-  // 3. Bloc de gamme : la même 2 à 3 soirs de suite, puis la gamme qui a le plus à republier (pas reprise depuis 14 jours)
+  // 3. Bloc de gamme (dans la famille du soir) : la même 2 à 3 soirs de suite, puis celle qui a le plus à republier
   const candidats = (g) => pool.filter((x) => gammeAction(x) === g && ["reposts", "republier", "lbc", "masques"].includes(x.m))
     .sort((x, y) => (x.m === "lbc") - (y.m === "lbc") || (x.age ?? 1e9) - (y.age ?? 1e9) || (y.pr || 0) - (x.pr || 0));
-  const derniere = passees[passees.length - 1]?.[1];
-  let bloc = derniere?.b || "", soir = (derniere?.s || 0) + 1;
+  const memeFam = derniere && (derniere.f || "sets") === fam;
+  let bloc = memeFam ? derniere.b || "" : "", soir = memeFam ? (derniere.s || 0) + 1 : 1;
   if (!bloc || soir > BLOC_SOIRS || !candidats(bloc).length){
     const recentes = new Set(passees.filter(([j]) => j >= plusJours(auj, -14)).map(([, m]) => m.b).filter(Boolean));
     const nb = {};
@@ -2132,15 +2159,24 @@ function construireMission(L){
   const avant = compte.n;
   if (bloc) for (const x of candidats(bloc)) prendre(x);
   const blocPris = compte.n > avant;
-  // 4. S'il reste de la place : annonces masquées, Leboncoin, vieux stock
+  // 4. S'il reste de la place : annonces masquées, Leboncoin, vieux stock (de la même famille)
   for (const m of ["masques", "republier", "lbc", "ancien"]) for (const x of pool) if (x.m === m) prendre(x);
-  return { k, b: blocPris ? bloc : (derniere?.b || ""), s: blocPris ? soir : (derniere?.s || 0), le: new Date().toISOString() };
+  return { k, f: fam, fs, nv, b: blocPris ? bloc : (memeFam ? derniere.b || "" : ""), s: blocPris ? soir : (memeFam ? derniere.s || 0 : 0), le: new Date().toISOString() };
 }
 function missionDuJour(L){
-  const auj = jourLocal();
-  if (!MJOURS[auj] && missionsLues && db && missionEcrite !== auj){
+  const auj = jourLocal(), MJ = MJOURS[auj];
+  if (!missionsLues || !db) return MJ || null;
+  let refaire = !MJ && missionEcrite !== auj;
+  // Nouvel article arrivé depuis (colis reçu, set découpé) : on refait la mission, en gardant ce qui est déjà fait ce soir
+  if (MJ && !refaire){
+    const deja = new Set(MJ.nv || []);
+    const supposees = clesSupposees();
+    refaire = !MJ.f || L.some((x) => estNouveau(x) && !supposees.has(x.k) && !deja.has(x.k) && !(MJ.k || []).includes(x.k));
+  }
+  if (refaire){
     missionEcrite = auj;
-    MJOURS[auj] = construireMission(L);
+    const garder = MJ ? (MJ.k || []).filter((c) => !L.some((y) => y.k === c)) : [];
+    MJOURS[auj] = construireMission(L, garder);
     db.doc("missions/" + auj).set(MJOURS[auj]).catch(() => { missionEcrite = ""; });
   }
   return MJOURS[auj] || null;
@@ -2384,7 +2420,7 @@ function rendreMissions(L){
     const total = (MJ.k || []).filter((k) => !k.startsWith("lbcnew-")).length;
     const reste = enJour.filter((y) => !y.k.startsWith("lbcnew-")).length;
     const jour = { m: "jour", ic: "🌙", t: "Tonight's mission", L: enJour, total, fait: total - reste,
-      d: `${MJ.b ? `${esc(MJ.b)} evening ${MJ.s} of ${BLOC_SOIRS}. ` : ""}New items first (Vinted and Leboncoin the same evening), then reposts of one theme. Not done tonight? It comes back: Leboncoin is checked by its e-mails, Vinted by your next export.` };
+      d: `${MJ.f === "figs" ? "Minifigs evening" : "Sets evening"}${MJ.b ? `, ${esc(MJ.b)} evening ${MJ.s} of ${BLOC_SOIRS}` : ""}. Sets and minifigs are never mixed: a few evenings of each. New items first (Vinted and Leboncoin the same evening), then reposts of one theme. Not done tonight? It comes back: Leboncoin is checked by its e-mails, Vinted by your next export.` };
     if (enJour.length || total) groupes.splice(groupes[0]?.m === "doubles" ? 1 : 0, 0, jour);
   }
   if (!groupes.length){ $("#p-actions").innerHTML = `<p class="empty">Nothing to do on the platforms. 🎉</p>`; return; }
