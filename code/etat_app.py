@@ -273,7 +273,8 @@ def a_regulariser(obj: dict) -> list[dict]:
                      "suivi": sv.get("suivi") if sv else None, "suivi_url": suivi_url,
                      # QR et code à montrer au relais (base privée, seulement tant que le colis attend)
                      **({"qr": f"https://avisageng-colis-webexternal.pickup-services.com/api/barcode/AztecCode?d={urllib.parse.quote(sv['pass'], safe=':;')}"
-                         if sv.get("pass") else None, "code": sv.get("code"), "relais": sv.get("lieu"),
+                         # le pass cite le n° de colis : jamais montré sur une autre commande
+                         if sv.get("pass") and sv.get("suivi") in sv["pass"].split(";") else None, "code": sv.get("code"), "relais": sv.get("lieu"),
                          "jusqu": jour(sv["jusqu"]) if sv.get("jusqu") else None}
                         if sv and sv["colis"] == "a_retirer" and (sv.get("pass") or sv.get("code")) else {}),
                      "articles": [f"{int(float(x['quantite'] or 1))} × {nom_set(x)}" for x in lignes],
