@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="8aee2bbef3"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="a4382ed399"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -408,6 +408,9 @@ h2.sec:first-child{margin-top:4px}
 .pf-ligne.passe{opacity:.6}
 .pf-ic{flex:none;width:22px;text-align:center} .pf-lt{flex:1;min-width:0} .pf-lt span{display:block;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 dialog.confirmer{border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);padding:16px;max-width:min(340px,calc(100vw - 32px));font:15px/1.4 var(--body)}
+dialog.pass{max-width:min(380px,calc(100vw - 24px));width:100%;text-align:center} dialog.pass h3{margin:4px 0 2px;font-size:20px} dialog.pass .kind{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+dialog.pass .qr{background:#fff;border-radius:12px;padding:16px;margin:12px 0;display:flex;justify-content:center;min-height:120px;align-items:center} dialog.pass .qr img{width:100%;max-width:260px;image-rendering:pixelated} dialog.pass .qr .sub{color:#333}
+dialog.pass .code{font:700 40px/1.1 ui-monospace,Menlo,monospace;letter-spacing:.12em;margin:4px 0 14px;user-select:all} dialog.pass .row{justify-content:center} dialog.pass .row .btn{width:100%;justify-content:center}
 dialog.confirmer::backdrop{background:rgba(0,0,0,.45)} dialog.confirmer p{margin:0 0 14px} dialog.confirmer .row{display:flex;gap:8px;justify-content:flex-end} dialog.confirmer .col{display:flex;flex-direction:column;gap:8px} dialog.confirmer .col .btn{width:100%;justify-content:center}
 .sv{flex:none;width:48px;height:48px;border-radius:6px;overflow:hidden;background:#fff;border:1px solid var(--line);display:flex;align-items:center;justify-content:center}
 .sv .adth{transform:scale(.75);transform-origin:center} .sv .ref{font:700 10px var(--display);color:#5d6472;word-break:break-all;text-align:center}
@@ -934,6 +937,7 @@ function rendreTodo(){
           ${x.action ? (ax ? `<span class="sent">✓ Noted</span>` : `<button class="btn yes" data-a="lig" ${db ? "" : "disabled"}>${esc(x.action.label)}</button>`) : ""}</div>
           ${x.etape != null ? `<ol class="steps">${["Ordered", "Shipped", x.arrivee || "Arrived", "Received"].map((n, i) => `<li class="${i < x.etape ? "fait" : i === x.etape ? "ici" : ""}"><i></i><span>${esc(n)}</span></li>`).join("")}</ol>` : ""}
           ${x.suivi ? `<div class="sub suivi">Tracking ${x.suivi_url ? `<a href="${esc(x.suivi_url)}" target="_blank" rel="noopener">${esc(x.suivi)} ↗</a>` : esc(x.suivi)}</div>` : ""}
+          ${x.qr || x.code ? `<div class="row"><button class="btn yes" data-a="pass">🎫 Show pickup pass</button></div>` : ""}
           ${x.url ? `<div class="row"><a class="btn" href="${esc(x.url)}" target="_blank" rel="noopener">Open the email ↗</a></div>` : ""}
           ${x.choix ? (ax ? `<span class="sent">✓ Noted</span>` : `<div class="row choix">${x.choix.map((c, i) => `<button class="btn ${i < x.choix.length - 1 ? "yes" : ""}" data-a="choix" data-i="${i}" ${db ? "" : "disabled"}>${esc(c.label)}</button>`).join("")}</div>`) : ""}
           ${x.articles && x.articles.length === 1 ? `<div class="sub">${esc(x.articles[0])}</div>` : x.articles && x.articles.length ? `<details class="more"><summary>${x.articles.length} line${x.articles.length > 1 ? "s" : ""}</summary><ul>${x.articles.map((y) => `<li>${esc(y)}</li>`).join("")}</ul></details>` : ""}</li>`; };
@@ -980,6 +984,23 @@ function choisir(texte, choix){
     d.addEventListener("click", (e) => { const b = e.target.closest("button"); if (b || e.target === d){ d.close(); d.remove(); ok(b?.value || null); } });
     document.body.appendChild(d); d.showModal();
   });
+}
+// Pickup pass à montrer au relais : QR (code Aztec du transporteur) et code de retrait en grand
+function montrerPass(x){
+  const d = document.createElement("dialog"); d.className = "confirmer pass";
+  d.innerHTML = `<div class="kind">Pickup pass</div><h3></h3><p class="sub"></p>
+    ${x.qr ? `<div class="qr"><img alt="Pickup pass QR code"></div>` : ""}
+    ${x.code ? `<div class="sub">Pickup code</div><div class="code"></div>` : ""}
+    <div class="row"><button class="btn yes" value="ok">Close</button></div>`;
+  d.querySelector("h3").textContent = x.relais || x.titre;
+  d.querySelector("p").textContent = [x.titre, x.jusqu && "until " + x.jusqu].filter(Boolean).join(" · ");
+  if (x.qr){ const im = d.querySelector("img"); im.src = x.qr;
+    im.onerror = () => { im.parentNode.innerHTML = `<div class="sub">The QR code could not load. Give the code below.</div>`; }; }
+  if (x.code) d.querySelector(".code").textContent = x.code;
+  let verrou = null;
+  try { navigator.wakeLock?.request("screen").then((v) => { verrou = v; }, () => {}); } catch (e) {}
+  d.addEventListener("click", (e) => { if (e.target.closest("button") || e.target === d){ d.close(); d.remove(); try { verrou?.release(); } catch (er) {} } });
+  document.body.appendChild(d); d.showModal();
 }
 function confirmer(texte, oui = "Yes"){
   return new Promise((ok) => {
@@ -1341,6 +1362,11 @@ $("#todo").addEventListener("click", async (e) => {
     actions[lid] = { ...c.action, tache: lid }; rendreTodo();
     try { await db.doc("actions/" + lid).set({ ...c.action, tache: lid, le: new Date().toISOString(), fait: false }); note(""); }
     catch (err) { delete actions[lid]; rendreTodo(); note("This was not saved. Check your connection and try again."); }
+    return;
+  }
+  if (b.dataset.a === "pass"){
+    const lid = b.closest(".tl").dataset.lid, t = ETAT.a_faire.find((x) => x.id === b.closest(".task").dataset.id);
+    const x = t && t.lignes.find((y) => y.id === lid); if (x) montrerPass(x);
     return;
   }
   if (b.dataset.a === "lig"){

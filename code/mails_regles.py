@@ -12,6 +12,7 @@ Jamais de nom, d'adresse ni de téléphone dans les entrées.
 """
 import html
 import re
+import urllib.parse
 
 # Expéditeurs (dans l'adresse) -> magasin, comme dans la base
 MAGASINS = {"leclerc": "E.LECLERC", "carrefour": "CARREFOUR", "lego.com": "LEGO.COM", "amazon": "AMAZON.FR",
@@ -288,6 +289,27 @@ def leboncoin(adresse: str, sujet: str, t: str, corps: str) -> dict | None:
     return {"lbc": etat, "set": nums[-1], "titre": titre[:200], **({"url": u.group(0)} if u else {})}
 
 
+# ---------- Code de retrait (relais Pickup) ----------
+
+AZTEC = r"https://avisageng-colis-webexternal\.pickup-services\.com/api/barcode/AztecCode\?d=([^\"'\s)<>\]]+)"
+
+
+def retrait(corps: str, t: str) -> dict:
+    """QR (code Aztec) et code de retrait d'un colis en relais Pickup, à montrer au commerçant.
+
+    Gardés seulement dans la base privée, tant que le colis attend d'être retiré (purgés à la réception)."""
+    r = {}
+    m = re.search(AZTEC, corps)
+    if m:
+        d = urllib.parse.unquote(html.unescape(m.group(1)))
+        if d.startswith("PICKUPPASS:"):
+            r["pass"] = d
+    c = re.search(r"code de retrait(?: suivant)?(?: au commer[çc]ant)?\s*:?\s*(\d{4,8})\b", plat(t), re.I)
+    if c:
+        r["code"] = c.group(1)
+    return r
+
+
 # ---------- Entrée d'un mail ----------
 
 def lire(mail_id: str, expediteur: str, sujet: str, corps: str, jour: str, url: str, connus: list[dict]) -> dict | None:
@@ -309,6 +331,8 @@ def lire(mail_id: str, expediteur: str, sujet: str, corps: str, jour: str, url: 
         if e:
             if "colis" in e:
                 e["url"] = url
+                if e["colis"] == "a_retirer":
+                    e.update(retrait(corps, t))
             return {**base, **e}
     if re.search(r"confirm|annul|rembours|retour", sujet, re.I) and magasin(adresse):
         return None  # commande d'un magasin pas (ou plus) lisible par les règles, annulation, remboursement : pour Claude

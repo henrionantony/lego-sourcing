@@ -107,6 +107,7 @@ def colis(ouverts: dict[int, dict]) -> dict[int, dict]:
     nums = controle()["nums"]
     res: dict[int, dict] = {}
     orphelins: list[dict] = []
+    a_purger: list[str] = []
     # Numéro de suivi déjà relié à une commande par un autre mail (ex. « expédié » du
     # marchand, puis « arrivé en relais » du transporteur sans numéro de commande)
     par_suivi = {c["suivi"]: c.get("achat_id") or nums.get(c.get("num")) for c in entrees
@@ -119,6 +120,8 @@ def colis(ouverts: dict[int, dict]) -> dict[int, dict]:
             cands = [a for a, o in ouverts.items() if _cle(o["lieu"]) == _cle(c["magasin"])]
             aid = cands[0] if len(cands) == 1 else None
         if aid not in ouverts:
+            if aid and (c.get("pass") or c.get("code")):
+                a_purger.append(c["mail"])   # commande reçue : le code de retrait ne sert plus
             if c["colis"] == "a_retirer" and not aid:
                 orphelins.append({**c, "candidats": [a for a, o in ouverts.items() if not c.get("magasin")
                                                      or _cle(o["lieu"]) == _cle(c["magasin"])] or list(ouverts)})
@@ -129,14 +132,29 @@ def colis(ouverts: dict[int, dict]) -> dict[int, dict]:
         av = res.get(aid, {})
         if ORDRE_COLIS.get(c["colis"], 0) >= ORDRE_COLIS.get(av.get("colis"), 0):
             av = {**av, "colis": c["colis"], "d": c.get("d")}
-        for k in ("lieu", "jusqu", "suivi", "transporteur"):
+        for k in ("lieu", "jusqu", "suivi", "transporteur", "pass", "code"):
             # le dernier mail « à retirer » fait foi pour le relais (colis redirigé)
-            if c.get(k) and (not av.get(k) or (c["colis"] == "a_retirer" and k in ("lieu", "jusqu"))):
+            if c.get(k) and (not av.get(k) or (c["colis"] == "a_retirer" and k in ("lieu", "jusqu", "pass", "code"))):
                 av[k] = c[k]
         res[aid] = av
+    # Codes de retrait vieux de 3 semaines (colis jamais relié) : purgés aussi
+    vieux = (dt.date.today() - dt.timedelta(days=21)).isoformat()
+    a_purger += [c["mail"] for c in entrees if (c.get("pass") or c.get("code")) and (c.get("d") or "") < vieux]
+    if a_purger:
+        purger_retraits(set(a_purger))
     if orphelins:
         res[0] = {"orphelins": orphelins}   # colis prêts qu'on n'a pas su rattacher à une commande
     return res
+
+
+def purger_retraits(ids: set[str]):
+    """Efface QR et code de retrait des mails donnés (colis retiré ou trop vieux)."""
+    t = tout()
+    for x in t:
+        if x.get("mail") in ids:
+            x.pop("pass", None)
+            x.pop("code", None)
+    base.json_partage_ecrire("commandes", FICHIER, t)
 
 
 if __name__ == "__main__":
@@ -144,6 +162,16 @@ if __name__ == "__main__":
     import sys
     if sys.argv[1:2] == ["ids"]:
         print(" ".join(str(x.get("mail")) for x in tout()))
+    elif sys.argv[1:2] == ["retrait"]:
+        # python3 mails.py retrait <fichier> : QR et code de retrait d'un mail Pickup
+        # (fichier = résultat JSON de get_message FULL_CONTENT, ou HTML brut), à ajouter à l'entrée
+        import mails_regles
+        brut = Path(sys.argv[2]).read_text()
+        try:
+            brut = json.loads(brut).get("htmlBody") or brut
+        except ValueError:
+            pass
+        print(json.dumps(mails_regles.retrait(brut, mails_regles.texte(brut))))
     elif sys.argv[1:2] == ["ajouter"]:
         print("ajouté" if ajouter(json.loads(sys.argv[2])) else "déjà noté")
     else:

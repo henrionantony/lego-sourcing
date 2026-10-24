@@ -11,6 +11,7 @@ import json
 import re
 import os
 import ssl
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -270,6 +271,11 @@ def a_regulariser(obj: dict) -> list[dict]:
                      "sous": f"{n} item{'s' if n > 1 else ''}{etat}", "pret": bool(sv and sv["colis"] == "a_retirer"),
                      "etape": min(etape, 2), "arrivee": "Pick up" if sv and sv["colis"] == "a_retirer" else "Delivered" if etape == 3 else "Arrived",
                      "suivi": sv.get("suivi") if sv else None, "suivi_url": suivi_url,
+                     # QR et code à montrer au relais (base privée, seulement tant que le colis attend)
+                     **({"qr": f"https://avisageng-colis-webexternal.pickup-services.com/api/barcode/AztecCode?d={urllib.parse.quote(sv['pass'], safe=':;')}"
+                         if sv.get("pass") else None, "code": sv.get("code"), "relais": sv.get("lieu"),
+                         "jusqu": jour(sv["jusqu"]) if sv.get("jusqu") else None}
+                        if sv and sv["colis"] == "a_retirer" and (sv.get("pass") or sv.get("code")) else {}),
                      "articles": [f"{int(float(x['quantite'] or 1))} × {nom_set(x)}" for x in lignes],
                      # Pour le scan à la réception : quantités attendues par numéro de set
                      "sets": {k: v for k, v in _compter(lignes).items()},
