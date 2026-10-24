@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="f6ac631e28"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="a7194a408a"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -2140,7 +2140,7 @@ function famille(x){
   return a.g === "Minifigures" || RX_FIG.test(a.t || x.titre || "") ? "figs" : "sets";
 }
 // Nouveau = figurine de part-out, ou set reçu acheté depuis moins de NOUVEAU_JOURS (le vieux stock jamais publié passe après le bloc)
-const NOUVEAU_JOURS = 30, MISSION_V = 2;  // MISSION_V : changer la règle refait la mission du jour
+const NOUVEAU_JOURS = 30, MISSION_V = 3, MISSION_LBC = 10;  // MISSION_V : changer la règle refait la mission du jour
 const estNouveau = (x) => x.m === "figs" || (x.m === "achats" && (x.d || "") >= plusJours(jourLocal(), -NOUVEAU_JOURS));
 function construireMission(L, garder = []){
   const auj = jourLocal(), passees = missionsPassees(), supposees = clesSupposees();
@@ -2191,6 +2191,12 @@ function construireMission(L, garder = []){
   const blocPris = compte.n > avant;
   // 4. S'il reste de la place : annonces masquées, Leboncoin, vieux stock (de la même famille)
   for (const m of ["achats", "masques", "republier", "lbc", "ancien"]) for (const x of pool) if (x.m === m) prendre(x);
+  // 5. Leboncoin en plus des 10 (le vendeur 24/10 : une personne l'aide à poster sur Leboncoin) : jusqu'à MISSION_LBC
+  //    annonces en ligne sur Vinted mais pas sur Leboncoin, la gamme du soir d'abord, puis les plus chères
+  const dejaLbc = k.filter((c) => c.startsWith("lbc-")).length;
+  pool.filter((x) => x.m === "lbc" && !k.includes(x.k))
+    .sort((x, y) => (gammeAction(y) === bloc) - (gammeAction(x) === bloc) || (y.pr || 0) - (x.pr || 0) || (+y.prix || 0) - (+x.prix || 0))
+    .slice(0, Math.max(0, MISSION_LBC - dejaLbc)).forEach((x) => k.push(x.k));
   return { v: MISSION_V, k, f: fam, fs, nv, b: blocPris ? bloc : (memeFam ? derniere.b || "" : ""), s: blocPris ? soir : (memeFam ? derniere.s || 0 : 0), le: new Date().toISOString() };
 }
 function missionDuJour(L){
@@ -2465,7 +2471,7 @@ function rendreMissions(L){
     const total = (MJ.k || []).filter((k) => !k.startsWith("lbcnew-")).length;
     const reste = enJour.filter((y) => !y.k.startsWith("lbcnew-")).length;
     const jour = { m: "jour", ic: "🌙", t: "Tonight's mission", L: enJour, total, fait: total - reste,
-      d: `${MJ.f === "figs" ? "Minifigs evening" : "Sets evening"}${MJ.b ? `, ${esc(MJ.b)} evening ${MJ.s} of ${BLOC_SOIRS}` : ""}. Sets and minifigs are never mixed: a few evenings of each. New items first (Vinted and Leboncoin the same evening), then reposts of one theme. Not done tonight? It comes back: Leboncoin is checked by its e-mails, Vinted by your next export.` };
+      d: `${MJ.f === "figs" ? "Minifigs evening" : "Sets evening"}${MJ.b ? `, ${esc(MJ.b)} evening ${MJ.s} of ${BLOC_SOIRS}` : ""}. Sets and minifigs are never mixed: a few evenings of each. New items first (Vinted and Leboncoin the same evening), then reposts of one theme, plus up to ${MISSION_LBC} ads already live on Vinted to post on Leboncoin. Not done tonight? It comes back: Leboncoin is checked by its e-mails, Vinted by your next export.` };
     if (enJour.length || total) groupes.splice(groupes[0]?.m === "doubles" ? 1 : 0, 0, jour);
   }
   if (!groupes.length){ $("#p-actions").innerHTML = `<p class="empty">Nothing to do on the platforms. 🎉</p>`; return; }
