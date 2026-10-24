@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="a7194a408a"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="9913d9e75c"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -411,6 +411,13 @@ h2.sec:first-child{margin-top:4px}
 .pf-ligne{display:flex;gap:10px;align-items:center;text-align:left;width:100%;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--ink);font:13.5px/1.3 var(--body);cursor:pointer}
 .pf-ligne.t-rm{border-left-color:var(--gap)} .pf-ligne.t-new{border-left-color:var(--warn)} .pf-ligne.t-relist,.pf-ligne.t-lbc{border-left-color:var(--ok)}
 .pf-ligne.passe{opacity:.6}
+/* Couleur par plateforme, plus forte que la couleur du type d'action */
+:root{--vinted:#007782;--vinted-bg:#d9f1f2;--lbc:#e8590c;--lbc-bg:#fde6d6}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--vinted:#2bc4cf;--vinted-bg:#123a3d;--lbc:#ff8a4c;--lbc-bg:#43230f}}
+:root[data-theme="dark"]{--vinted:#2bc4cf;--vinted-bg:#123a3d;--lbc:#ff8a4c;--lbc-bg:#43230f}
+.pf-ligne.p-vinted{border-left:7px solid var(--vinted)} .pf-ligne.p-lbc{border-left:7px solid var(--lbc)}
+.pf-top.p-vinted{border-color:var(--vinted)} .pf-top.p-lbc{border-color:var(--lbc)}
+.p-vinted .pf-tete{background:var(--vinted-bg);color:var(--vinted)} .p-lbc .pf-tete{background:var(--lbc-bg);color:var(--lbc)}
 .pf-ic{flex:none;width:22px;text-align:center} .pf-lt{flex:1;min-width:0} .pf-lt span{display:block;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 dialog.confirmer{border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);padding:16px;max-width:min(340px,calc(100vw - 32px));font:15px/1.4 var(--body)}
 dialog.pass{max-width:min(380px,calc(100vw - 24px));width:100%;text-align:center} dialog.pass h3{margin:4px 0 2px;font-size:20px} dialog.pass .kind{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
@@ -2402,7 +2409,7 @@ function carteAction(x){
   const photos = a && a.ph.length ? `<div class="adph">${a.ph.map((p, i) => `<button class="phb" data-y="ph" data-i="${i}" aria-label="Save photo ${i + 1}"><img alt="Photo ${i + 1}" data-i="${i}"></button>`).join("")}</div>
       <div class="adbtns"><button class="btn" data-y="tout">Save all ${a.ph.length} photos</button></div>`
     : x.it ? `<div class="pf-sansph">${photo(x.it)}<span>No photos yet. Take 3 or 4: front, back, both sides of the box.</span></div>` : "";
-  return `<article class="ad pf-top ${T.cl}" data-id="${a ? a.id : ""}" data-k="${esc(x.k)}">
+  return `<article class="ad pf-top ${T.cl} ${clPf(x.pf)}" data-id="${a ? a.id : ""}" data-k="${esc(x.k)}">
     <div class="pf-tete"><span class="pf-type">${T.ic} ${T.lib}</span><span class="pf-pf">${x.pf}</span></div>
     <div class="adbody">
       <div class="pf-titre">${esc(x.titre)}</div>
@@ -2426,7 +2433,9 @@ function vignetteAction(y){
   const n = String(y.titre || "").match(/\b(\d{4,7})\b/);
   return n ? vignetteSet(n[1]) : `<span class="sv"></span>`;
 }
-const ligneAction = (y) => `<button class="pf-ligne ${PTYPES[y.type].cl}${pfaits[y.k]?.etat === "passe" ? " passe" : ""}" data-k="${esc(y.k)}">
+// Couleur par plateforme (le vendeur 24/10) : Vinted turquoise, Leboncoin orange
+const clPf = (pf) => pf === "Leboncoin" ? "p-lbc" : "p-vinted";
+const ligneAction = (y) => `<button class="pf-ligne ${PTYPES[y.type].cl} ${clPf(y.pf)}${pfaits[y.k]?.etat === "passe" ? " passe" : ""}" data-k="${esc(y.k)}">
       ${vignetteAction(y)}<span class="pf-lt"><b>${PTYPES[y.type].ic} ${PTYPES[y.type].lib}</b> · ${y.pf}${pfaits[y.k]?.etat === "passe" ? " · skipped" : ""}<span>${esc(y.titre)}</span></span>
       <span class="adp">${y.prix ? eur(y.prix) : ""}</span></button>`;
 // Score du jour : ce que tu as fait aujourd'hui (boutons « Done » ou actions disparues après un export)
