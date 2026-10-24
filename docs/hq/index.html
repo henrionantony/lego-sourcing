@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="393d3b8b88"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="a9fed23aba"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -828,7 +828,7 @@ const ANNONCES = __ANNONCES__;  // annonces Vinted en ligne ou masquées, texte 
 const PLANCHES = __PLANCHES__;
 const LBC = __LBC__;
 const ANN_DATE = __ANNDATE__;  // date de l'export Vinted affiché
-const APUB = __APUB__;
+let APUB = __APUB__;
 let EXEMP = __EXEMP__;
 let EXEMP_LE = __EXEMP_LE__;  // date de l'extraction des exemplaires : les ventes d'après sont décomptées ici  // set -> {pp: prix public, c: [[article, coût, date, magasin, reste]]}, le moins cher d'abord  // set en stock -> {prix proposé, estimation, coût, état} (a_publier.py)  // export Leboncoin : {lien: {id Vinted: url Leboncoin}, seules: annonces Leboncoin sans annonce Vinted}  // ids des planches de vignettes
 const SPR = __SPRITES__;   // photo -> [planche, colonne, ligne] dans sprites/s<n>.jpg (16 x 16 vignettes)
@@ -3148,6 +3148,7 @@ $("#po").addEventListener("click", async (e) => {
     HIST = snap.exists ? snap.data() : null;
     // Quantités de la base rafraîchies à chaque passage (sinon : copie figée à la publication)
     if (HIST && HIST.ex) { EXEMP = HIST.ex; EXEMP_LE = new Date(HIST.maj).toISOString(); }
+    if (HIST && HIST.apub) APUB = HIST.apub;
     if (HIST && HIST.ventes) DERNIERE_VENTE = HIST.ventes.reduce((m, v) => v.d > m ? v.d : m, "");
     rendreHist(); rendrePlateformes(); if (vue === "scan") rendreScanVue();
   }, () => {});

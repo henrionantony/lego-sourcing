@@ -575,6 +575,8 @@ def main():
     import a_publier
     a_publier.main()
     h["ex"] = json.loads(a_publier.EXEMPLAIRES.read_text())
+    # Prix d'annonce à jour (un colis reçu fait entrer un set en stock) sans republier l'appli
+    h["apub"] = json.loads(a_publier.SORTIE.read_text())
     # Lecture de la base ratée (0 achat ou stock vide) : on garde le fichier précédent
     # plutôt que de montrer un stock à zéro dans l'inventaire.
     if not h.get("achats") or not h.get("ex"):
