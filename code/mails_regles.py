@@ -304,7 +304,7 @@ def retrait(corps: str, t: str) -> dict:
         d = urllib.parse.unquote(html.unescape(m.group(1)))
         if d.startswith("PICKUPPASS:"):
             r["pass"] = d
-    c = re.search(r"code de retrait(?: suivant)?(?: au commer[çc]ant)?\s*:?\s*(\d{4,8})\b", plat(t), re.I)
+    c = re.search(r"code de retrait(?: suivant)?(?: au commer[çc]ant)?[\s:|]*(\d{4,8})\b", plat(t), re.I)
     if c:
         r["code"] = c.group(1)
     return r
