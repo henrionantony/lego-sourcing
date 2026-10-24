@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="1ed315b302"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="9d02befc9f"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -2178,19 +2178,24 @@ function construireMission(L, garder = []){
   const pool = tout.filter((x) => famille(x) === fam);
   const parK = new Map(pool.map((x) => [x.k, x]));
   const k = [...garder], nv = tout.filter(estNouveau).map((x) => x.k);
-  const max = Math.max(MISSION_N, garder.filter((c) => !c.startsWith("lbcnew-")).length + Math.min(MISSION_N, nouveaux(fam)));
-  const compte = { n: garder.filter((c) => !c.startsWith("lbcnew-")).length };
+  const max = Math.max(MISSION_N, garder.filter((c) => !/^lbc(new|rel)-/.test(c)).length + Math.min(MISSION_N, nouveaux(fam)));
+  const compte = { n: garder.filter((c) => !/^lbc(new|rel)-/.test(c)).length };
   const prendre = (x) => {
     if (!x || k.includes(x.k) || compte.n >= max) return false;
     k.push(x.k); compte.n++;
     // Le même soir, la copie Leboncoin d'un nouvel article (ne compte pas dans les 10)
     if (x.k.startsWith("new-") && parK.has("lbc" + x.k)) k.push("lbc" + x.k);
+    if (x.k.startsWith("relist-") && parK.has("lbcrel-" + x.k.slice(7))) k.push("lbcrel-" + x.k.slice(7));
+    // Mêmes sets sur les deux plateformes (le vendeur 24/10) : une action Vinted sur une annonce absente de Leboncoin
+    // emmène sa copie Leboncoin juste derrière (comptée comme une action)
+    const id = x.a?.id, lb = id && x.pf === "Vinted" && parK.get("lbc-" + id);
+    if (lb && !k.includes(lb.k)) { k.push(lb.k); compte.n++; }
     return true;
   };
   // 1. Nouveaux articles : achats reçus (les plus récents d'abord) ou figurines de part-out
   for (const x of [...pool].sort((x, y) => (y.d || "").localeCompare(x.d || ""))) if (estNouveau(x)) prendre(x);
   // 2. Pas faits les jours d'avant (vérifiés par les mails ou l'export) : en tête de ce qui reste
-  for (const [, m] of passees) for (const c of m.k || []) if (!c.startsWith("lbcnew-")) prendre(parK.get(c));
+  for (const [, m] of passees) for (const c of m.k || []) if (!/^lbc(new|rel)-/.test(c)) prendre(parK.get(c));
   // 3. Bloc de gamme (dans la famille du soir) : la même 2 à 3 soirs de suite, puis celle qui a le plus à republier
   const candidats = (g) => pool.filter((x) => gammeAction(x) === g && ["reposts", "republier", "lbc", "masques"].includes(x.m))
     .sort((x, y) => (x.m === "lbc") - (y.m === "lbc") || (x.age ?? 1e9) - (y.age ?? 1e9) || (y.pr || 0) - (x.pr || 0));
@@ -2318,6 +2323,8 @@ function listeActions(){
     if (recu) L.push({ k: "relist-" + a.id, type: "remettre", pf: "Vinted", a, titre: a.t, prix: APUB[a.n]?.prix || a.p, avant: APUB[a.n]?.prix && APUB[a.n].prix !== +a.p ? a.p : null,
       u: a.u, m: "achats", d: recu, v: (APUB[a.n]?.prix || +a.p || 0) * reste,
       pourquoi: `New boxes received (${reste} in stock, bought ${recu}). Show this hidden ad again${APUB[a.n]?.prix && APUB[a.n].prix !== +a.p ? " at the new price" : ""} and set the quantity.` });
+    // Même soir : la copie Leboncoin (ne compte pas dans les 10), comme pour un nouvel article
+    if (recu && !surLbc(a)) L.push({ k: "lbcrel-" + a.id, type: "lbc", pf: "Leboncoin", a, titre: a.t, prix: APUB[a.n]?.prix || a.p, q: reste, v: 0, m: "lbcneuf", pourquoi: "Same evening: post it on Leboncoin too." });
     else L.push({ k: "relist-" + a.id, type: "remettre", pf: "Vinted", a, titre: a.t, prix: a.p, u: a.u, m: "masques", v: +a.p || 0,
       pourquoi: `Hidden on Vinted, but the database says you still have ${reste}. Check it's on your shelf, then show it again.` });
   }
@@ -2460,7 +2467,7 @@ function rendrePlateformes(){
   if (!$("#p-actions")) return;
   const L = listeActions(), MJ = MJOURS[jourLocal()];
   // Pastille : ce qui reste de la mission du soir (+ doubles ventes urgentes), pas toute la file
-  const n = MJ ? L.filter((x) => x.m === "doubles" || (MJ.k || []).includes(x.k) && !x.k.startsWith("lbcnew-")).length
+  const n = MJ ? L.filter((x) => x.m === "doubles" || (MJ.k || []).includes(x.k) && !/^lbc(new|rel)-/.test(x.k)).length
     : L.filter((x) => pfaits[x.k]?.etat !== "passe" && x.m !== "lbcneuf" && x.m !== "reposts").length;
   $("#pf-n").textContent = n ? " (" + n + ")" : "";
   $("#b-pf").textContent = n || "";
@@ -2487,8 +2494,8 @@ function rendreMissions(L){
   const Lr = L.filter((y) => !supposees.has(y.k) && y.m !== "lbcneuf");
   const groupes = MISSIONS.map((M) => ({ ...M, L: Lr.filter((y) => y.m === M.m) })).filter((M) => M.L.length);
   if (MJ){
-    const total = (MJ.k || []).filter((k) => !k.startsWith("lbcnew-")).length;
-    const reste = enJour.filter((y) => !y.k.startsWith("lbcnew-")).length;
+    const total = (MJ.k || []).filter((k) => !/^lbc(new|rel)-/.test(k)).length;
+    const reste = enJour.filter((y) => !/^lbc(new|rel)-/.test(y.k)).length;
     const jour = { m: "jour", ic: "🌙", t: "Tonight's mission", L: enJour, total, fait: total - reste,
       d: `${MJ.f === "figs" ? "Minifigs evening" : "Sets evening"}${MJ.b ? `, ${esc(MJ.b)} evening ${MJ.s} of ${BLOC_SOIRS}` : ""}. Sets and minifigs are never mixed: a few evenings of each. New items first (Vinted and Leboncoin the same evening), then reposts of one theme, plus up to ${MISSION_LBC} ads already live on Vinted to post on Leboncoin. Not done tonight? It comes back: Leboncoin is checked by its e-mails, Vinted by your next export.` };
     if (enJour.length || total) groupes.splice(groupes[0]?.m === "doubles" ? 1 : 0, 0, jour);
