@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="9913d9e75c"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="1ed315b302"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -2149,9 +2149,19 @@ function famille(x){
 // Nouveau = figurine de part-out, ou set reçu acheté depuis moins de NOUVEAU_JOURS (le vieux stock jamais publié passe après le bloc)
 const NOUVEAU_JOURS = 30, MISSION_V = 3, MISSION_LBC = 10;  // MISSION_V : changer la règle refait la mission du jour
 const estNouveau = (x) => x.m === "figs" || (x.m === "achats" && (x.d || "") >= plusJours(jourLocal(), -NOUVEAU_JOURS));
+// le vendeur 24/10 : tant que son stock n'est pas remis à jour, pas de sets d'occasion ni de City Stuntz dans les missions
+const SANS_OCCASION = true, EXCLUS = /stuntz/i;
+function horsMission(x){
+  if (EXCLUS.test(x.titre || x.a?.t || "")) return true;
+  if (!SANS_OCCASION || famille(x) !== "sets") return false;
+  if (x.k.startsWith("new-") || x.k.startsWith("lbcnew-")) { const e = APUB[x.it?.s]?.etat || ""; return !!e && !/SCELL/i.test(e); }
+  if (!x.a || boiteNeuve(x.a)) return false;
+  // Occasion seulement si l'annonce le dit (texte vide ou sans état : on garde)
+  return /\bcomplet\b|\blot\b|occasion/i.test(x.a.t || "") || /excellent état|très bon état|bon état|déjà monté|occasion|non scell|sans boîte/i.test(x.a.d || "");
+}
 function construireMission(L, garder = []){
   const auj = jourLocal(), passees = missionsPassees(), supposees = clesSupposees();
-  const tout = L.filter((x) => !supposees.has(x.k) && !["doubles", "attente", "baisses"].includes(x.m) && pfaits[x.k]?.etat !== "passe");
+  const tout = L.filter((x) => !supposees.has(x.k) && !["doubles", "attente", "baisses"].includes(x.m) && pfaits[x.k]?.etat !== "passe" && !horsMission(x));
   const derniere = passees[passees.length - 1]?.[1];
   // Famille du soir : celle des nouveaux articles (les boîtes reçues d'abord), sinon on continue la période en cours
   // (BLOC_SOIRS soirs), puis on passe à l'autre
