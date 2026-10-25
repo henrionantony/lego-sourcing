@@ -43,7 +43,10 @@ def jeton() -> str:
         with urllib.request.urlopen(req, timeout=30) as r:
             return json.load(r)["access_token"]
     except urllib.error.HTTPError as e:
-        sys.exit(f"autorisation vendeur refusée ({e.code}) : {e.read()[:200].decode(errors='replace')}")
+        rt = os.environ["EBAY_REFRESH_TOKEN"].strip()
+        sorte = "refresh" if "#r^" in rt else "access (User Token)" if "#p^" in rt else "inconnue"
+        sys.exit(f"autorisation vendeur refusée ({e.code}) : jeton {sorte}, longueur {len(rt)}, "
+                 f"réponse {e.read()[:200].decode(errors='replace')}")
 
 
 TOK = None
