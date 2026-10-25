@@ -18,6 +18,7 @@ import glob
 import gzip
 import html
 import json
+import math
 import re
 import sys
 from datetime import date
@@ -132,6 +133,17 @@ def main():
         # Encore vendu par LEGO : jamais plus cher que chez LEGO (prix + port France), sinon on attend le retrait
         pp = v.get("pp")
         calcule = regles.prix_ebay(v["prix"])
+        # Croisement marché / marge : port compris, pas plus cher que la médiane des annonces eBay
+        # (au moins 3), mais jamais sous le plancher de marge (coût × marge brute minimale).
+        eb = prix_ebay.get(s) or {}
+        plancher = max(float(v.get("plancher") or 0), regles.PRIX_MIN)
+        marche = eb["med"] - p["fr"] if (eb.get("n") or 0) >= 3 and eb.get("med") else None
+        sous_plancher = bool(marche and marche < plancher)
+        if marche:
+            # Bien moins cher que tout eBay : on remonte juste sous l'annonce la moins chère
+            if eb.get("bas") and calcule < eb["bas"] - p["fr"] - 1:
+                calcule = round(eb["bas"] - p["fr"] - 1)
+            calcule = float(max(min(calcule, round(marche)), math.ceil(plancher)))
         if v.get("st") == "en vente" and pp and calcule + p["fr"] > pp:
             if s in en_ligne:
                 chez_lego.append(s)
@@ -145,10 +157,10 @@ def main():
                  "qte": q or 1, "port": {k: p[k] for k in ("fr", "ue", "uk", "kg")}, "images": [img] if img else [],
                  "ean": (b.get("barcode") or {}).get("EAN"), "gamme": b.get("theme"), "pieces": b.get("pieces"),
                  "annee": b.get("year"), "nom": en}
-        eb = prix_ebay.get(s) or {}
         info = {"set": s, "nom": en, "fr": fr, "prix": calcule, "port": p["fr"], "qte": q or 1, "cout": v.get("cout"),
                 "estime": v.get("estime"), "st": v.get("st"), "retrait": v.get("retrait"),
-                "ebay_bas": eb.get("bas"), "ebay_n": eb.get("n")}
+                "ebay_bas": eb.get("bas"), "ebay_med": eb.get("med"), "ebay_n": eb.get("n"),
+                "net": round(calcule * (1 - regles.PRELEVEMENTS) - float(v.get("cout") or 0), 2), "sous_plancher": sous_plancher}
         if s in valides:
             out[s] = fiche
             if s in en_ligne and not fixe and abs(calcule - prix) >= 1:
@@ -184,11 +196,14 @@ def valider(sets: list[str]):
 def liste():
     prop = base.doc("ebay/propositions") or {}
     e = lambda x: f"{x:.0f} €" if x else "?"
+    net = lambda i: f"net {i.get('net', 0):.0f} € ({i.get('net', 0) / i['cout'] * 100:.0f} %)" if i.get("cout") else "cadeau"
     for i in prop.get("nouvelles", []):
-        print(f"NOUVEAU {i['set']} {i['nom']} | {e(i['prix'])} + port {e(i['port'])} | coût {e(i['cout'])} | "
-              f"{i['st']} {i.get('retrait') or ''} | eBay dès {e(i['ebay_bas'])} ({i['ebay_n'] or 0})")
+        print(f"NOUVEAU {i['set']} {i['nom']} | {e(i['prix'])} + port {e(i['port'])} | coût {e(i['cout'])} | {net(i)} | "
+              f"{i['st']} {i.get('retrait') or ''} | eBay dès {e(i['ebay_bas'])}, médiane {e(i.get('ebay_med'))} ({i['ebay_n'] or 0})"
+              + (" | ⚠ marché sous ton plancher" if i.get("sous_plancher") else ""))
     for i in prop.get("maj", []):
-        print(f"PRIX {i['set']} {i['nom']} | {e(i['ancien'])} → {e(i['prix'])} | coût {e(i['cout'])} | eBay dès {e(i['ebay_bas'])}")
+        print(f"PRIX {i['set']} {i['nom']} | {e(i['ancien'])} → {e(i['prix'])} | coût {e(i['cout'])} | {net(i)} | "
+              f"eBay dès {e(i['ebay_bas'])}, médiane {e(i.get('ebay_med'))}" + (" | ⚠ marché sous ton plancher" if i.get("sous_plancher") else ""))
     print(f"réserve : {prop.get('reserve')} sets proposables")
 
 
