@@ -1,12 +1,12 @@
-"""Prix et popularité des sets sur eBay.fr (API officielle Browse, lecture seule).
+"""Prix et offre des sets sur eBay.fr (API officielle Browse, lecture seule).
 
 Pour chaque set suivi (stock + deals récents), lit les annonces neuves à prix fixe
-livrables en France : nombre d'annonces, prix demandés (port compris) et, sur les
-moins chères, la quantité déjà vendue estimée par eBay (signal de popularité).
+livrables en France : prix demandés (port compris) et nombre d'annonces
+concurrentes (l'offre en face de nous).
 Résultat dans la base privée, document « ebay/prix » :
-  {set: {"n": annonces, "bas": prix le plus bas, "med": médiane, "vendus": quantité
-         vendue estimée (annonces lues), "lues": annonces lues en détail, "maj": date}}
-Les prix des ventes passées ne sont pas fournis par l'API publique d'eBay.
+  {set: {"n": annonces, "bas": prix le plus bas, "med": médiane, "maj": date}}
+Les ventes passées ne sont pas fournies par l'API publique d'eBay (et la quantité
+vendue des annonces à un seul exemplaire vaut toujours 0) : pas de signal de demande ici.
 
 Usage : python3 ebay.py [set …]   (sans argument : les sets suivis, les plus anciens d'abord)
 Variables : EBAY_CLIENT_ID, EBAY_CLIENT_SECRET (clés « Production » de developer.ebay.com).
@@ -26,12 +26,11 @@ import base
 
 API = "https://api.ebay.com"
 MARCHE = "EBAY_FR"
-PAR_PASSAGE = 250          # sets relus par passage (quota Browse : 5 000 appels/jour)
-DETAILS = 3                # annonces lues en détail par set (quantité vendue)
+PAR_PASSAGE = 1000         # sets relus par passage (quota Browse : 5 000 appels/jour, 1 appel par set)
 DEBUG = {} if os.environ.get("EBAY_DEBUG") else None   # détail privé dans la base (ebay/debug)
 FRAIS = 3                  # jours avant de relire un set
 EXCLUS = re.compile(r"notice|instructions?|bo[iî]te vide|empty box|sans bo[iî]te|minifig|figurine seule|"
-                    r"compatible|moc\b|custom|lot de pi[eè]ces|autocollant|sticker|led|[ée]clairage|light kit|"
+                    r"compatible|moc\b|custom|lot de pi[eè]ces|autocollant|sticker|led|[ée]clairage|light kit|lumi[eè]re|"
                     r"d[ée]j[aà] mont[ée]|occasion|used|incomplet|pi[eè]ces d[ée]tach[ée]es", re.I)
 
 
@@ -89,17 +88,8 @@ def lire_set(tok: str, s: str) -> dict:
     if ps:
         out["bas"] = ps[0]
         out["med"] = round(statistics.median(ps), 2)
-    vendus = lues = 0
-    for a in sorted(bons, key=prix)[:DETAILS]:
-        try:
-            d = appel(tok, "/buy/browse/v1/item/" + urllib.parse.quote(a["itemId"]))
-        except Exception:
-            continue
-        lues += 1
-        if DEBUG is not None:
-            DEBUG.setdefault(s, []).append([a.get("title", "")[:80], prix(a), d.get("estimatedAvailabilities")])
-        vendus += sum(int(e.get("estimatedSoldQuantity") or 0) for e in d.get("estimatedAvailabilities", []))
-    out["vendus"], out["lues"] = vendus, lues
+    if DEBUG is not None:
+        DEBUG[s] = [[a.get("title", "")[:80], prix(a)] for a in sorted(bons, key=prix)[:5]]
     return out
 
 
