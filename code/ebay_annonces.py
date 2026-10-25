@@ -33,6 +33,7 @@ UE = ["AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "DE", "GR", "HU", "I
       "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE", "CH"]
 JOURNAL = []
 PAR_JOUR = int(os.environ.get("EBAY_PAR_JOUR") or 5)
+MAX_EN_LIGNE = 150   # annonces gratuites par mois (une annonce renouvelée chaque mois compte à nouveau)
 
 
 class Erreur(Exception):
@@ -268,7 +269,8 @@ def main():
     # (rythme choisi, et 150 annonces gratuites par mois sur eBay.fr)
     maj = {s: v for s, v in a_faire.items() if (faites.get(s) or {}).get("listing")
            and (faites[s].get("prix") != v["prix"] or faites[s].get("port") != v["port"])}
-    neuves = [s for s in a_faire if not (faites.get(s) or {}).get("listing")][:PAR_JOUR]
+    en_ligne = sum(1 for v in faites.values() if v.get("listing"))
+    neuves = [s for s in a_faire if not (faites.get(s) or {}).get("listing")][:max(0, min(PAR_JOUR, MAX_EN_LIGNE - en_ligne))]
     a_faire = {s: a_faire[s] for s in list(maj) + neuves}
     if not a_faire:
         print("rien à publier")
