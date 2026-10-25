@@ -28,6 +28,7 @@ API = "https://api.ebay.com"
 MARCHE = "EBAY_FR"
 PAR_PASSAGE = 250          # sets relus par passage (quota Browse : 5 000 appels/jour)
 DETAILS = 3                # annonces lues en détail par set (quantité vendue)
+DEBUG = {} if os.environ.get("EBAY_DEBUG") else None   # détail privé dans la base (ebay/debug)
 FRAIS = 3                  # jours avant de relire un set
 EXCLUS = re.compile(r"notice|instructions?|bo[iî]te vide|empty box|sans bo[iî]te|minifig|figurine seule|"
                     r"compatible|moc\b|custom|lot de pi[eè]ces|autocollant|sticker|led|[ée]clairage|light kit|"
@@ -79,6 +80,10 @@ def lire_set(tok: str, s: str) -> dict:
     motif = re.compile(rf"(?<!\d){re.escape(s)}(?!\d)")
     bons = [a for a in r.get("itemSummaries", [])
             if motif.search(a.get("title", "")) and not EXCLUS.search(a.get("title", "")) and prix(a)]
+    # Écarte les annonces trop bon marché pour être le set complet (pièces, figurines, notices oubliées par le filtre)
+    if bons:
+        m = statistics.median(prix(a) for a in bons)
+        bons = [a for a in bons if prix(a) >= 0.5 * m]
     ps = sorted(prix(a) for a in bons)
     out = {"n": len(bons), "maj": dt.date.today().isoformat()}
     if ps:
@@ -91,6 +96,8 @@ def lire_set(tok: str, s: str) -> dict:
         except Exception:
             continue
         lues += 1
+        if DEBUG is not None:
+            DEBUG.setdefault(s, []).append([a.get("title", "")[:80], prix(a), d.get("estimatedAvailabilities")])
         vendus += sum(int(e.get("estimatedSoldQuantity") or 0) for e in d.get("estimatedAvailabilities", []))
     out["vendus"], out["lues"] = vendus, lues
     return out
@@ -122,6 +129,8 @@ def main():
             err += 1
             if err == 1:
                 print("première erreur :", type(e).__name__, str(e)[:200])
+    if DEBUG:
+        base.doc_ecrire("ebay/debug", DEBUG)
     if ok and not base.doc_ecrire("ebay/prix", deja):
         sys.exit("écriture dans la base refusée")
     # Journal public : seulement des compteurs

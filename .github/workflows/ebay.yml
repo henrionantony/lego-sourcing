@@ -29,6 +29,7 @@ jobs:
       EBAY_CLIENT_ID: ${{ secrets.EBAY_CLIENT_ID }}
       EBAY_CLIENT_SECRET: ${{ secrets.EBAY_CLIENT_SECRET }}
       SETS: ${{ inputs.sets }}
+      EBAY_DEBUG: ${{ inputs.sets }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
