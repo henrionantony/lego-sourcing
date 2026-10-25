@@ -196,8 +196,8 @@ def valider(sets: list[str]):
 def liste():
     prop = base.doc("ebay/propositions") or {}
     e = lambda x: f"{x:.0f} €" if x else "?"
-    net = lambda i: (f"brut +{(i['prix'] / i['cout'] - 1) * 100:.0f} %, net {i.get('net', 0):.0f} € (+{i.get('net', 0) / i['cout'] * 100:.0f} %)"
-                     if i.get("cout") else "cadeau")
+    # Marge comptée en brut (prix de vente / coût), comme sa règle des +40 %
+    net = lambda i: f"marge brute +{(i['prix'] / i['cout'] - 1) * 100:.0f} %" if i.get("cout") else "cadeau"
     for i in prop.get("nouvelles", []):
         print(f"NOUVEAU {i['set']} {i['nom']} | {e(i['prix'])} + port {e(i['port'])} | coût {e(i['cout'])} | {net(i)} | "
               f"{i['st']} {i.get('retrait') or ''} | eBay dès {e(i['ebay_bas'])}, médiane {e(i.get('ebay_med'))} ({i['ebay_n'] or 0})"
