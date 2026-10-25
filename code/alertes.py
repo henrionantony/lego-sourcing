@@ -197,6 +197,20 @@ def decoupe(x, prix: float) -> str | None:
             f"+ reste du set {euros(reste)} → vers {euros(pv)}, gain net {euros(gn)} ({gn / prix:+.0%})")
 
 
+_EBAY = None
+
+
+def prix_ebay() -> dict:
+    """Prix demandés sur eBay.fr par set (document privé « ebay/prix », écrit par ebay.py)."""
+    global _EBAY
+    if _EBAY is None:
+        try:
+            _EBAY = base.doc("ebay/prix") or {}
+        except Exception:
+            _EBAY = {}
+    return _EBAY
+
+
 def details(s: str, prix: float, ref, tresor=None, en_stock: int = 0, part_out=None, note: dict | None = None,
             engage: dict | None = None) -> list[str]:
     """Lignes d'aide à la décision : scénarios de revente, risque, quantité.
@@ -257,6 +271,11 @@ def details(s: str, prix: float, ref, tresor=None, en_stock: int = 0, part_out=N
         lignes.append(f"🏷 Prix d'annonce : {euros(pa['prix'])} (estimation {euros(est)} + {regles.PRIX_DEPART - 1:.0%}"
                       + (f", plafonné sous le prix LEGO" if pa["plafonne"] else "")
                       + f", plancher {euros(pa['plancher'])})")
+    eb = prix_ebay().get(s)
+    if eb and eb.get("n"):
+        ref_pv = est or float(x.prix_vente_estime)
+        lignes.append(f"🛒 eBay.fr : dès {euros(eb['bas'])} port compris, médiane {euros(eb['med'])} ({eb['n']} annonce{'s' if eb['n'] > 1 else ''} neuve{'s' if eb['n'] > 1 else ''})"
+                      + (" · ⚠ déjà moins cher que notre prix prévu" if eb["n"] >= 3 and eb["bas"] < ref_pv else ""))
     ch = x.get("chaleur_dealabs")
     pop = ("gamme populaire sur Dealabs" if ch >= 150 else "gamme moyennement suivie" if ch >= 70
            else "gamme peu suivie sur Dealabs") if ch == ch and ch is not None else "popularité inconnue"
