@@ -90,7 +90,7 @@ def main():
             continue
         q = reglages.get("qte", {}).get(s, q)
         img = (b.get("image") or {}).get("imageURL")
-        out[s] = {"titre": t, "description": description(s, en, fr, b), "prix": regles.prix_ebay(v["prix"]),
+        out[s] = {"titre": t, "description": description(s, en, fr, b), "prix": float(reglages.get("prix", {}).get(s) or regles.prix_ebay(v["prix"])),
                   "qte": q or 1, "port": {k: p[k] for k in ("fr", "ue", "uk", "kg")}, "images": [img] if img else [],
                   "ean": (b.get("barcode") or {}).get("EAN"), "gamme": b.get("theme"), "pieces": b.get("pieces"),
                   "annee": b.get("year"), "nom": en}
