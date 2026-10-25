@@ -1,0 +1,30 @@
+name: eBay annonces
+on:
+  workflow_dispatch:
+    inputs:
+      essai:
+        description: "essai = tout préparer sans publier"
+        default: ""
+concurrency: ebay-annonces
+permissions:
+  contents: read
+jobs:
+  annonces:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      EBAY_CLIENT_ID: ${{ secrets.EBAY_CLIENT_ID }}
+      EBAY_CLIENT_SECRET: ${{ secrets.EBAY_CLIENT_SECRET }}
+      EBAY_REFRESH_TOKEN: ${{ secrets.EBAY_REFRESH_TOKEN }}
+      EBAY_LIEU: ${{ secrets.EBAY_LIEU }}
+      ESSAI: ${{ inputs.essai }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Annonces eBay
+        working-directory: code
+        run: python3 ebay_annonces.py ${ESSAI:+--essai}
