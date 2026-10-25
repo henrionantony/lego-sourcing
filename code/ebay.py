@@ -18,6 +18,7 @@ import os
 import re
 import statistics
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -40,8 +41,15 @@ def jeton() -> str:
     req = urllib.request.Request(API + "/identity/v1/oauth2/token", data=corps, method="POST", headers={
         "Authorization": "Basic " + base64.b64encode(cle).decode(),
         "Content-Type": "application/x-www-form-urlencoded"})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        return json.load(r)["access_token"]
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return json.load(r)["access_token"]
+    except urllib.error.HTTPError as e:
+        # Diagnostic sans rien révéler : type de clé (PRD = production, SBX = bac à sable) et réponse d'eBay
+        cid = os.environ["EBAY_CLIENT_ID"]
+        sorte = "production" if "-PRD-" in cid else "bac à sable" if "-SBX-" in cid else "inconnue"
+        sys.exit(f"jeton eBay refusé ({e.code}) : clé {sorte}, longueurs {len(cid)}/{len(os.environ['EBAY_CLIENT_SECRET'])}, "
+                 f"réponse {e.read()[:200].decode(errors='replace')}")
 
 
 def appel(tok: str, chemin: str) -> dict:
