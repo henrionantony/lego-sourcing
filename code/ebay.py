@@ -48,7 +48,9 @@ def jeton() -> str:
         # Diagnostic sans rien révéler : type de clé (PRD = production, SBX = bac à sable) et réponse d'eBay
         cid = os.environ["EBAY_CLIENT_ID"]
         sorte = "production" if "-PRD-" in cid else "bac à sable" if "-SBX-" in cid else "inconnue"
-        sys.exit(f"jeton eBay refusé ({e.code}) : clé {sorte}, longueurs {len(cid)}/{len(os.environ['EBAY_CLIENT_SECRET'])}, "
+        sec = os.environ["EBAY_CLIENT_SECRET"]
+        secret = "Cert ID" if sec.startswith("PRD-") else "Dev ID ?" if re.fullmatch(r"[0-9a-f-]{36}", sec) else "autre"
+        sys.exit(f"jeton eBay refusé ({e.code}) : clé {sorte}, secret {secret}, longueurs {len(cid)}/{len(os.environ['EBAY_CLIENT_SECRET'])}, "
                  f"réponse {e.read()[:200].decode(errors='replace')}")
 
 
