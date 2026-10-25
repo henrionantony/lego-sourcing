@@ -23,7 +23,8 @@ import base
 
 API = "https://api.ebay.com"
 MARCHE = "EBAY_FR"
-SCOPES = " ".join("https://api.ebay.com/oauth/api_scope/" + s for s in ("sell.inventory", "sell.account"))
+SCOPES = " ".join(["https://api.ebay.com/oauth/api_scope"]  # catégories (Taxonomy)
+                  + ["https://api.ebay.com/oauth/api_scope/" + s for s in ("sell.inventory", "sell.account")])
 LIEU = "legohq"
 ISO3 = {"AUT": "AT", "BEL": "BE", "BGR": "BG", "HRV": "HR", "CYP": "CY", "CZE": "CZ", "DNK": "DK", "EST": "EE",
         "FIN": "FI", "DEU": "DE", "GRC": "GR", "HUN": "HU", "IRL": "IE", "ITA": "IT", "LVA": "LV", "LTU": "LT",
