@@ -82,7 +82,7 @@ def main():
                    "src": r.get("fiabilite") or "",
                    "st": r.get("statut") or "", "rapide": float(r.get("pv_rapide") or 0) or None,
                    "garde": float(r.get("pv_garde") or 0) or None, "retrait": r.get("retrait_croise") or r.get("retrait") or ""}
-        out[s] = {"prix": prix, "estime": round(estime, 2) or None, **conseil,
+        out[s] = {"prix": prix, "ebay": regles.prix_ebay(prix) if prix else None, "estime": round(estime, 2) or None, **conseil,
                   "cout": round(cout, 2), "plancher": pa["plancher"], "pp": float(r.get("prix_public") or 0) or None,
                   "plafonne": pa["plafonne"], "vendus": vendus.get(s, [])[-5:], "etat": c[0][1], **({"douteux": True} if douteux else {})}
     SORTIE.write_text(json.dumps(out, ensure_ascii=False))

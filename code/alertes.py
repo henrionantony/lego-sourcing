@@ -270,7 +270,8 @@ def details(s: str, prix: float, ref, tresor=None, en_stock: int = 0, part_out=N
         pa = regles.prix_annonce(est, prix, pp, x.statut == "en vente")
         lignes.append(f"🏷 Prix d'annonce : {euros(pa['prix'])} (estimation {euros(est)} + {regles.PRIX_DEPART - 1:.0%}"
                       + (f", plafonné sous le prix LEGO" if pa["plafonne"] else "")
-                      + f", plancher {euros(pa['plancher'])})")
+                      + f", plancher {euros(pa['plancher'])})"
+                      + (f" · sur eBay {euros(regles.prix_ebay(pa['prix']))}" if pa["prix"] else ""))
     eb = prix_ebay().get(s)
     if eb and eb.get("n"):
         ref_pv = est or float(x.prix_vente_estime)

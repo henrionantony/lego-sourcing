@@ -120,6 +120,35 @@ def plafond_catalogue(prix_public) -> float | None:
     return float(max(0, int((float(prix_public) - PROTECTION_FIXE - PORT_ACHETEUR) / (1 + PROTECTION_PCT))))
 
 
+# eBay.fr depuis le 1/09/2026, vendeur particulier de l'EEE : aucun frais de vente (commission 0).
+# L'acheteur paie à eBay des frais de protection : 0,10 € + 7 % jusqu'à 20 € + 4 % de 20 à 300 €
+# + 2 % de 300 à 4 000 € (port non compté). Frais vendeur réglables si le compte passe pro,
+# ou si on dépasse 150 annonces par mois (0,35 € l'annonce en plus).
+EBAY_FRAIS_PCT, EBAY_FRAIS_FIXE = 0.0, 0.0
+
+
+def protection_ebay(p: float) -> float:
+    return 0.10 + 0.07 * min(p, 20) + 0.04 * max(0, min(p, 300) - 20) + 0.02 * max(0, min(p, 4000) - 300)
+
+
+def protection_vinted(p: float) -> float:
+    return PROTECTION_FIXE + PROTECTION_PCT * p
+
+
+def prix_ebay(prix_vinted: float) -> float:
+    """Prix d'annonce eBay équivalent à un prix Vinted : jamais moins de net pour toi
+    (frais vendeur eBay ajoutés), et autant que possible tant que l'acheteur eBay ne paie
+    pas plus que l'acheteur Vinted (frais de protection eBay plus bas au-delà de ~14 €)."""
+    import math
+    net_egal = (prix_vinted + EBAY_FRAIS_FIXE) / (1 - EBAY_FRAIS_PCT)
+    cible = prix_vinted + protection_vinted(prix_vinted)       # total payé par l'acheteur Vinted, hors port
+    bas, haut = 0.0, cible
+    for _ in range(40):                                         # prix eBay dont total acheteur = cible
+        m = (bas + haut) / 2
+        bas, haut = (m, haut) if m + protection_ebay(m) <= cible else (bas, m)
+    return float(max(math.ceil(net_egal), math.floor(bas)))
+
+
 def estime_revente(r) -> float:
     """Prix de revente attendu d'un set (ligne du référentiel, dict ou pandas) : revente rapide si
     encore au catalogue, sinon l'estimation ; retiré : la valeur après retrait si elle est plus haute."""
