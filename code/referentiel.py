@@ -318,6 +318,37 @@ def scenarios(prix_public, gamme, retrait, cs: dict, aujourdhui=None) -> dict:
     return out
 
 
+# Prise de valeur après le retrait (règle : toujours lire une vente par rapport à la date de
+# retrait du set). Rapport vente / prix public des ventes faites APRÈS le retrait, selon l'âge de la
+# retraite le jour de la vente. Les ventes faites pendant que le set était au catalogue (sous le prix
+# LEGO) n'entrent pas dans la valeur d'un set retiré. La courbe ne redescend pas : les sets vendus
+# tard sont souvent ceux qui traînaient (biais), pas une baisse de la cote.
+TRANCHES_RETRAIT = (90, 180, 365, 730, 100000)
+PIVOT_JOURS = 730  # le pivot : ~2 ans après le retrait, le stock d'occasion s'épuise
+
+
+def courbe_retrait(v: pd.DataFrame) -> dict:
+    """{"courbe": [(jours max, rapport)], "gamme": {gamme: facteur relatif}} sur les ventes après retrait."""
+    v = v[(v.prix_public > 0) & (v.statut_vente == "retiré")].assign(
+        ratio=lambda d: d["Prix Vente"] / d.prix_public,
+        apres=lambda d: (pd.to_datetime(d["Date Vente"]) - pd.to_datetime(d.retrait, errors="coerce")).dt.days)
+    glob, courbe, mx, debut = v.ratio.median(), [], 0.0, -1
+    for fin in TRANCHES_RETRAIT:
+        g = v[(v.apres > debut) & (v.apres <= fin)]
+        r = g.ratio.median() if len(g) >= MIN_VENTES_SCENARIO else glob
+        mx = max(mx, r)
+        courbe.append((fin, mx))
+        debut = fin
+    par = v.groupby("Gamme").ratio.agg(["size", "median"])
+    par = par[par["size"] >= MIN_VENTES_SCENARIO]
+    return {"courbe": courbe, "gamme": {g: x / glob for g, x in par["median"].items()}}
+
+
+def rapport_retrait(cr: dict, gamme, jours: float) -> float:
+    r = next((x for fin, x in cr["courbe"] if jours <= fin), cr["courbe"][-1][1])
+    return r * cr["gamme"].get(gamme, 1.0)
+
+
 # Erreur médiane de chaque source sur les ventes passées (backtest_estime.py).
 # Le prix attendu est la moyenne des sources disponibles, chacune pondérée par
 # 1 / erreur² : la plus précise pèse le plus, aucune n'est jetée.
@@ -325,7 +356,7 @@ ERREURS = {"BrickLink": 0.15, "gamme": 0.11, "global": 0.19, "BrickEconomy": 0.1
 
 
 def estimer(prix_public, statut: str, gamme, coef: dict, valeur_be=None, ratio_be=None,
-            valeur_bl=None, ratio_bl=None, erreurs: dict = ERREURS):
+            valeur_bl=None, ratio_bl=None, erreurs: dict = ERREURS, k_retrait=None):
     """Prix de vente attendu (avant commissions) et sa fiabilité.
     Sources : ventes conclues BrickLink en Europe, prix public × rapport
     appris par gamme, valeur BrickEconomy (surtout marché anglophone).
@@ -339,6 +370,8 @@ def estimer(prix_public, statut: str, gamme, coef: dict, valeur_be=None, ratio_b
         k = coef["gamme"].get((gamme, statut))
         f = "gamme" if k else "global"
         k = k or coef["global"].get(statut) or coef["global"].get("en vente")
+        if k_retrait:  # set retiré : rapport appris selon l'âge de sa retraite
+            k = k_retrait
         if k:
             sources[f] = prix_public * k
     if valeur_be and not pd.isna(valeur_be):
@@ -429,8 +462,12 @@ def construire(xlsx: str, rafraichir: bool = False) -> pd.DataFrame:
 
     # Rapport ventes réelles / valeur BrickEconomy, quand on en a assez.
     v["valeur_be"] = v.set_num.map(lambda s: (be.cache.get(s) or {}).get("valeur_neuf"))
-    vb = v[v.valeur_be > 0]
+    # La valeur BrickEconomy est celle d'aujourd'hui : on la compare aux ventes des 18 derniers mois,
+    # séparément pour les sets vendus encore au catalogue (sous la cote) et après leur retrait.
+    vb = v[(v.valeur_be > 0) & (pd.to_datetime(v["Date Vente"]) > pd.Timestamp.today() - pd.DateOffset(months=18))]
     ratio_be = (vb["Prix Vente"] / vb.valeur_be).median() if len(vb) >= 20 else 1.0
+    ratios_be = {s: (g["Prix Vente"] / g.valeur_be).median() if len(g) >= 20 else ratio_be
+                 for s, g in vb.groupby("statut_vente")}
 
     # BrickLink : ventes conclues en Europe, mêmes priorités, 5 000 appels/jour.
     import bricklink
@@ -444,12 +481,24 @@ def construire(xlsx: str, rafraichir: bool = False) -> pd.DataFrame:
     vl = v[v.valeur_bl > 0]
     ratio_bl = (vl["Prix Vente"] / vl.valeur_bl).median() if len(vl) >= 20 else 1.0
 
+    cr = courbe_retrait(v)
+    age = (aujourdhui - pd.to_datetime(ref.retrait, errors="coerce")).dt.days
+    ref["jours_retrait"] = age.where(ref.statut == "retiré")
+    k_ret = [rapport_retrait(cr, gamme_par_theme.get(th), a) if st == "retiré" and a == a else None
+             for st, th, a in zip(ref.statut, ref.theme_rb, age)]
     est = [estimer(pp, st, gamme_par_theme.get(th), coef,
-                   (be.cache.get(s) or {}).get("valeur_neuf"), ratio_be, vbl, ratio_bl)
-           for pp, st, th, s, vbl in zip(ref.prix_public, ref.statut, ref.theme_rb, ref.set_num,
-                                         ref.valeur_bl)]
+                   (be.cache.get(s) or {}).get("valeur_neuf"), ratios_be.get(st, ratio_be), vbl, ratio_bl, k_retrait=kr)
+           for pp, st, th, s, vbl, kr in zip(ref.prix_public, ref.statut, ref.theme_rb, ref.set_num,
+                                             ref.valeur_bl, k_ret)]
+    # Prise de valeur attendue au pivot (2 ans après le retrait), pour les sets retirés ou à date de retrait connue
+    ref["pv_pivot"] = [round(pp * rapport_retrait(cr, gamme_par_theme.get(th), PIVOT_JOURS), 2)
+                       if pp == pp and pp and r == r else None
+                       for pp, th, r in zip(ref.prix_public, ref.theme_rb, pd.to_datetime(ref.retrait, errors="coerce"))]
+    ref["pivot_le"] = (pd.to_datetime(ref.retrait, errors="coerce") + pd.Timedelta(days=PIVOT_JOURS)).dt.strftime("%Y-%m-%d")
     ref["chaleur_dealabs"] = ref.theme_rb.map(chaleur_dealabs(ref))
-    froid = ref.chaleur_dealabs < SEUIL_FROID
+    # Seulement pour les sets encore au catalogue : une fois retiré, c'est la rareté qui fait le prix,
+    # plus la chaleur des promos Dealabs (qui ne parlent que des sets encore vendus).
+    froid = (ref.chaleur_dealabs < SEUIL_FROID) & (ref.statut != "retiré")
     ref["prix_vente_estime"] = [e[0] * (DEMANDE_FROIDE if fr else 1) if e[0] else None
                                 for e, fr in zip(est, froid)]
     ref["fiabilite"] = [e[1] for e in est]
@@ -506,7 +555,9 @@ def construire(xlsx: str, rafraichir: bool = False) -> pd.DataFrame:
           f"{ref.fiabilite.isin(['BrickEconomy', 'mixte']).sum()} avec valeur BrickEconomy, "
           f"{ref.valeur_bl.notna().sum()} avec ventes BrickLink Europe (correcteur ×{ratio_bl:.2f}), "
           f"{ref.prix_max.notna().sum()} avec prix max. Coefficients sur {coef['n']} ventes : "
-          + ", ".join(f"{k} ×{x:.2f}" for k, x in coef["global"].items()))
+          + ", ".join(f"{k} ×{x:.2f}" for k, x in coef["global"].items())
+          + ". Après retrait : " + ", ".join(f"≤{f} j ×{x:.2f}" for f, x in cr["courbe"])
+          + ". BrickEconomy : " + ", ".join(f"{k} ×{x:.2f}" for k, x in ratios_be.items()))
     return ref
 
 

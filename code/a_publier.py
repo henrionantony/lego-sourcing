@@ -81,7 +81,9 @@ def main():
         conseil = {"be": (be.get(s + "-1") or {}).get("date") if (be.get(s + "-1") or {}).get("valeur_neuf") else None,
                    "src": r.get("fiabilite") or "",
                    "st": r.get("statut") or "", "rapide": float(r.get("pv_rapide") or 0) or None,
-                   "garde": float(r.get("pv_garde") or 0) or None, "retrait": r.get("retrait_croise") or r.get("retrait") or ""}
+                   "garde": float(r.get("pv_garde") or 0) or None, "retrait": r.get("retrait_croise") or r.get("retrait") or "",
+                   # Valeur attendue au pivot, 2 ans après le retrait (courbe apprise sur tes ventes après retrait)
+                   "pivot": float(r.get("pv_pivot") or 0) or None, "pivot_le": r.get("pivot_le") or ""}
         out[s] = {"prix": prix, "ebay": regles.prix_ebay(prix) if prix else None, "estime": round(estime, 2) or None, **conseil,
                   "cout": round(cout, 2), "plancher": pa["plancher"], "pp": float(r.get("prix_public") or 0) or None,
                   "plafonne": pa["plafonne"], "vendus": vendus.get(s, [])[-5:], "etat": c[0][1], **({"douteux": True} if douteux else {})}
