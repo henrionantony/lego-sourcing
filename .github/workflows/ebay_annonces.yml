@@ -1,7 +1,7 @@
 name: eBay annonces
 on:
   schedule:
-    - cron: "7 17 * * *"   # 5 nouvelles annonces par jour (EBAY_PAR_JOUR)
+    - cron: "17 20 * * *"   # 5 nouvelles annonces par jour (EBAY_PAR_JOUR), vers 21h30 heure de Paris (heure d'hiver ; GitHub part souvent en retard)
   workflow_dispatch:
     inputs:
       essai:
