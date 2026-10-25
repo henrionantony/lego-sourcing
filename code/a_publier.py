@@ -1,7 +1,7 @@
 """Prix proposé pour les sets en stock qui ne sont publiés nulle part.
 
 Prix = le plus haut entre l'estimation de revente (referentiel.csv) et le
-plancher du lot (coût d'achat × MARGE_BRUTE_PLANCHER, part d'associé comprise).
+plancher (coût d'achat × MARGE_BRUTE_PLANCHER, relâché quand le reste de l'achat compense : transaction.py).
 Set encore au catalogue : plafonné pour que prix + frais acheteur Vinted + port
 reste sous le prix LEGO (regles.plafond_catalogue), sans descendre sous le plancher.
 Écrit ../stock/app/a_publier.json (privé, jamais dans le dépôt) :
@@ -14,6 +14,7 @@ from pathlib import Path
 
 import base
 import regles
+import transaction
 
 ICI = Path(__file__).resolve().parent
 LEGO = ICI.parent
@@ -57,6 +58,9 @@ def main():
     hz = {r["id"]: (r.get("horizon") or "", r.get("vise_le") or "")
           for r in base.lire("articles", "select=id,horizon,vise_le&horizon=not.is.null&limit=10000") or []}
     vendus = mes_ventes()
+    # Plancher calculé sur l'achat entier : plus bas quand le reste de l'achat a déjà assez rapporté
+    tx = transaction.planchers()
+    planchers: dict[str, float] = {}
     couts: dict[str, list] = {}
     ex: dict[str, list] = {}
     for l in stock:
@@ -65,6 +69,8 @@ def main():
         # prix_achat = prix de la ligne entière : on le ramène à un exemplaire
         cout = 0.0 if l.get("offert") else float(l["prix_achat"] or 0) / part / max(1, int(l.get("quantite") or 1))
         couts.setdefault(s, []).append((cout, l.get("details_etat") or ""))
+        if l["id"] in tx:
+            planchers[s] = min(planchers.get(s, tx[l["id"]]["plancher"]), tx[l["id"]]["plancher"])
         ex.setdefault(s, []).append([l["id"], round(cout, 2), l.get("date_achat") or "", l.get("lieu") or "", int(l.get("reste") or 1), *hz.get(l["id"], ("", ""))])
     out = {}
     for s, c in couts.items():
@@ -75,7 +81,7 @@ def main():
         # posé sur un seul article. On garde l'estimation et on le signale.
         douteux = bool(estime) and cout > 2 * estime
         # Même calcul que l'alerte Telegram (regles.prix_annonce) : un seul prix partout
-        pa = regles.prix_annonce(estime, cout, float(r.get("prix_public") or 0), r.get("statut") == "en vente")
+        pa = regles.prix_annonce(estime, cout, float(r.get("prix_public") or 0), r.get("statut") == "en vente", planchers.get(s))
         prix = arrondi(estime) if douteux else pa["prix"]
         # Pour choisir « poster maintenant » ou « garder » : revente rapide, revente après retraite, date de retraite
         conseil = {"be": (be.get(s + "-1") or {}).get("date") if (be.get(s + "-1") or {}).get("valeur_neuf") else None,

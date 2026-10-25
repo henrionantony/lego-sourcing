@@ -18,6 +18,7 @@ from pathlib import Path
 import pandas as pd
 
 import base
+import transaction
 from alertes import euros, telegram
 from referentiel import charger
 from regles import MARGE_BRUTE_PLANCHER, PRELEVEMENTS, plafond_catalogue
@@ -44,12 +45,17 @@ def stock_detaille() -> pd.DataFrame:
         return st
     art = pd.DataFrame(base.lire("articles", "select=id,achat_id,prix_achat,quantite,quote_part&limit=10000"))
     ven = pd.DataFrame(base.lire("ventes", "select=article_id,prix_vente,quantite&limit=20000"))
-    cout = (art.prix_achat.fillna(0) * art.quantite.fillna(1)).groupby(art.achat_id).sum()
+    cout = art.prix_achat.fillna(0).groupby(art.achat_id).sum()  # prix_achat = ligne entière
     ven = ven.merge(art[["id", "achat_id"]], left_on="article_id", right_on="id")
     encaisse = (ven.prix_vente.fillna(0) * (1 - PRELEVEMENTS)).groupby(ven.achat_id).sum()
     st["rembourse"] = st.achat_id.map(encaisse).fillna(0) >= st.achat_id.map(cout).fillna(0)
     q = pd.to_numeric(st.id.map(art.set_index("id").quote_part), errors="coerce")
-    st["cout_set"] = st.prix_achat / q.where(q > 0, 1)
+    # prix_achat = prix de la ligne entière : ramené à un exemplaire
+    qte = pd.to_numeric(st.id.map(art.set_index("id").quantite), errors="coerce").fillna(1).clip(lower=1)
+    st["cout_set"] = st.prix_achat / q.where(q > 0, 1) / qte
+    # Plancher calculé sur l'achat entier (relâché quand le reste de l'achat compense)
+    tx = transaction.planchers()
+    st["plancher_tx"] = st.id.map(lambda i: (tx.get(i) or {}).get("plancher"))
     st["set"] = st.id_set.astype(str).str.split("-").str[0].str.removesuffix(".0")
     st["age"] = (pd.Timestamp.today() - pd.to_datetime(st.date_achat)).dt.days
     return st
@@ -98,7 +104,8 @@ def construire(export: Path):
         depart = json.loads((STOCK / "app" / "a_publier.json").read_text())
     except (OSError, ValueError):
         depart = {}
-    par_set = st.groupby("set").agg(cout=("cout_set", "max"), age=("age", "max"), rembourse=("rembourse", "all")) \
+    par_set = st.groupby("set").agg(cout=("cout_set", "max"), age=("age", "max"), rembourse=("rembourse", "all"),
+                                      plancher_tx=("plancher_tx", "min")) \
         if not st.empty else pd.DataFrame()
     for a in ann[ann.statut == "en ligne"].itertuples():
         if a.set not in par_set.index or a.prix != a.prix:
@@ -112,7 +119,9 @@ def construire(export: Path):
             raison = raison or "acheté il y a moins de 3 mois"
         plancher = s.cout / (1 - PRELEVEMENTS)                      # jamais à perte
         if not s.rembourse and s.age < 365:
-            plancher = max(plancher, s.cout * MARGE_BRUTE_PLANCHER)  # plancher tant que le lot n'est pas remboursé
+            # plancher tant que le lot n'est pas remboursé, calculé sur l'achat entier quand on le connaît
+            tx = s.plancher_tx if s.plancher_tx == s.plancher_tx else None
+            plancher = max(plancher, tx if tx is not None else s.cout * MARGE_BRUTE_PLANCHER)
         nouveau = round(a.prix * (1 - BAISSE))
         if not raison and nouveau < plancher:
             raison = "au plancher"

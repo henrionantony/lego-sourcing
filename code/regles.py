@@ -157,14 +157,15 @@ def estime_revente(r) -> float:
     return max(e, f("pv_garde")) if r.get("statut") == "retiré" else e
 
 
-def prix_annonce(estime: float, cout: float, prix_public=None, au_catalogue: bool = False) -> dict:
+def prix_annonce(estime: float, cout: float, prix_public=None, au_catalogue: bool = False, plancher=None) -> dict:
     """LE prix d'annonce d'un set, le même partout (alerte Telegram, appli, liste du lundi).
     Départ = estimation de revente × PRIX_DEPART (marge pour les offres et la baisse de 5 %/30 j),
     jamais sous le plancher (coût × MARGE_BRUTE_PLANCHER) ; encore au catalogue : plafonné
-    pour que prix + frais acheteur + port reste sous le prix LEGO, sans passer sous le plancher."""
+    pour que prix + frais acheteur + port reste sous le prix LEGO, sans passer sous le plancher.
+    plancher : celui calculé sur l'achat entier (transaction.py), sinon coût × MARGE_BRUTE_PLANCHER."""
     import math
     arr = lambda p: float(math.ceil(p / 5) * 5) if p >= 30 else float(math.ceil(p))
-    plancher = cout * MARGE_BRUTE_PLANCHER
+    plancher = cout * MARGE_BRUTE_PLANCHER if plancher is None else plancher
     depart = estime * PRIX_DEPART
     prix = max(depart, plancher, PRIX_MIN, GWP_DEFAUT if cout == 0 and not estime else 0)
     prix = arr(prix) if prix else None
