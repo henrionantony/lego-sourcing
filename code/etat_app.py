@@ -175,8 +175,10 @@ def objectifs() -> dict:
     for v in annee:
         mois[v["date_vente"][:7]] = mois.get(v["date_vente"][:7], 0) + float(v["prix_vente"] or 0)
     net, estime = gain_net(annee)
+    prelev = ca * PRELEVEMENTS
     return {"debut": DEBUT_ANNEE.isoformat(), "ca": round(ca, 2), "cible_ca": CIBLE_CA, "cible_net": CIBLE_NET,
-            "net_frais": round(ca * (1 - PRELEVEMENTS), 2), "net": round(net, 2), "net_estime": round(estime, 2), "ventes": len(annee), "derniere_vente": derniere,
+            "net_frais": round(ca * (1 - PRELEVEMENTS), 2), "net": round(net, 2), "net_estime": round(estime, 2),
+            "prelev": round(prelev, 2), "couts": round(ca - prelev - net, 2), "ventes": len(annee), "derniere_vente": derniere,
             "mois": mois}
 
 
