@@ -165,7 +165,7 @@ def main():
             out[s] = fiche
             if s in en_ligne and not fixe and abs(calcule - prix) >= 1:
                 maj.append({**info, "ancien": prix})
-        elif not reglages.get("pause_nouvelles"):  # pause tant que le stock n'est pas remis à jour
+        else:  # même en pause (stock pas remis à jour), la liste reste proposée : ton OK vaut accord
             propositions.append(info)
     # Les meilleurs d'abord : retirés (ça monte), puis moins chers que le moins cher d'eBay, puis le plus gros prix
     moins_cher = lambda i: not i["ebay_bas"] or i["prix"] + i["port"] <= i["ebay_bas"]
@@ -174,7 +174,7 @@ def main():
     if not base.doc_ecrire("ebay/a_publier", out):
         sys.exit("écriture refusée")
     base.doc_ecrire("ebay/propositions", {"le": date.today().isoformat(), "nouvelles": propositions[:NOUVELLES_PAR_JOUR],
-                                         "reserve": len(propositions), "maj": maj})
+                                         "toutes": propositions, "reserve": len(propositions), "maj": maj})
     print(f"{len(out)} annonces dans la file, {len(propositions)} sets proposables, {len(maj)} changements de prix, "
           f"{len(chez_lego)} à retirer (moins chers chez LEGO), {len(sans)} sans prix ou port")
 
@@ -193,13 +193,16 @@ def valider(sets: list[str]):
     main()
 
 
-def liste():
+def liste(n: int = NOUVELLES_PAR_JOUR):
+    """Les n prochaines nouveautés (5 par jour) et les changements de prix des annonces en ligne."""
     prop = base.doc("ebay/propositions") or {}
     e = lambda x: f"{x:.0f} €" if x else "?"
     # Marge comptée en brut (prix de vente / coût), comme sa règle des +40 %
-    net = lambda i: f"marge brute +{(i['prix'] / i['cout'] - 1) * 100:.0f} %" if i.get("cout") else "cadeau"
-    for i in prop.get("nouvelles", []):
-        print(f"NOUVEAU {i['set']} {i['nom']} | {e(i['prix'])} + port {e(i['port'])} | coût {e(i['cout'])} | {net(i)} | "
+    net = lambda i: (f"marge brute +{(i['prix'] / i['cout'] - 1) * 100:.0f} %"
+                     + (" (sous +40 %, compensé par l'achat)" if i["prix"] < i["cout"] * regles.MARGE_BRUTE_PLANCHER - 0.5 else "")) \
+        if i.get("cout") else "cadeau"
+    for k, i in enumerate((prop.get("toutes") or prop.get("nouvelles", []))[:n]):
+        print(f"J+{k // NOUVELLES_PAR_JOUR} NOUVEAU {i['set']} {i['nom']} | {e(i['prix'])} + port {e(i['port'])} | coût {e(i['cout'])} | {net(i)} | "
               f"{i['st']} {i.get('retrait') or ''} | eBay dès {e(i['ebay_bas'])}, médiane {e(i.get('ebay_med'))} ({i['ebay_n'] or 0})"
               + (" | ⚠ marché sous ton plancher" if i.get("sous_plancher") else ""))
     for i in prop.get("maj", []):
@@ -212,6 +215,6 @@ if __name__ == "__main__":
     if sys.argv[1:2] == ["valider"]:
         valider(sys.argv[2:])
     elif sys.argv[1:2] == ["liste"]:
-        liste()
+        liste(int(sys.argv[2]) if sys.argv[2:] else NOUVELLES_PAR_JOUR)
     else:
         main()
