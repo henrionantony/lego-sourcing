@@ -25,6 +25,10 @@ API = "https://api.ebay.com"
 MARCHE = "EBAY_FR"
 SCOPES = " ".join("https://api.ebay.com/oauth/api_scope/" + s for s in ("sell.inventory", "sell.account"))
 LIEU = "legohq"
+ISO3 = {"AUT": "AT", "BEL": "BE", "BGR": "BG", "HRV": "HR", "CYP": "CY", "CZE": "CZ", "DNK": "DK", "EST": "EE",
+        "FIN": "FI", "DEU": "DE", "GRC": "GR", "HUN": "HU", "IRL": "IE", "ITA": "IT", "LVA": "LV", "LTU": "LT",
+        "LUX": "LU", "MLT": "MT", "NLD": "NL", "POL": "PL", "PRT": "PT", "ROU": "RO", "SVK": "SK", "SVN": "SI",
+        "ESP": "ES", "SWE": "SE", "CHE": "CH", "GBR": "GB", "FRA": "FR"}
 UE = ["AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "DE", "GR", "HU", "IE", "IT", "LV", "LT", "LU",
       "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE", "CH"]
 JOURNAL = []
@@ -57,7 +61,7 @@ def jeton() -> str:
 TOK = None
 
 
-def appel(methode: str, chemin: str, corps=None, ok_404=False):
+def appel(methode: str, chemin: str, corps=None, ok_404=False, _relance=False):
     data = json.dumps(corps).encode() if corps is not None else None
     req = urllib.request.Request(API + chemin, data=data, method=methode, headers={
         "Authorization": "Bearer " + TOK, "Content-Type": "application/json", "Accept": "application/json",
@@ -70,6 +74,10 @@ def appel(methode: str, chemin: str, corps=None, ok_404=False):
         t = e.read().decode(errors="replace")
         if ok_404 and e.code == 404:
             return None
+        if e.code >= 500 and not _relance:
+            import time
+            time.sleep(3)
+            return appel(methode, chemin, corps, ok_404, True)
         raise Erreur(f"{methode} {chemin.split('?')[0]} → {e.code} {t[:600]}")
 
 
@@ -104,11 +112,15 @@ def politiques() -> dict:
            (appel("GET", "/sell/account/v1/fulfillment_policy" + q) or {}).get("fulfillmentPolicies", [])}
     services = services_port()
 
+    pays_ue = list(UE)   # réduit aux destinations qu'eBay.fr accepte une par une (sinon refus 216347)
+
     def port(p: dict) -> str:
         nom = f"LegoHQ port FR {p['fr']:.2f} UE {p['ue']:.2f} RU {p['uk']:.2f}"
-        if nom not in ful:
-            eur = lambda x: {"value": f"{x:.2f}", "currency": "EUR"}
-            ful[nom] = creer("/sell/account/v1/fulfillment_policy", {
+        if nom in ful:
+            return ful[nom]
+        eur = lambda x: {"value": f"{x:.2f}", "currency": "EUR"}
+        for _ in range(3):
+            corps = {
                 "name": nom, "marketplaceId": MARCHE, "categoryTypes": [{"name": "ALL_EXCLUDING_MOTORS_VEHICLES"}],
                 "handlingTime": {"value": 2, "unit": "DAY"},
                 "shippingOptions": [
@@ -116,11 +128,21 @@ def politiques() -> dict:
                         {"shippingServiceCode": services["fr"], "shippingCost": eur(p["fr"]), "sortOrder": 1}]},
                     {"optionType": "INTERNATIONAL", "costType": "FLAT_RATE", "shippingServices": [
                         {"shippingServiceCode": services["int"], "shippingCost": eur(p["ue"]), "sortOrder": 1,
-                         "shipToLocations": {"regionIncluded": [{"regionName": c} for c in UE]}},
+                         "shipToLocations": {"regionIncluded": [{"regionName": c} for c in pays_ue]}},
                         {"shippingServiceCode": services["int"], "shippingCost": eur(p["uk"]), "sortOrder": 2,
                          "shipToLocations": {"regionIncluded": [{"regionName": "GB"}]}}]}],
-                "shipToLocations": {"regionIncluded": [{"regionName": c} for c in UE + ["GB", "FR"]]}}, "fulfillmentPolicyId")
-        return ful[nom]
+                "shipToLocations": {"regionIncluded": [{"regionName": c} for c in pays_ue + ["GB", "FR"]]}}
+            try:
+                ful[nom] = creer("/sell/account/v1/fulfillment_policy", corps, "fulfillmentPolicyId")
+                return ful[nom]
+            except Erreur as e:
+                m = re.search(r'"name":"([A-Z,]{3,})","value":"[^"]*destinations', str(e))
+                if not m:
+                    raise
+                refus = {ISO3.get(x, x) for x in m.group(1).split(",")}
+                pays_ue[:] = [c for c in pays_ue if c not in refus]
+                JOURNAL.append(f"destinations refusées par eBay.fr : {' '.join(sorted(refus))}")
+        raise Erreur("politique de port impossible")
     return {"paiement": pay, "retour": ret, "port": port}
 
 
