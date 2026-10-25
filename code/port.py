@@ -3,7 +3,7 @@
 Poids : Brickset (poids de la boîte) quand il le donne, sinon volume de la boîte × densité
 moyenne des sets (0,112 kg/dm³, erreur médiane ~17 %), sinon nombre de pièces (~37 %).
 Colis = boîte + 3 cm par côté, + carton et calage. Tarifs publics La Poste 2026 (guichet).
-Le port demandé à l'acheteur = tarif de la tranche + emballage, arrondi au 0,50 € au-dessus :
+Le port demandé à l'acheteur = tarif de la tranche + emballage + imprévu, arrondi au 0,50 € au-dessus :
 on ne perd jamais sur le port, même quand le poids est estimé un peu court (marge de 10 %).
 """
 import glob
@@ -19,6 +19,7 @@ FRANCE = [(0.25, 5.49), (0.5, 7.59), (0.75, 9.29), (1, 9.59), (2, 11.19), (5, 17
 EUROPE = [(0.5, 14.99), (1, 19.39), (2, 22.19), (5, 28.59), (10, 46.99), (15, 67.99), (30, 87.99)]  # UE + Suisse
 SUPPLEMENT_UK = 4.0
 EMBALLAGE = 1.0          # carton, papier bulle, scotch
+IMPREVU = 2.0            # marge pour un colis plus lourd ou plus cher que prévu
 MARGE_POIDS = 1.10       # poids estimé (pas mesuré) : on se garde 10 %
 DENSITE = 0.112          # kg par dm³ de boîte
 CARTON_KG = 0.15
@@ -66,7 +67,7 @@ def tarif(grille, kg) -> float | None:
 
 
 def demande(cout) -> float | None:
-    return None if cout is None else math.ceil((cout + EMBALLAGE) * 2) / 2
+    return None if cout is None else math.ceil((cout + EMBALLAGE + IMPREVU) * 2) / 2
 
 
 def port(s: str, pieces=None) -> dict | None:

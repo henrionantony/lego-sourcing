@@ -62,13 +62,10 @@ def main():
     ap = json.loads((APP / "a_publier.json").read_text())
     noms = json.loads((APP / "noms_fr.json").read_text())
     bs = brickset()
-    deja = base.doc("ebay/annonces") or {}
     voulus = {s: None for s in sys.argv[1:]} if len(sys.argv) > 1 else derniers_recus()
     out, sans = {}, []
     for s, q in voulus.items():
         v, b = ap.get(s) or {}, bs.get(s) or {}
-        if s in deja and deja[s].get("listing"):
-            continue
         if not v.get("prix") or not b:
             sans.append(s)
             continue

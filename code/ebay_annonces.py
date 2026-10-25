@@ -32,6 +32,7 @@ ISO3 = {"AUT": "AT", "BEL": "BE", "BGR": "BG", "HRV": "HR", "CYP": "CY", "CZE": 
 UE = ["AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "DE", "GR", "HU", "IE", "IT", "LV", "LT", "LU",
       "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE", "CH"]
 JOURNAL = []
+PAR_JOUR = int(os.environ.get("EBAY_PAR_JOUR") or 5)
 
 
 class Erreur(Exception):
@@ -221,7 +222,7 @@ def categorie(v: dict) -> tuple[str, dict]:
     return cat, out
 
 
-def publier(s: str, v: dict, pol: dict, essai: bool) -> dict:
+def publier(s: str, v: dict, pol: dict, essai: bool, deja: dict | None = None) -> dict:
     v = {**v, "set": s}
     sku = f"LHQ-{s}"
     cat, aspects = categorie(v)
@@ -248,8 +249,11 @@ def publier(s: str, v: dict, pol: dict, essai: bool) -> dict:
         appel("PUT", f"/sell/inventory/v1/offer/{oid}", offre)
     else:
         oid = appel("POST", "/sell/inventory/v1/offer", offre)["offerId"]
-    res = {"sku": sku, "offre": oid, "prix": v["prix"], "qte": v["qte"], "le": dt.datetime.now().isoformat(timespec="minutes")}
-    if not essai:
+    res = {"sku": sku, "offre": oid, "prix": v["prix"], "qte": v["qte"], "port": v["port"],
+           "le": dt.datetime.now().isoformat(timespec="minutes")}
+    if deja and deja.get("listing"):
+        res["listing"] = deja["listing"]          # annonce en ligne : la mise à jour de l'offre suffit
+    elif not essai:
         res["listing"] = appel("POST", f"/sell/inventory/v1/offer/{oid}/publish")["listingId"]
     return res
 
@@ -260,7 +264,12 @@ def main():
     TOK = jeton()
     a_faire = base.doc("ebay/a_publier") or {}
     faites = base.doc("ebay/annonces") or {}
-    a_faire = {s: v for s, v in a_faire.items() if not (faites.get(s) or {}).get("listing")}
+    # Annonces en ligne dont le prix ou le port a changé : mises à jour ; nouvelles : PAR_JOUR au plus
+    # (rythme choisi, et 150 annonces gratuites par mois sur eBay.fr)
+    maj = {s: v for s, v in a_faire.items() if (faites.get(s) or {}).get("listing")
+           and (faites[s].get("prix") != v["prix"] or faites[s].get("port") != v["port"])}
+    neuves = [s for s in a_faire if not (faites.get(s) or {}).get("listing")][:PAR_JOUR]
+    a_faire = {s: a_faire[s] for s in list(maj) + neuves}
     if not a_faire:
         print("rien à publier")
         return
@@ -274,14 +283,14 @@ def main():
     ok = err = 0
     for s, v in a_faire.items():
         try:
-            faites[s] = publier(s, v, pol, essai)
+            faites[s] = publier(s, v, pol, essai, faites.get(s))
             ok += 1
         except Erreur as e:
             err += 1
             JOURNAL.append(f"{s} : {e}")
     base.doc_ecrire("ebay/annonces", faites)
     base.doc_ecrire("journal/ebay", {"le": dt.datetime.now().isoformat(timespec="minutes"), "lignes": JOURNAL})
-    print(f"{ok} annonces {'préparées (essai)' if essai else 'publiées'}, {err} erreurs")
+    print(f"{ok} annonces traitées ({len(maj)} mises à jour, {len(neuves)} nouvelles{', essai' if essai else ''}), {err} erreurs")
     if err and not ok:
         sys.exit(1)
 

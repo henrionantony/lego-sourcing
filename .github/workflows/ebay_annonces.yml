@@ -1,5 +1,7 @@
 name: eBay annonces
 on:
+  schedule:
+    - cron: "7 17 * * *"   # 5 nouvelles annonces par jour (EBAY_PAR_JOUR)
   workflow_dispatch:
     inputs:
       essai:
