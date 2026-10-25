@@ -44,7 +44,11 @@ def jeton() -> str:
             return json.load(r)["access_token"]
     except urllib.error.HTTPError as e:
         rt = os.environ["EBAY_REFRESH_TOKEN"].strip()
-        sorte = "refresh" if "#r^" in rt else "access (User Token)" if "#p^" in rt else "inconnue"
+        if len(rt) > 1000:
+            # Jeton d'accès (User Token, valable 2 h) collé à la place du jeton de renouvellement : on s'en sert tel quel
+            print("jeton d'accès utilisé directement (valable 2 h)")
+            return rt
+        sorte = "inconnue"
         sys.exit(f"autorisation vendeur refusée ({e.code}) : jeton {sorte}, longueur {len(rt)}, "
                  f"réponse {e.read()[:200].decode(errors='replace')}")
 
