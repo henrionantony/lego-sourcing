@@ -166,7 +166,7 @@ def prix_annonce(estime: float, cout: float, prix_public=None, au_catalogue: boo
     arr = lambda p: float(math.ceil(p / 5) * 5) if p >= 30 else float(math.ceil(p))
     plancher = cout * MARGE_BRUTE_PLANCHER
     depart = estime * PRIX_DEPART
-    prix = max(depart, plancher, GWP_DEFAUT if cout == 0 and not estime else 0)
+    prix = max(depart, plancher, PRIX_MIN, GWP_DEFAUT if cout == 0 and not estime else 0)
     prix = arr(prix) if prix else None
     cap = plafond_catalogue(prix_public) if au_catalogue else None
     plafonne = bool(prix and cap and prix > cap)
@@ -179,6 +179,7 @@ def prix_annonce(estime: float, cout: float, prix_public=None, au_catalogue: boo
 BUDGET = 1000.0
 # Valeurs tirées des ventes réelles : neutres ici, les vraies sont dans le fichier privé.
 GWP_DEFAUT = 25.0                 # revente d'un cadeau Lego.com non chiffré
+PRIX_MIN = 5.0                    # prix d'annonce minimal (polybags…), vraie valeur dans le fichier privé
 MARGE_BRUTE_PLANCHER = 1.30       # prix plancher d'annonce tant que le lot n'est pas remboursé
 PRIX_DEPART = 1.15                # prix de départ d'une nouvelle annonce = estimation × ça, puis −5 % / 30 j jusqu'au plancher
 TELEGRAM_CHAT_ID = None           # destinataire des alertes (privé)
