@@ -63,7 +63,9 @@ def main():
     noms = json.loads((APP / "noms_fr.json").read_text())
     bs = brickset()
     voulus = {s: None for s in sys.argv[1:]} if len(sys.argv) > 1 else derniers_recus()
-    out, sans = {}, []
+    out, sans, chez_lego = {}, [], []
+    # Corrections à la main : quantité réelle (vente pas encore enregistrée), sets à ne pas mettre sur eBay
+    reglages = base.doc("ebay/reglages") or {}
     for s, q in voulus.items():
         v, b = ap.get(s) or {}, bs.get(s) or {}
         if not v.get("prix") or not b:
@@ -79,14 +81,24 @@ def main():
         if not p or not p["fr"] or not p["ue"] or p["hors_norme"]:
             sans.append(s)
             continue
+        # Encore vendu par LEGO : jamais plus cher que chez LEGO (prix + port France), sinon on attend le retrait
+        pp = v.get("pp")
+        if v.get("st") == "en vente" and pp and regles.prix_ebay(v["prix"]) + p["fr"] > pp:
+            chez_lego.append(s)
+            continue
+        if s in reglages.get("exclus", []):
+            continue
+        q = reglages.get("qte", {}).get(s, q)
         img = (b.get("image") or {}).get("imageURL")
         out[s] = {"titre": t, "description": description(s, en, fr, b), "prix": regles.prix_ebay(v["prix"]),
                   "qte": q or 1, "port": {k: p[k] for k in ("fr", "ue", "uk", "kg")}, "images": [img] if img else [],
                   "ean": (b.get("barcode") or {}).get("EAN"), "gamme": b.get("theme"), "pieces": b.get("pieces"),
                   "annee": b.get("year"), "nom": en}
+    base.doc_ecrire("ebay/a_retirer", sorted(chez_lego + reglages.get("exclus", [])))
     if not base.doc_ecrire("ebay/a_publier", out):
         sys.exit("écriture refusée")
-    print(f"{len(out)} annonces prêtes, {len(sans)} sets sans prix ou port : {' '.join(sans)}")
+    print(f"{len(out)} annonces prêtes, {len(chez_lego)} encore moins chers chez LEGO ({' '.join(chez_lego)}), "
+          f"{len(sans)} sets sans prix ou port : {' '.join(sans)}")
 
 
 if __name__ == "__main__":

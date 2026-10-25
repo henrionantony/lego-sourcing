@@ -265,15 +265,39 @@ def main():
     TOK = jeton()
     a_faire = base.doc("ebay/a_publier") or {}
     faites = base.doc("ebay/annonces") or {}
+    # Annonces retirées à la main sur eBay : notées « retire », jamais republiées ni mises à jour
+    for s, v in faites.items():
+        if v.get("listing") and not v.get("retire"):
+            try:
+                o = appel("GET", f"/sell/inventory/v1/offer/{v['offre']}", ok_404=True) or {}
+            except Erreur:
+                continue
+            etat = (o.get("listing") or {}).get("listingStatus") or ""
+            if not o or o.get("status") != "PUBLISHED" or etat in ("ENDED", "INACTIVE"):
+                v.update(retire=True, retire_le=dt.date.today().isoformat(), par="vendeur")
+    # Sets à retirer (encore moins chers chez LEGO, ou exclus à la main) : annonce retirée, offre gardée
+    retirees = 0
+    for s in base.doc("ebay/a_retirer") or []:
+        v = faites.get(s)
+        if v and v.get("listing") and not v.get("retire") and not essai:
+            try:
+                appel("POST", f"/sell/inventory/v1/offer/{v['offre']}/withdraw")
+                v.update(retire=True, retire_le=dt.date.today().isoformat(), par="regle")
+                retirees += 1
+            except Erreur as e:
+                JOURNAL.append(f"retrait {s} : {e}")
+    a_faire = {s: v for s, v in a_faire.items() if not (faites.get(s) or {}).get("retire")}
     # Annonces en ligne dont le prix ou le port a changé : mises à jour ; nouvelles : PAR_JOUR au plus
     # (rythme choisi, et 150 annonces gratuites par mois sur eBay.fr)
     maj = {s: v for s, v in a_faire.items() if (faites.get(s) or {}).get("listing")
-           and (faites[s].get("prix") != v["prix"] or faites[s].get("port") != v["port"])}
+           and (faites[s].get("prix") != v["prix"] or faites[s].get("port") != v["port"]
+                or faites[s].get("qte") != v["qte"])}
     en_ligne = sum(1 for v in faites.values() if v.get("listing"))
     neuves = [s for s in a_faire if not (faites.get(s) or {}).get("listing")][:max(0, min(PAR_JOUR, MAX_EN_LIGNE - en_ligne))]
     a_faire = {s: a_faire[s] for s in list(maj) + neuves}
     if not a_faire:
-        print("rien à publier")
+        base.doc_ecrire("ebay/annonces", faites)
+        print(f"rien à publier, {retirees} annonces retirées")
         return
     try:
         pol = politiques()
@@ -292,7 +316,7 @@ def main():
             JOURNAL.append(f"{s} : {e}")
     base.doc_ecrire("ebay/annonces", faites)
     base.doc_ecrire("journal/ebay", {"le": dt.datetime.now().isoformat(timespec="minutes"), "lignes": JOURNAL})
-    print(f"{ok} annonces traitées ({len(maj)} mises à jour, {len(neuves)} nouvelles{', essai' if essai else ''}), {err} erreurs")
+    print(f"{retirees} retirées, {ok} annonces traitées ({len(maj)} mises à jour, {len(neuves)} nouvelles{', essai' if essai else ''}), {err} erreurs")
     if err and not ok:
         sys.exit(1)
 
