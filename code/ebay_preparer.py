@@ -78,11 +78,11 @@ def en_ligne_vinted() -> dict[str, int]:
     return q
 
 
-def description(s, en, fr, b) -> str:
+def description(s, en, fr, b, note="") -> str:
     nom = f"{fr} ({en})" if fr and fr.lower() != en.lower() else en
     pieces, annee, gamme = b.get("pieces"), b.get("year"), b.get("theme")
     lignes = [f"<h2>LEGO {html.escape(gamme or '')} {s} – {html.escape(nom)}</h2>",
-              "<p><b>Neuf, boîte scellée</b> (jamais ouverte).</p><ul>",
+              "<p><b>Neuf, boîte scellée</b> (jamais ouverte).</p>" + (f"<p>⚠️ {html.escape(note)}</p>" if note else "") + "<ul>",
               f"<li>Numéro du set : {s}</li>"]
     if gamme: lignes.append(f"<li>Gamme : {html.escape(gamme)}</li>")
     if pieces and str(pieces) != "0": lignes.append(f"<li>Pièces : {pieces}</li>")
@@ -141,7 +141,7 @@ def main():
         # Prix validé (à la main) sinon : en ligne = le prix actuel, nouveau = le prix calculé
         fixe = reglages.get("prix", {}).get(s)
         prix = float(fixe or (annonces[s]["prix"] if s in en_ligne else calcule))
-        fiche = {"titre": t, "description": description(s, en, fr, b), "prix": prix,
+        fiche = {"titre": t, "description": description(s, en, fr, b, reglages.get("notes", {}).get(s, "")), "prix": prix,
                  "qte": q or 1, "port": {k: p[k] for k in ("fr", "ue", "uk", "kg")}, "images": [img] if img else [],
                  "ean": (b.get("barcode") or {}).get("EAN"), "gamme": b.get("theme"), "pieces": b.get("pieces"),
                  "annee": b.get("year"), "nom": en}
