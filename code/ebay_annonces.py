@@ -42,15 +42,17 @@ class Erreur(Exception):
 
 def jeton() -> str:
     cle = f"{os.environ['EBAY_CLIENT_ID']}:{os.environ['EBAY_CLIENT_SECRET']}".encode()
-    corps = urllib.parse.urlencode({"grant_type": "refresh_token", "refresh_token": os.environ["EBAY_REFRESH_TOKEN"].strip(),
-                                    "scope": SCOPES}).encode()
+    # Jeton de renouvellement obtenu avec ebay_jeton.py (rangé chiffré), sinon le secret GitHub
+    import ebay_jeton
+    rt = ebay_jeton.jeton_range() or os.environ.get("EBAY_REFRESH_TOKEN", "").strip()
+    print(f"::add-mask::{rt}")
+    corps = urllib.parse.urlencode({"grant_type": "refresh_token", "refresh_token": rt, "scope": SCOPES}).encode()
     req = urllib.request.Request(API + "/identity/v1/oauth2/token", data=corps, method="POST", headers={
         "Authorization": "Basic " + base64.b64encode(cle).decode(), "Content-Type": "application/x-www-form-urlencoded"})
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
             return json.load(r)["access_token"]
     except urllib.error.HTTPError as e:
-        rt = os.environ["EBAY_REFRESH_TOKEN"].strip()
         if len(rt) > 1000:
             # Jeton d'accès (User Token, valable 2 h) collé à la place du jeton de renouvellement : on s'en sert tel quel
             print("jeton d'accès utilisé directement (valable 2 h)")

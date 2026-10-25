@@ -1,0 +1,29 @@
+name: eBay jeton
+# Une fois (puis tous les ~18 mois) : lien d'accord eBay, puis échange du code contre le jeton
+# de renouvellement, rangé chiffré dans la base privée. Rien n'apparaît en clair dans le journal.
+on:
+  workflow_dispatch:
+    inputs:
+      code:
+        description: "vide = préparer le lien d'accord ; sinon l'adresse de la page eBay après accord (contient code=…)"
+        default: ""
+permissions:
+  contents: read
+jobs:
+  jeton:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      EBAY_CLIENT_ID: ${{ secrets.EBAY_CLIENT_ID }}
+      EBAY_CLIENT_SECRET: ${{ secrets.EBAY_CLIENT_SECRET }}
+      EBAY_CODE: ${{ inputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Jeton eBay
+        working-directory: code
+        run: if [ -z "$EBAY_CODE" ]; then python3 ebay_jeton.py lien; else python3 ebay_jeton.py; fi
