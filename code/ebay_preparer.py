@@ -32,10 +32,16 @@ def brickset() -> dict:
 
 
 def derniers_recus() -> dict[str, int]:
-    """Quantité par set des articles neufs scellés reçus et pas encore mis en vente."""
+    """Quantité par set des articles neufs scellés reçus et pas encore mis en vente.
+    Sans les sets gardés pour le part-out (stratégie LOT/DETAILS, ou figurine / build déjà vendu à part) :
+    la photo officielle montre le set entier, ce serait trompeur."""
     q = {}
-    for a in base.lire("articles", "select=id_set,quantite,co_investisseur&categorie=eq.SET&livre=eq.true"
+    entames = {v["article_id"] for v in base.lire("ventes", "select=article_id&produit=in.(FIGURINE,SET%20PART)"
+                                                   "&article_id=not.is.null&limit=20000")}
+    for a in base.lire("articles", "select=id,id_set,quantite,co_investisseur,strategie&categorie=eq.SET&livre=eq.true"
                                    "&statut=eq." + urllib.parse.quote("à traiter") + "&details_etat=eq.SCELLE&limit=1000"):
+        if "LOT" in str(a.get("strategie") or "") or a["id"] in entames:
+            continue
         if a.get("id_set") and not a.get("co_investisseur"):
             s = str(a["id_set"])
             q[s] = q.get(s, 0) + int(a.get("quantite") or 1)
