@@ -1,0 +1,39 @@
+name: eBay
+
+# Prix demandés et popularité des sets suivis sur eBay.fr (API officielle, lecture seule).
+# Résultat dans la base privée (document ebay/prix) ; le journal n'affiche que des compteurs.
+on:
+  schedule:
+    - cron: "40 4 * * *"
+  workflow_dispatch:
+    inputs:
+      sets:
+        description: "Numéros de sets séparés par des espaces (vide = sets suivis)"
+        required: false
+        default: ""
+
+concurrency:
+  group: ebay
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  ebay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      EBAY_CLIENT_ID: ${{ secrets.EBAY_CLIENT_ID }}
+      EBAY_CLIENT_SECRET: ${{ secrets.EBAY_CLIENT_SECRET }}
+      SETS: ${{ inputs.sets }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: eBay
+        working-directory: code
+        run: python3 ebay.py $SETS
