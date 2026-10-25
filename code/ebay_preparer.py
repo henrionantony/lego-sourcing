@@ -165,7 +165,7 @@ def main():
             out[s] = fiche
             if s in en_ligne and not fixe and abs(calcule - prix) >= 1:
                 maj.append({**info, "ancien": prix})
-        else:
+        elif not reglages.get("pause_nouvelles"):  # pause tant que le stock n'est pas remis à jour
             propositions.append(info)
     # Les meilleurs d'abord : retirés (ça monte), puis moins chers que le moins cher d'eBay, puis le plus gros prix
     moins_cher = lambda i: not i["ebay_bas"] or i["prix"] + i["port"] <= i["ebay_bas"]
