@@ -13,6 +13,7 @@ import base64
 import datetime as dt
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.parse
@@ -72,6 +73,17 @@ def appel(methode: str, chemin: str, corps=None, ok_404=False):
         raise Erreur(f"{methode} {chemin.split('?')[0]} → {e.code} {t[:600]}")
 
 
+def creer(chemin: str, corps: dict, champ: str) -> str:
+    """Crée une politique ; si eBay en a déjà une identique (« Conditions en double »), reprend celle-là."""
+    try:
+        return appel("POST", chemin, corps)[champ]
+    except Erreur as e:
+        m = re.search(r'"duplicatePolicyId","value":"(\d+)"', str(e))
+        if m:
+            return m.group(1)
+        raise
+
+
 def politiques() -> dict:
     """Paiement et retour (créés une fois), plus la fonction qui donne la politique de port d'une grille."""
     try:
@@ -81,13 +93,13 @@ def politiques() -> dict:
             JOURNAL.append(f"opt_in : {e}")
     q = f"?marketplace_id={MARCHE}"
     pay = (appel("GET", "/sell/account/v1/payment_policy" + q) or {}).get("paymentPolicies", [])
-    pay = next((p["paymentPolicyId"] for p in pay if p["name"] == "LegoHQ paiement"), None) or appel(
-        "POST", "/sell/account/v1/payment_policy", {"name": "LegoHQ paiement", "marketplaceId": MARCHE,
-        "categoryTypes": [{"name": "ALL_EXCLUDING_MOTORS_VEHICLES"}], "immediatePay": True})["paymentPolicyId"]
+    pay = next((p["paymentPolicyId"] for p in pay if p["name"] == "LegoHQ paiement"), None) or creer(
+        "/sell/account/v1/payment_policy", {"name": "LegoHQ paiement", "marketplaceId": MARCHE,
+        "categoryTypes": [{"name": "ALL_EXCLUDING_MOTORS_VEHICLES"}], "immediatePay": True}, "paymentPolicyId")
     ret = (appel("GET", "/sell/account/v1/return_policy" + q) or {}).get("returnPolicies", [])
-    ret = next((p["returnPolicyId"] for p in ret if p["name"] == "LegoHQ sans retour"), None) or appel(
-        "POST", "/sell/account/v1/return_policy", {"name": "LegoHQ sans retour", "marketplaceId": MARCHE,
-        "categoryTypes": [{"name": "ALL_EXCLUDING_MOTORS_VEHICLES"}], "returnsAccepted": False})["returnPolicyId"]
+    ret = next((p["returnPolicyId"] for p in ret if p["name"] == "LegoHQ sans retour"), None) or creer(
+        "/sell/account/v1/return_policy", {"name": "LegoHQ sans retour", "marketplaceId": MARCHE,
+        "categoryTypes": [{"name": "ALL_EXCLUDING_MOTORS_VEHICLES"}], "returnsAccepted": False}, "returnPolicyId")
     ful = {p["name"]: p["fulfillmentPolicyId"] for p in
            (appel("GET", "/sell/account/v1/fulfillment_policy" + q) or {}).get("fulfillmentPolicies", [])}
     services = services_port()
@@ -96,7 +108,7 @@ def politiques() -> dict:
         nom = f"LegoHQ port FR {p['fr']:.2f} UE {p['ue']:.2f} RU {p['uk']:.2f}"
         if nom not in ful:
             eur = lambda x: {"value": f"{x:.2f}", "currency": "EUR"}
-            ful[nom] = appel("POST", "/sell/account/v1/fulfillment_policy", {
+            ful[nom] = creer("/sell/account/v1/fulfillment_policy", {
                 "name": nom, "marketplaceId": MARCHE, "categoryTypes": [{"name": "ALL_EXCLUDING_MOTORS_VEHICLES"}],
                 "handlingTime": {"value": 2, "unit": "DAY"},
                 "shippingOptions": [
@@ -107,7 +119,7 @@ def politiques() -> dict:
                          "shipToLocations": {"regionIncluded": [{"regionName": c} for c in UE]}},
                         {"shippingServiceCode": services["int"], "shippingCost": eur(p["uk"]), "sortOrder": 2,
                          "shipToLocations": {"regionIncluded": [{"regionName": "GB"}]}}]}],
-                "shipToLocations": {"regionIncluded": [{"regionName": c} for c in UE + ["GB", "FR"]]}})["fulfillmentPolicyId"]
+                "shipToLocations": {"regionIncluded": [{"regionName": c} for c in UE + ["GB", "FR"]]}}, "fulfillmentPolicyId")
         return ful[nom]
     return {"paiement": pay, "retour": ret, "port": port}
 
