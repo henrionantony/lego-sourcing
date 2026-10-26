@@ -376,8 +376,10 @@ def main():
            and (faites[s].get("prix") != v["prix"] or faites[s].get("port") != v["port"]
                 or faites[s].get("qte") != v["qte"] or faites[s].get("img", 1) != len(v["images"]))}
     en_ligne = sum(1 for v in faites.values() if v.get("listing"))
+    # Rythme réglable sans code : « par_jour » dans ebay/reglages (sinon EBAY_PAR_JOUR, 5 par défaut)
+    par_jour = int((base.doc("ebay/reglages") or {}).get("par_jour") or PAR_JOUR)
     # Dans l'ordre choisi (figurines d'abord) : la base ne garde pas l'ordre des clés
-    neuves = [s for s in sorted(a_faire, key=lambda s: a_faire[s].get("ordre", 1000)) if not (faites.get(s) or {}).get("listing")][:max(0, min(PAR_JOUR, MAX_EN_LIGNE - en_ligne))]
+    neuves = [s for s in sorted(a_faire, key=lambda s: a_faire[s].get("ordre", 1000)) if not (faites.get(s) or {}).get("listing")][:max(0, min(par_jour, MAX_EN_LIGNE - en_ligne))]
     a_faire = {s: a_faire[s] for s in list(maj) + neuves}
     if not a_faire:
         base.doc_ecrire("ebay/annonces", faites)
