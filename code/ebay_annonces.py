@@ -13,6 +13,7 @@ import base64
 import datetime as dt
 import json
 import os
+import html
 import re
 import sys
 import urllib.error
@@ -232,6 +233,62 @@ def remise_groupee() -> str | None:
     return None
 
 
+def manuelles(faites: dict) -> dict:
+    """Annonces en ligne sur le compte eBay qui ne viennent pas de l'outil (mises à la main) :
+    {numéro de set: [annonces]}. Leurs sets ne reçoivent pas de nouvelle annonce (pas de doublon).
+    Liste gardée dans ebay/manuelles (titre, prix, quantité : jamais de données d'acheteur)."""
+    nos = {str(v.get("listing")) for v in faites.values() if v.get("listing")}
+    out, page = [], 1
+    try:
+        while page <= 20:
+            x = trading("GetMyeBaySelling", "<ActiveList><Include>true</Include><Pagination>"
+                        f"<EntriesPerPage>200</EntriesPerPage><PageNumber>{page}</PageNumber></Pagination></ActiveList>"
+                        "<DetailLevel>ReturnAll</DetailLevel>")
+            if "<Ack>Failure</Ack>" in x:
+                JOURNAL.append("annonces du compte illisibles : " + " | ".join(re.findall(r"<LongMessage>(.*?)</LongMessage>", x))[:300])
+                return {}
+            act = x.split("<ActiveList>", 1)[-1]
+            for b in re.findall(r"<Item>(.*?)</Item>", act, re.S):
+                i = re.search(r"<ItemID>(\d+)</ItemID>", b)
+                if not i or i.group(1) in nos:
+                    continue
+                t = html.unescape((re.search(r"<Title>(.*?)</Title>", b, re.S) or [None, ""])[1])
+                pr = re.search(r"<CurrentPrice[^>]*>([\d.]+)</CurrentPrice>", b)
+                q = re.search(r"<QuantityAvailable>(\d+)</QuantityAvailable>", b)
+                out.append({"id": i.group(1), "titre": t, "prix": float(pr.group(1)) if pr else None,
+                            "qte": int(q.group(1)) if q else None, "sets": re.findall(r"\b(\d{4,7})\b", t)})
+            pages = re.search(r"<TotalNumberOfPages>(\d+)</TotalNumberOfPages>", act)
+            if not pages or page >= int(pages.group(1)):
+                break
+            page += 1
+    except Exception as e:
+        JOURNAL.append(f"annonces du compte : {e}")
+        return {}
+    base.doc_ecrire("ebay/manuelles", {"le": dt.datetime.now().isoformat(timespec="minutes"), "annonces": out})
+    par: dict[str, list] = {}
+    for a in out:
+        for n in a["sets"]:
+            par.setdefault(n, []).append(a)
+    return par
+
+
+def terminer_manuelles(faites: dict):
+    """Termine sur eBay toutes les annonces faites à la main (pas par l'outil), à ta demande :
+    on repart de zéro avec les prix calculés. Titres gardés dans ebay/manuelles_terminees."""
+    manuelles(faites)
+    liste = (base.doc("ebay/manuelles") or {}).get("annonces", [])
+    fini, ko = [], []
+    for a in liste:
+        try:
+            x = trading("EndItem", f"<ItemID>{a['id']}</ItemID><EndingReason>NotAvailable</EndingReason>")
+            (ko if "<Ack>Failure</Ack>" in x else fini).append(a if "<Ack>Failure</Ack>" not in x else
+                {**a, "erreur": " | ".join(re.findall(r"<LongMessage>(.*?)</LongMessage>", x))[:200]})
+        except Exception as e:
+            ko.append({**a, "erreur": str(e)[:200]})
+    base.doc_ecrire("ebay/manuelles_terminees", {"le": dt.datetime.now().isoformat(timespec="minutes"), "terminees": fini, "erreurs": ko})
+    print(f"{len(fini)} annonces faites à la main terminées, {len(ko)} erreurs")
+
+
 _IMG = {}
 
 
@@ -346,6 +403,12 @@ def main():
     global TOK
     essai = "--essai" in sys.argv
     TOK = jeton()
+    if "--terminer-manuelles" in sys.argv:
+        terminer_manuelles(base.doc("ebay/annonces") or {})
+        return
+    if "--lister-manuelles" in sys.argv:
+        print(f"{sum(1 for _ in (manuelles(base.doc('ebay/annonces') or {})))} sets en vente à la main")
+        return
     a_faire = base.doc("ebay/a_publier") or {}
     faites = base.doc("ebay/annonces") or {}
     # Annonces retirées à la main sur eBay : notées « retire », jamais republiées ni mises à jour
@@ -376,6 +439,11 @@ def main():
            and (faites[s].get("prix") != v["prix"] or faites[s].get("port") != v["port"]
                 or faites[s].get("qte") != v["qte"] or faites[s].get("img", 1) != len(v["images"]))}
     en_ligne = sum(1 for v in faites.values() if v.get("listing"))
+    # Sets déjà en vente sur le compte par une annonce faite à la main : pas de seconde annonce
+    deja = manuelles(faites)
+    for s in [s for s in a_faire if s.split("-")[0] in deja and not (faites.get(s) or {}).get("listing")]:
+        JOURNAL.append(f"{s} : déjà en vente à la main sur eBay, pas de nouvelle annonce")
+        del a_faire[s]
     # Rythme réglable sans code : « par_jour » dans ebay/reglages (sinon EBAY_PAR_JOUR, 5 par défaut)
     par_jour = int((base.doc("ebay/reglages") or {}).get("par_jour") or PAR_JOUR)
     # Dans l'ordre choisi (figurines d'abord) : la base ne garde pas l'ordre des clés

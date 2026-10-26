@@ -7,6 +7,9 @@ on:
       essai:
         description: "essai = tout préparer sans publier"
         default: ""
+      mode:
+        description: "vide = normal ; --lister-manuelles ou --terminer-manuelles"
+        default: ""
 concurrency: ebay-annonces
 permissions:
   contents: read
@@ -22,6 +25,7 @@ jobs:
       EBAY_REFRESH_TOKEN: ${{ secrets.EBAY_REFRESH_TOKEN }}
       EBAY_LIEU: ${{ secrets.EBAY_LIEU }}
       ESSAI: ${{ inputs.essai }}
+      MODE: ${{ inputs.mode }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -29,4 +33,4 @@ jobs:
           python-version: "3.12"
       - name: Annonces eBay
         working-directory: code
-        run: python3 ebay_annonces.py ${ESSAI:+--essai}
+        run: python3 ebay_annonces.py ${ESSAI:+--essai} $MODE
