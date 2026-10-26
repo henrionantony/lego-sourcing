@@ -200,6 +200,11 @@ def main():
             if eb.get("bas") and calcule < eb["bas"] - p["fr"] - 1:
                 calcule = round(eb["bas"] - p["fr"] - 1)
             calcule = float(max(min(calcule, round(marche)), math.ceil(plancher)))
+        # Mode vente (26/10 : récupérer du cash en gardant la marge) :
+        # le moins cher d'eBay, port compris, dès que le plancher le permet
+        # sans baisser de plus de 15 % d'un coup : les offres acceptées seules font le reste
+        if reglages.get("vente_rapide") and eb.get("bas"):
+            calcule = float(max(min(calcule, round(eb["bas"] - p["fr"] - 1)), round(calcule * 0.85), math.ceil(plancher)))
         if v.get("st") == "en vente" and pp and calcule + p["fr"] > pp:
             if s in en_ligne:
                 chez_lego.append(s)
@@ -209,10 +214,13 @@ def main():
         # Prix validé (à la main) sinon : en ligne = le prix actuel, nouveau = le prix calculé
         fixe = reglages.get("prix", {}).get(s)
         prix = float(fixe or (annonces[s]["prix"] if s in en_ligne else calcule))
+        if reglages.get("vente_rapide"):
+            prix = min(prix, calcule)   # en mode vente, on ne fait que baisser, jamais sous le plancher
         fiche = {"titre": t, "description": description(s, en, fr, b, reglages.get("notes", {}).get(s, "")), "prix": prix,
                  "qte": q or 1, "port": {k: p[k] for k in ("fr", "ue", "uk", "kg", "add", "groupe")}, "images": photos_set(b),
                  "ean": (b.get("barcode") or {}).get("EAN"), "gamme": b.get("theme"), "pieces": b.get("pieces"),
-                 "annee": b.get("year"), "nom": en}
+                 "annee": b.get("year"), "nom": en,
+                 "plancher": math.ceil(plancher) if reglages.get("vente_rapide") else None}
         info = {"set": s, "nom": en, "fr": fr, "prix": calcule, "port": p["fr"], "qte": q or 1, "cout": v.get("cout"),
                 "estime": v.get("estime"), "st": v.get("st"), "retrait": v.get("retrait"),
                 "ebay_bas": eb.get("bas"), "ebay_med": eb.get("med"), "ebay_n": eb.get("n"),

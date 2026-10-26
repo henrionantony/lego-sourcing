@@ -390,6 +390,16 @@ def publier(s: str, v: dict, pol: dict, essai: bool, deja: dict | None = None) -
              "pricingSummary": {"price": {"value": f"{v['prix']:.2f}", "currency": "EUR"}},
              "listingPolicies": {"fulfillmentPolicyId": pol["port"](v["port"]), "paymentPolicyId": pol["paiement"],
                                  "returnPolicyId": pol["retour"]}}
+    # « Faire une offre » : accepte seul à ~7 % sous le prix, refuse seul sous 80 % du prix
+    # ou sous le plancher de marge ; entre les deux, l'offre attend ta réponse
+    if v.get("plancher") and v["plancher"] + 1 < v["prix"]:
+        refus = float(max(v["plancher"], round(v["prix"] * 0.80)))
+        accepte = max(refus + 1, round(v["prix"] * 0.93))
+        if accepte < v["prix"]:
+            offre["listingPolicies"]["bestOfferTerms"] = {
+                "bestOfferEnabled": True,
+                "autoAcceptPrice": {"value": f"{accepte:.2f}", "currency": "EUR"},
+                "autoDeclinePrice": {"value": f"{refus:.2f}", "currency": "EUR"}}
     try:
         ex = appel("GET", f"/sell/inventory/v1/offer?sku={sku}&marketplace_id={MARCHE}", ok_404=True) or {}
     except Erreur:
@@ -400,7 +410,7 @@ def publier(s: str, v: dict, pol: dict, essai: bool, deja: dict | None = None) -
         appel("PUT", f"/sell/inventory/v1/offer/{oid}", offre)
     else:
         oid = appel("POST", "/sell/inventory/v1/offer", offre)["offerId"]
-    res = {"sku": sku, "offre": oid, "prix": v["prix"], "qte": v["qte"], "port": v["port"], "img": len(v["images"]), "desc": empreinte(v),
+    res = {"sku": sku, "offre": oid, "prix": v["prix"], "qte": v["qte"], "port": v["port"], "img": len(v["images"]), "desc": empreinte(v), "plancher": v.get("plancher"),
            "le": dt.datetime.now().isoformat(timespec="minutes")}
     if deja and deja.get("listing"):
         res["listing"] = deja["listing"]          # annonce en ligne : la mise à jour de l'offre suffit
@@ -448,7 +458,7 @@ def main():
     maj = {s: v for s, v in a_faire.items() if (faites.get(s) or {}).get("listing")
            and (faites[s].get("prix") != v["prix"] or faites[s].get("port") != v["port"]
                 or faites[s].get("qte") != v["qte"] or faites[s].get("img", 1) != len(v["images"])
-                or faites[s].get("desc", "?") != empreinte(v))}
+                or faites[s].get("desc", "?") != empreinte(v) or faites[s].get("plancher") != v.get("plancher"))}
     en_ligne = sum(1 for v in faites.values() if v.get("listing"))
     # Sets déjà en vente sur le compte par une annonce faite à la main : pas de seconde annonce
     deja = manuelles(faites)
