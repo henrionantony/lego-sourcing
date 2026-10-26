@@ -96,6 +96,60 @@ def description(s, en, fr, b, note="") -> str:
 
 
 NOUVELLES_PAR_JOUR = 5
+CACHE_IMG = ICI.parent / "data" / "cache" / "brickset_images.json"
+PORT_FIG = {"fr": 4.0, "ue": None, "uk": None, "kg": 0.1, "lettre": True, "add": 1.0}   # lettre suivie 100 g, +1 € par figurine en plus
+PORT_SET_EN_PLUS = 4.0   # même annonce, chaque set en plus : +4 €
+_imgs = None
+
+
+def photos_set(b: dict) -> list:
+    """Photo officielle du set puis toutes les photos officielles en plus (Brickset), 24 au plus.
+    Jamais les photos des annonces Vinted : sur eBay, on doit avoir l'air d'un autre vendeur."""
+    global _imgs
+    if _imgs is None:
+        try:
+            _imgs = json.loads(CACHE_IMG.read_text())
+        except (OSError, ValueError):
+            _imgs = {}
+    sid = str(b.get("setID") or "")
+    if sid and sid not in _imgs and int(b.get("additionalImageCount") or 0):
+        import os
+        import urllib.request
+        try:
+            u = "https://brickset.com/api/v3.asmx/getAdditionalImages?" + urllib.parse.urlencode(
+                {"apiKey": os.environ["BRICKSET_API_KEY"], "setID": sid})
+            r = json.load(urllib.request.urlopen(u, timeout=30))
+            if r.get("status") == "success":
+                _imgs[sid] = [i["imageURL"] for i in r.get("additionalImages", []) if i.get("imageURL")]
+                CACHE_IMG.write_text(json.dumps(_imgs))
+        except Exception:
+            pass
+    img = (b.get("image") or {}).get("imageURL")
+    return ([img] if img else []) + _imgs.get(sid, [])[:23]
+
+
+def fiche_figurine(f: dict, noms: dict) -> dict:
+    """Annonce d'une figurine du part-out : photos officielles BrickLink (jamais les siennes)."""
+    code, nom, s = f["code"], f["nom"], str(f["set"])
+    sfr = (noms.get(s) or {}).get("nom") or ""
+    gamme = f.get("gamme") or ""
+    for t in (f"LEGO {gamme} Minifigure {nom} {code} - {s} - Neuve", f"LEGO Minifigure {nom} {code} - {s} - Neuve",
+              f"LEGO Minifig {nom} {code} - Neuve"):
+        if len(t.replace("  ", " ")) <= 80:
+            break
+    t = t.replace("  ", " ")[:80]
+    d = (f"<h2>Minifigure LEGO {html.escape(gamme)} – {html.escape(nom)} ({code})</h2>"
+         f"<p><b>Neuve</b>, issue du set {s}{' ' + html.escape(sfr) if sfr else ''} acheté neuf et ouvert pour l'occasion : jamais jouée, "
+         "jamais exposée.</p><ul>"
+         f"<li>Référence BrickLink : {code}</li><li>Set d'origine : {s}</li>"
+         "<li>Figurine complète telle qu'elle sort du set, avec ses accessoires d'origine.</li></ul>"
+         "<p>Photo officielle de la figurine.</p>"
+         "<p>✉️ Envoi en lettre suivie, figurine protégée. Plusieurs figurines : <b>+1 € seulement par figurine en plus</b>, "
+         "tout part dans le même envoi.</p>"
+         "<p>Vendeur particulier passionné, plus de 500 avis positifs sur d'autres plateformes.</p>")
+    return {"titre": t, "description": d, "prix": float(f["prix"]), "qte": int(f.get("qte") or 1), "port": dict(PORT_FIG),
+            "images": [f"https://img.bricklink.com/ItemImage/MN/0/{code}.png", f"https://img.bricklink.com/ItemImage/ML/{code}.png"],
+            "gamme": gamme, "nom": nom, "code": code, "figurine": True, "set_source": s}
 
 
 def main():
@@ -149,12 +203,12 @@ def main():
                 chez_lego.append(s)
             continue
         q = reglages.get("qte", {}).get(s, q)
-        img = (b.get("image") or {}).get("imageURL")
+        p = {**p, "add": PORT_SET_EN_PLUS}
         # Prix validé (à la main) sinon : en ligne = le prix actuel, nouveau = le prix calculé
         fixe = reglages.get("prix", {}).get(s)
         prix = float(fixe or (annonces[s]["prix"] if s in en_ligne else calcule))
         fiche = {"titre": t, "description": description(s, en, fr, b, reglages.get("notes", {}).get(s, "")), "prix": prix,
-                 "qte": q or 1, "port": {k: p[k] for k in ("fr", "ue", "uk", "kg")}, "images": [img] if img else [],
+                 "qte": q or 1, "port": {k: p[k] for k in ("fr", "ue", "uk", "kg", "add")}, "images": photos_set(b),
                  "ean": (b.get("barcode") or {}).get("EAN"), "gamme": b.get("theme"), "pieces": b.get("pieces"),
                  "annee": b.get("year"), "nom": en}
         info = {"set": s, "nom": en, "fr": fr, "prix": calcule, "port": p["fr"], "qte": q or 1, "cout": v.get("cout"),
@@ -170,6 +224,13 @@ def main():
     # Les meilleurs d'abord : retirés (ça monte), puis moins chers que le moins cher d'eBay, puis le plus gros prix
     moins_cher = lambda i: not i["ebay_bas"] or i["prix"] + i["port"] <= i["ebay_bas"]
     propositions.sort(key=lambda i: (i["st"] != "retiré", not moins_cher(i), -i["prix"]))
+    # Figurines validées (liste ordonnée « figurines » des réglages) : avant les sets, dans l'ordre choisi
+    figs = {}
+    for i, f in enumerate(reglages.get("figurines", [])):
+        k = f"fig-{f['code']}"
+        if k not in retirees and not f.get("vendue"):
+            figs[k] = {**fiche_figurine(f, noms), "ordre": i}
+    out = {**figs, **out}
     base.doc_ecrire("ebay/a_retirer", sorted(chez_lego + reglages.get("exclus", [])))
     if not base.doc_ecrire("ebay/a_publier", out):
         sys.exit("écriture refusée")

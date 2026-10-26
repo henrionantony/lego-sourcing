@@ -116,27 +116,35 @@ def politiques() -> dict:
     ful = {p["name"]: p["fulfillmentPolicyId"] for p in
            (appel("GET", "/sell/account/v1/fulfillment_policy" + q) or {}).get("fulfillmentPolicies", [])}
     services = services_port()
+    remise = remise_groupee()
 
     pays_ue = list(UE)   # réduit aux destinations qu'eBay.fr accepte une par une (sinon refus 216347)
 
     def port(p: dict) -> str:
-        nom = f"LegoHQ port FR {p['fr']:.2f} UE {p['ue']:.2f} RU {p['uk']:.2f}"
+        # Figurine : lettre suivie, France seulement. « add » = port de chaque exemplaire en plus (même annonce)
+        lettre, add = bool(p.get("lettre")), p.get("add")
+        nom = (f"LegoHQ lettre FR {p['fr']:.2f}" if lettre else f"LegoHQ port FR {p['fr']:.2f} UE {p['ue']:.2f} RU {p['uk']:.2f}") \
+            + (f" +{add:.2f}" if add else "") + (" groupé" if remise else "")
         if nom in ful:
             return ful[nom]
         eur = lambda x: {"value": f"{x:.2f}", "currency": "EUR"}
+        plus = lambda x: {"additionalShippingCost": eur(add or x)}
         for _ in range(3):
+            fr = {"shippingServiceCode": services["lettre"] if lettre else services["fr"], "shippingCost": eur(p["fr"]),
+                  "sortOrder": 1, **plus(p["fr"])}
+            options = [{"optionType": "DOMESTIC", "costType": "FLAT_RATE", "shippingServices": [fr]}]
+            if remise:
+                options[0]["shippingDiscountProfileId"] = remise
+            if not lettre:
+                options.append({"optionType": "INTERNATIONAL", "costType": "FLAT_RATE", "shippingServices": [
+                    {"shippingServiceCode": services["int"], "shippingCost": eur(p["ue"]), "sortOrder": 1, **plus(p["ue"]),
+                     "shipToLocations": {"regionIncluded": [{"regionName": c} for c in pays_ue]}},
+                    {"shippingServiceCode": services["int"], "shippingCost": eur(p["uk"]), "sortOrder": 2, **plus(p["uk"]),
+                     "shipToLocations": {"regionIncluded": [{"regionName": "GB"}]}}]})
             corps = {
                 "name": nom, "marketplaceId": MARCHE, "categoryTypes": [{"name": "ALL_EXCLUDING_MOTORS_VEHICLES"}],
-                "handlingTime": {"value": 2, "unit": "DAY"},
-                "shippingOptions": [
-                    {"optionType": "DOMESTIC", "costType": "FLAT_RATE", "shippingServices": [
-                        {"shippingServiceCode": services["fr"], "shippingCost": eur(p["fr"]), "sortOrder": 1}]},
-                    {"optionType": "INTERNATIONAL", "costType": "FLAT_RATE", "shippingServices": [
-                        {"shippingServiceCode": services["int"], "shippingCost": eur(p["ue"]), "sortOrder": 1,
-                         "shipToLocations": {"regionIncluded": [{"regionName": c} for c in pays_ue]}},
-                        {"shippingServiceCode": services["int"], "shippingCost": eur(p["uk"]), "sortOrder": 2,
-                         "shipToLocations": {"regionIncluded": [{"regionName": "GB"}]}}]}],
-                "shipToLocations": {"regionIncluded": [{"regionName": c} for c in pays_ue + ["GB", "FR"]]}}
+                "handlingTime": {"value": 2, "unit": "DAY"}, "shippingOptions": options,
+                "shipToLocations": {"regionIncluded": [{"regionName": c} for c in (["FR"] if lettre else pays_ue + ["GB", "FR"])]}}
             try:
                 ful[nom] = creer("/sell/account/v1/fulfillment_policy", corps, "fulfillmentPolicyId")
                 return ful[nom]
@@ -172,11 +180,75 @@ def services_port() -> dict:
         JOURNAL.append(f"services de port : {e}")
     choisir = lambda inter: next((c for c, d, i in liste if i == inter and "colissimo" in (c + d).lower()), None)
     fr, it = choisir(False), choisir(True)
-    JOURNAL.append(f"services : {fr} / {it} parmi {len(liste)} ; colissimo : "
-                   + ", ".join(f"{c}{'*' if i else ''}" for c, d, i in liste if "coli" in (c + d).lower()))
+    # Figurines : lettre suivie (« lettre » et « suivi » dans le nom), sinon Colissimo
+    lettres = [(c, d) for c, d, i in liste if not i and "lettre" in (c + d).lower()]
+    lettre = next((c for c, d in lettres if "suivi" in (c + d).lower()), None) or (lettres[0][0] if lettres else fr)
+    JOURNAL.append(f"services : {fr} / {it} / lettre {lettre} parmi {len(liste)} ; colissimo et lettres : "
+                   + ", ".join(f"{c}{'*' if i else ''}" for c, d, i in liste if "coli" in (c + d).lower() or "lettre" in (c + d).lower()))
     if not fr or not it:
         raise Erreur("services Colissimo introuvables")
-    return {"fr": fr, "int": it}
+    return {"fr": fr, "int": it, "lettre": lettre}
+
+
+REMISE = 3.0   # envoi groupé : chaque article en plus coûte son port moins 3 € (figurine 4 € → +1 €)
+
+
+def trading(appel_nom: str, corps: str) -> str:
+    req = urllib.request.Request(API + "/ws/api.dll", data=(
+        f'<?xml version="1.0" encoding="utf-8"?><{appel_nom}Request xmlns="urn:ebay:apis:eBLBaseComponents">'
+        f'{corps}</{appel_nom}Request>').encode(), method="POST", headers={
+        "X-EBAY-API-SITEID": "71", "X-EBAY-API-COMPATIBILITY-LEVEL": "1225", "X-EBAY-API-CALL-NAME": appel_nom,
+        "X-EBAY-API-IAF-TOKEN": TOK, "Content-Type": "text/xml"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return r.read().decode(errors="replace")
+
+
+def remise_groupee() -> str | None:
+    """Règle d'envoi groupé du compte (API Trading) : « déduire REMISE € du port de chaque article en plus ».
+    Créée une fois ; sans elle, chaque article garde son port plein."""
+    nom = f"LegoHQ groupe -{REMISE:.0f}"
+    try:
+        x = trading("GetShippingDiscountProfiles", "")
+        for b in re.findall(r"<DiscountProfile>(.*?)</DiscountProfile>", x, re.S):
+            if f"<DiscountProfileName>{nom}</DiscountProfileName>" in b:
+                return re.search(r"<DiscountProfileID>(.*?)</DiscountProfileID>", b).group(1)
+        x = trading("SetShippingDiscountProfiles",
+                    "<CurrencyID>EUR</CurrencyID><ModifyActionCode>Add</ModifyActionCode><FlatShippingDiscount>"
+                    "<DiscountName>EachAdditionalAmountOff</DiscountName><DiscountProfile>"
+                    f"<DiscountProfileName>{nom}</DiscountProfileName>"
+                    f'<EachAdditionalAmountOff currencyID="EUR">{REMISE:.2f}</EachAdditionalAmountOff>'
+                    "</DiscountProfile></FlatShippingDiscount>")
+        if "<Ack>Failure</Ack>" in x:
+            JOURNAL.append("remise groupée refusée : " + " | ".join(re.findall(r"<LongMessage>(.*?)</LongMessage>", x))[:400])
+            return None
+        x = trading("GetShippingDiscountProfiles", "")
+        for b in re.findall(r"<DiscountProfile>(.*?)</DiscountProfile>", x, re.S):
+            if f"<DiscountProfileName>{nom}</DiscountProfileName>" in b:
+                JOURNAL.append("remise groupée créée")
+                return re.search(r"<DiscountProfileID>(.*?)</DiscountProfileID>", b).group(1)
+        JOURNAL.append("remise groupée introuvable après création")
+    except Exception as e:
+        JOURNAL.append(f"remise groupée : {e}")
+    return None
+
+
+_IMG = {}
+
+
+def images_ok(urls: list) -> list:
+    """Garde les photos qu'eBay pourra télécharger (réponse 200 et vraie image), 24 au plus."""
+    out = []
+    for u in urls:
+        if u not in _IMG:
+            try:
+                req = urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0"})
+                with urllib.request.urlopen(req, timeout=20) as r:
+                    _IMG[u] = r.status == 200 and r.headers.get("Content-Type", "").startswith("image") and len(r.read()) > 2000
+            except Exception:
+                _IMG[u] = False
+        if _IMG[u] and u not in out:
+            out.append(u)
+    return out[:24]
 
 
 def lieu():
@@ -196,17 +268,22 @@ def categorie(v: dict) -> tuple[str, dict]:
     global _ARBRE
     if _ARBRE is None:
         _ARBRE = appel("GET", f"/commerce/taxonomy/v1/get_default_category_tree_id?marketplace_id={MARCHE}")["categoryTreeId"]
+    fig = bool(v.get("figurine"))
     sug = appel("GET", f"/commerce/taxonomy/v1/category_tree/{_ARBRE}/get_category_suggestions?q="
-                + urllib.parse.quote(f"LEGO {v['nom']} set complet"))
+                + urllib.parse.quote(f"LEGO minifigure {v['nom']}" if fig else f"LEGO {v['nom']} set complet"))
     cats = [c["category"]["categoryId"] for c in sug.get("categorySuggestions", [])]
     noms = [c["category"]["categoryName"] for c in sug.get("categorySuggestions", [])]
-    # Préférer « ensembles complets » LEGO
-    i = next((k for k, n in enumerate(noms) if "complet" in n.lower() or "complete" in n.lower()), 0)
+    # Préférer « ensembles complets » LEGO, ou la catégorie des minifigs
+    mots = ("minifig", "figurine") if fig else ("complet", "complete")
+    i = next((k for k, n in enumerate(noms) if any(m in n.lower() for m in mots)), 0)
     cat = cats[i]
     asp = appel("GET", f"/commerce/taxonomy/v1/category_tree/{_ARBRE}/get_item_aspects_for_category?category_id={cat}")
     connu = {"marque": "LEGO", "numéro": v["set"], "mpn": v["set"], "référence": v["set"], "gamme": v.get("gamme"),
              "thème": v.get("gamme"), "nombre de pièces": v.get("pieces"), "année": v.get("annee"), "ean": v.get("ean"),
              "type": "Ensemble complet", "caractéristiques": "Boîte scellée", "nom": v["nom"]}
+    if fig:
+        connu.update({"numéro": v["code"], "mpn": v["code"], "référence": v["code"], "type": "Minifigurine",
+                      "caractéristiques": None, "personnage": v["nom"], "nombre de pièces": None})
     out = {}
     for a in asp.get("aspects", []):
         n = a["localizedAspectName"]
@@ -230,8 +307,11 @@ def publier(s: str, v: dict, pol: dict, essai: bool, deja: dict | None = None) -
     v = {**v, "set": s}
     sku = f"LHQ-{s}"
     cat, aspects = categorie(v)
-    produit = {"title": v["titre"], "description": v["description"], "aspects": aspects, "imageUrls": v["images"],
-               "brand": "LEGO", "mpn": s}
+    images = images_ok(v["images"])
+    if not images:
+        raise Erreur("aucune photo téléchargeable")
+    produit = {"title": v["titre"], "description": v["description"], "aspects": aspects, "imageUrls": images,
+               "brand": "LEGO", "mpn": v.get("code") or s}
     if v.get("ean"):
         produit["ean"] = [v["ean"]]
     appel("PUT", f"/sell/inventory/v1/inventory_item/{sku}", {
@@ -253,7 +333,7 @@ def publier(s: str, v: dict, pol: dict, essai: bool, deja: dict | None = None) -
         appel("PUT", f"/sell/inventory/v1/offer/{oid}", offre)
     else:
         oid = appel("POST", "/sell/inventory/v1/offer", offre)["offerId"]
-    res = {"sku": sku, "offre": oid, "prix": v["prix"], "qte": v["qte"], "port": v["port"],
+    res = {"sku": sku, "offre": oid, "prix": v["prix"], "qte": v["qte"], "port": v["port"], "img": len(v["images"]),
            "le": dt.datetime.now().isoformat(timespec="minutes")}
     if deja and deja.get("listing"):
         res["listing"] = deja["listing"]          # annonce en ligne : la mise à jour de l'offre suffit
@@ -294,9 +374,10 @@ def main():
     # (rythme choisi, et 150 annonces gratuites par mois sur eBay.fr)
     maj = {s: v for s, v in a_faire.items() if (faites.get(s) or {}).get("listing")
            and (faites[s].get("prix") != v["prix"] or faites[s].get("port") != v["port"]
-                or faites[s].get("qte") != v["qte"])}
+                or faites[s].get("qte") != v["qte"] or faites[s].get("img", 1) != len(v["images"]))}
     en_ligne = sum(1 for v in faites.values() if v.get("listing"))
-    neuves = [s for s in a_faire if not (faites.get(s) or {}).get("listing")][:max(0, min(PAR_JOUR, MAX_EN_LIGNE - en_ligne))]
+    # Dans l'ordre choisi (figurines d'abord) : la base ne garde pas l'ordre des clés
+    neuves = [s for s in sorted(a_faire, key=lambda s: a_faire[s].get("ordre", 1000)) if not (faites.get(s) or {}).get("listing")][:max(0, min(PAR_JOUR, MAX_EN_LIGNE - en_ligne))]
     a_faire = {s: a_faire[s] for s in list(maj) + neuves}
     if not a_faire:
         base.doc_ecrire("ebay/annonces", faites)
