@@ -113,11 +113,34 @@ def risque(fiabilite: str, chaleur) -> str:
 PROTECTION_FIXE, PROTECTION_PCT, PORT_ACHETEUR = 0.70, 0.05, 4.0
 
 
-def plafond_catalogue(prix_public) -> float | None:
-    """Prix d'annonce maximum (à l'euro inférieur) d'un set encore au catalogue."""
+# Port payé par l'acheteur Vinted selon le poids du colis (point relais, ordre de grandeur) :
+# un gros carton coûte bien plus que 4 €, ce qui baisse le prix d'annonce maximum.
+PORT_ACHETEUR_KG = [(1, 4.0), (2, 5.5), (5, 7.5), (10, 10.0)]
+# Encore en vente chez LEGO : l'acheteur doit payer au moins 10 % de moins que chez LEGO
+# (port compris), sinon il achète neuf là-bas (promos, points Insiders).
+REMISE_CATALOGUE = 0.90
+
+
+def port_acheteur(set_num=None) -> float:
+    """Port que l'acheteur ajoute au prix (PORT_ACHETEUR si le poids est inconnu)."""
+    if not set_num:
+        return PORT_ACHETEUR
+    try:
+        import port
+        c = port.colis(str(set_num).split("-")[0])
+    except Exception:
+        c = None
+    if not c:
+        return PORT_ACHETEUR
+    return next((p for m, p in PORT_ACHETEUR_KG if c["kg"] <= m), PORT_ACHETEUR_KG[-1][1] + 3)
+
+
+def plafond_catalogue(prix_public, set_num=None) -> float | None:
+    """Prix d'annonce maximum (à l'euro inférieur) d'un set encore au catalogue :
+    prix + frais acheteur + port (selon le poids du set) reste 10 % sous le prix LEGO."""
     if not prix_public or prix_public != prix_public:
         return None
-    return float(max(0, int((float(prix_public) - PROTECTION_FIXE - PORT_ACHETEUR) / (1 + PROTECTION_PCT))))
+    return float(max(0, int((float(prix_public) * REMISE_CATALOGUE - PROTECTION_FIXE - port_acheteur(set_num)) / (1 + PROTECTION_PCT))))
 
 
 # eBay.fr depuis le 1/09/2026, vendeur particulier de l'EEE : aucun frais de vente (commission 0).
@@ -157,7 +180,8 @@ def estime_revente(r) -> float:
     return max(e, f("pv_garde")) if r.get("statut") == "retiré" else e
 
 
-def prix_annonce(estime: float, cout: float, prix_public=None, au_catalogue: bool = False, plancher=None) -> dict:
+def prix_annonce(estime: float, cout: float, prix_public=None, au_catalogue: bool = False, plancher=None,
+                 set_num=None) -> dict:
     """LE prix d'annonce d'un set, le même partout (alerte Telegram, appli, liste du lundi).
     Départ = estimation de revente × PRIX_DEPART (marge pour les offres et la baisse de 5 %/30 j),
     jamais sous le plancher (coût × MARGE_BRUTE_PLANCHER) ; encore au catalogue : plafonné
@@ -169,7 +193,7 @@ def prix_annonce(estime: float, cout: float, prix_public=None, au_catalogue: boo
     depart = estime * PRIX_DEPART
     prix = max(depart, plancher, PRIX_MIN, GWP_DEFAUT if cout == 0 and not estime else 0)
     prix = arr(prix) if prix else None
-    cap = plafond_catalogue(prix_public) if au_catalogue else None
+    cap = plafond_catalogue(prix_public, set_num) if au_catalogue else None
     plafonne = bool(prix and cap and prix > cap)
     if plafonne:
         prix = max(cap, float(math.ceil(plancher)))

@@ -127,7 +127,7 @@ def construire(export: Path):
             raison = "au plancher"
         # Encore au catalogue et plus cher que chez LEGO une fois frais et port payés :
         # on ramène au plafond tout de suite (pas d'attente d'âge ni de mois), sans passer sous le plancher
-        cap = plafond_catalogue(x.get("prix_public")) if x is not None and x.get("statut") == "en vente" else None
+        cap = plafond_catalogue(x.get("prix_public"), a.set) if x is not None and x.get("statut") == "en vente" else None
         if cap and a.prix > cap and max(cap, math.ceil(plancher)) < a.prix:
             nouveau, raison = max(cap, math.ceil(plancher)), None
         ligne = {"Annonce": a.titre, "Set": a.set, "Prix actuel": a.prix, "Nouveau prix": nouveau,

@@ -81,7 +81,7 @@ def main():
         # posé sur un seul article. On garde l'estimation et on le signale.
         douteux = bool(estime) and cout > 2 * estime
         # Même calcul que l'alerte Telegram (regles.prix_annonce) : un seul prix partout
-        pa = regles.prix_annonce(estime, cout, float(r.get("prix_public") or 0), r.get("statut") == "en vente", planchers.get(s))
+        pa = regles.prix_annonce(estime, cout, float(r.get("prix_public") or 0), r.get("statut") == "en vente", planchers.get(s), s)
         prix = arrondi(estime) if douteux else pa["prix"]
         # Pour choisir « poster maintenant » ou « garder » : revente rapide, revente après retraite, date de retraite
         conseil = {"be": (be.get(s + "-1") or {}).get("date") if (be.get(s + "-1") or {}).get("valeur_neuf") else None,

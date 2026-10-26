@@ -299,7 +299,7 @@ def coefficients_scenarios(v: pd.DataFrame) -> dict:
     return out
 
 
-def scenarios(prix_public, gamme, retrait, cs: dict, aujourdhui=None) -> dict:
+def scenarios(prix_public, gamme, retrait, cs: dict, aujourdhui=None, set_num=None) -> dict:
     """{'rapide': (prix, jours), 'garde': (prix, jours)} pour un set au catalogue."""
     aujourdhui = aujourdhui or pd.Timestamp.today()
     out = {}
@@ -313,7 +313,7 @@ def scenarios(prix_public, gamme, retrait, cs: dict, aujourdhui=None) -> dict:
         pv = prix_public * ratio
         if nom == "rapide":  # revendu avant le retrait : sous le prix LEGO, frais compris
             from regles import plafond_catalogue
-            pv = min(pv, plafond_catalogue(prix_public) or pv)
+            pv = min(pv, plafond_catalogue(prix_public, set_num) or pv)
         out[nom] = (pv, int(delai))
     return out
 
@@ -518,8 +518,8 @@ def construire(xlsx: str, rafraichir: bool = False) -> pd.DataFrame:
     # plus cher, « garde » seulement si son rendement annuel suffit.
     cs = coefficients_scenarios(v)
     cols = {"pv_rapide": [], "j_rapide": [], "pv_garde": [], "j_garde": []}
-    for pp, st, g, rt, fr in zip(ref.prix_public, ref.statut, ref.gamme, ref.retrait, froid):
-        sc = scenarios(pp, g, rt, cs) if st == "en vente" and pp == pp and pp else {}
+    for pp, st, g, rt, fr, b in zip(ref.prix_public, ref.statut, ref.gamme, ref.retrait, froid, ref.base):
+        sc = scenarios(pp, g, rt, cs, set_num=b) if st == "en vente" and pp == pp and pp else {}
         k = DEMANDE_FROIDE if fr else 1
         for nom in ("rapide", "garde"):
             pv, j = sc.get(nom, (None, None))

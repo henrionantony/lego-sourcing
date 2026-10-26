@@ -267,7 +267,7 @@ def details(s: str, prix: float, ref, tresor=None, en_stock: int = 0, part_out=N
     # Prix d'annonce si tu l'achètes : le même que l'appli LEGO HQ (regles.prix_annonce)
     est = regles.estime_revente(x)
     if est:
-        pa = regles.prix_annonce(est, prix, pp, x.statut == "en vente")
+        pa = regles.prix_annonce(est, prix, pp, x.statut == "en vente", set_num=x.get("base"))
         lignes.append(f"🏷 Prix d'annonce : {euros(pa['prix'])} (estimation {euros(est)} + {regles.PRIX_DEPART - 1:.0%}"
                       + (f", plafonné sous le prix LEGO" if pa["plafonne"] else "")
                       + f", plancher {euros(pa['plancher'])})"

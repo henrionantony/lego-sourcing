@@ -334,6 +334,9 @@ def a_regulariser(obj: dict) -> list[dict]:
             lignes.append({"id": f"colis-{c['mail']}", "d": c.get("d"),
                            "titre": f"{c.get('lieu') or 'Pickup point ?'} · email of {jour(c.get('d'))}",
                            "sous": " · ".join(info), "url": c.get("url"),
+                           # code de retrait montré même si la commande n'est pas encore reconnue
+                           **({"code": c.get("code"), "relais": c.get("lieu"), "jusqu": jour(c["jusqu"]) if c.get("jusqu") else None}
+                              if c.get("code") else {}),
                            "choix": [{"label": f"{magasin(achats.get(a, {}).get('lieu'))} {jour(achats.get(a, {}).get('date_achat'))[:5]} · "
                                                + ", ".join(nom_set(x).split(" · ")[-1] for x in par_achat.get(a, [])),
                                       "action": {"type": "colis_lien", "mail": c["mail"], "achat_id": a}} for a in c["candidats"]]
