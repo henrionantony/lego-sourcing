@@ -238,6 +238,10 @@ def manuelles(faites: dict) -> dict:
     {numéro de set: [annonces]}. Leurs sets ne reçoivent pas de nouvelle annonce (pas de doublon).
     Liste gardée dans ebay/manuelles (titre, prix, quantité : jamais de données d'acheteur)."""
     nos = {str(v.get("listing")) for v in faites.values() if v.get("listing")}
+    # Annonces déjà terminées par l'outil : GetMyeBaySelling les renvoie encore un temps comme actives
+    t = base.doc("ebay/manuelles_terminees") or {}
+    nos |= {str(x.get("id")) for x in (t.get("terminees") or []) + [e for e in t.get("erreurs") or []
+                                                                     if "terminée" in (e.get("erreur") or "")] if isinstance(x, dict)}
     out, page = [], 1
     try:
         while page <= 20:
