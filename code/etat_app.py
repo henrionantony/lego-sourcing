@@ -258,7 +258,15 @@ def virements_dus() -> dict[int, list]:
     cag = base.lire("articles", "select=achat_id,cagnotte,designation,id_set&cagnotte=gt.0&cree_le=gte.2026-10-19&limit=1000")
     if not cag:
         return {}
-    faits = {m["achat_id"] for m in base.lire("tresorerie", "select=achat_id&libelle=like.Cagnotte*&limit=10000")}
+    # Déjà reversé par achat (un achat peut être remboursé en plusieurs fois, ex. part avancée par le perso)
+    verse: dict[int, float] = {}
+    for m in base.lire("tresorerie", "select=achat_id,montant&libelle=like.Cagnotte*&limit=10000"):
+        if m.get("achat_id"):
+            verse[m["achat_id"]] = verse.get(m["achat_id"], 0) + float(m["montant"] or 0)
+    total = {}
+    for x in cag:
+        total[x["achat_id"]] = total.get(x["achat_id"], 0) + float(x["cagnotte"] or 0)
+    faits = {a for a, m in total.items() if verse.get(a, 0) >= m - 0.01}
     # Achats de rattrapage (datés d'avant la trésorerie de départ) : rien à reverser
     ids = ",".join(str(i) for i in {x["achat_id"] for x in cag})
     # sauf ceux marqués « cagnotte à reverser » (pas encore remboursée à l'époque)
@@ -268,7 +276,7 @@ def virements_dus() -> dict[int, list]:
     dus: dict[int, list] = {}
     for x in cag:
         if x["achat_id"] not in faits:
-            dus.setdefault(x["achat_id"], []).append(x)
+            dus.setdefault(x["achat_id"], []).append({**x, "_verse": round(verse.get(x["achat_id"], 0), 2)})
     return dus
 
 
@@ -360,10 +368,13 @@ def a_regulariser(obj: dict) -> list[dict]:
     # Cagnottes à reverser du compte perso vers le compte pro (achats saisis depuis l'application)
     vir = []
     for aid, lignes in virements_dus().items():
-        m = round(sum(float(x["cagnotte"]) for x in lignes), 2)
+        credit = round(sum(float(x["cagnotte"]) for x in lignes), 2)
+        deja = lignes[0].get("_verse") or 0
+        m = round(credit - deja, 2)   # reste à virer
         a = achats.get(aid) or (base.lire("achats", f"select=*&id=eq.{aid}") or [{}])[0]
         vir.append({"id": f"vire-{aid}", "d": a.get("date_achat"), "titre": f"{eur(m)} · {magasin(a.get('lieu'))} · {jour(a.get('date_achat'))}",
-                    "sous": "loyalty credit", "articles": [nom_set(x) for x in lignes],
+                    "sous": f"loyalty credit {eur(credit)}" + (f" · {eur(deja)} already moved · {eur(m)} left" if deja else ""),
+                    "articles": [nom_set(x) for x in lignes],
                     "action": {"type": "vire", "achat_id": aid, "montant": m, "label": "Transferred"}})
     if vir:
         vir.sort(key=lambda v: (str(v["d"]), v["id"]), reverse=True)  # le plus récent en haut
