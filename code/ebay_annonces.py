@@ -272,11 +272,15 @@ def manuelles(faites: dict) -> dict:
     return par
 
 
-def terminer_manuelles(faites: dict):
+def terminer_manuelles(faites: dict, doublons: bool = False):
     """Termine sur eBay toutes les annonces faites à la main (pas par l'outil), à ta demande :
     on repart de zéro avec les prix calculés. Titres gardés dans ebay/manuelles_terminees."""
     manuelles(faites)
     liste = (base.doc("ebay/manuelles") or {}).get("annonces", [])
+    if doublons:
+        # Seulement les sets que l'outil remet en vente, ou que tu n'as plus (« absents » des réglages)
+        garde = {k.split("-")[0] for k in base.doc("ebay/a_publier") or {}} | set((base.doc("ebay/reglages") or {}).get("absents", []))
+        liste = [a for a in liste if set(a["sets"]) & garde]
     fini, ko = [], []
     for a in liste:
         try:
@@ -403,8 +407,8 @@ def main():
     global TOK
     essai = "--essai" in sys.argv
     TOK = jeton()
-    if "--terminer-manuelles" in sys.argv:
-        terminer_manuelles(base.doc("ebay/annonces") or {})
+    if "--terminer-manuelles" in sys.argv or "--terminer-doublons" in sys.argv:
+        terminer_manuelles(base.doc("ebay/annonces") or {}, "--terminer-doublons" in sys.argv)
         return
     if "--lister-manuelles" in sys.argv:
         print(f"{sum(1 for _ in (manuelles(base.doc('ebay/annonces') or {})))} sets en vente à la main")
