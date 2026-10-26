@@ -22,8 +22,11 @@ def codes_prioritaires(be: BrickEconomy) -> list[str]:
     vendues = collections.Counter(str(v["id_minifig"]).lower() for v in
                                   base.lire("ventes", "select=id_minifig&id_minifig=not.is.null&limit=20000"))
     sets = [n for c in be.cache.values() for n in ((c.get("figurines") or {}).get("minifigs_quantities") or {})]
+    # Figurines demandées en premier (étude part-out en cours) : data/figs_prioritaires.txt, une par ligne
+    f = CACHE.parent / "figs_prioritaires.txt"
+    demandees = f.read_text().split() if f.exists() else []
     vus, out = set(), []
-    for c in stock + [c for c, _ in vendues.most_common()] + sets:
+    for c in demandees + stock + [c for c, _ in vendues.most_common()] + sets:
         if c and c not in vus:
             vus.add(c)
             out.append(c)
