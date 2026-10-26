@@ -83,14 +83,16 @@ def description(s, en, fr, b, note="") -> str:
     nom = f"{fr} ({en})" if fr and fr.lower() != en.lower() else en
     pieces, annee, gamme = b.get("pieces"), b.get("year"), b.get("theme")
     lignes = [f"<h2>LEGO {html.escape(gamme or '')} {s} – {html.escape(nom)}</h2>",
-              "<p><b>Neuf, boîte scellée</b> (jamais ouverte).</p>" + (f"<p>⚠️ {html.escape(note)}</p>" if note else "") + "<ul>",
+              "<p><b>Neuf, boîte scellée</b> (jamais ouverte).</p>" + (f"<p>{'' if note.startswith('⚠️') else '⚠️ '}{html.escape(note)}</p>" if note else "") + "<ul>",
               f"<li>Numéro du set : {s}</li>"]
     if gamme: lignes.append(f"<li>Gamme : {html.escape(gamme)}</li>")
     if pieces and str(pieces) != "0": lignes.append(f"<li>Pièces : {pieces}</li>")
     if annee: lignes.append(f"<li>Année : {annee}</li>")
-    lignes += ["</ul><p>Photo du produit officielle : le set envoyé est neuf et scellé, boîte en bon état.</p>",
+    # Boîte avec défauts (note) : ne pas promettre une boîte en bon état sous la photo officielle
+    lignes += ["</ul><p>Photo officielle du produit : " + ("la boîte de cet exemplaire a les défauts indiqués plus haut.</p>" if note
+               else "le set envoyé est neuf et scellé, boîte en bon état.</p>"),
                "<p>📦 Envoi soigné en carton avec calage, en Colissimo suivi depuis la France.</p>",
-               "<p>🇪🇺 Envoi dans toute l'Union européenne, en Suisse et au Royaume-Uni.</p>",
+               "<p>🇪🇺 Envoi aussi vers plusieurs pays d'Europe et le Royaume-Uni (voir les options de livraison).</p>",
                "<p>Vendeur particulier passionné, plus de 500 avis positifs sur d'autres plateformes.</p>"]
     return "".join(lignes)
 

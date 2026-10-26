@@ -293,6 +293,12 @@ def terminer_manuelles(faites: dict, doublons: bool = False):
     print(f"{len(fini)} annonces faites à la main terminées, {len(ko)} erreurs")
 
 
+
+def empreinte(v: dict) -> str:
+    """Empreinte du titre et de la description : une annonce en ligne est mise à jour quand ils changent."""
+    import hashlib
+    return hashlib.sha1((v.get("titre", "") + v.get("description", "")).encode()).hexdigest()[:12]
+
 _IMG = {}
 
 
@@ -394,7 +400,7 @@ def publier(s: str, v: dict, pol: dict, essai: bool, deja: dict | None = None) -
         appel("PUT", f"/sell/inventory/v1/offer/{oid}", offre)
     else:
         oid = appel("POST", "/sell/inventory/v1/offer", offre)["offerId"]
-    res = {"sku": sku, "offre": oid, "prix": v["prix"], "qte": v["qte"], "port": v["port"], "img": len(v["images"]),
+    res = {"sku": sku, "offre": oid, "prix": v["prix"], "qte": v["qte"], "port": v["port"], "img": len(v["images"]), "desc": empreinte(v),
            "le": dt.datetime.now().isoformat(timespec="minutes")}
     if deja and deja.get("listing"):
         res["listing"] = deja["listing"]          # annonce en ligne : la mise à jour de l'offre suffit
@@ -441,7 +447,8 @@ def main():
     # (rythme choisi, et 150 annonces gratuites par mois sur eBay.fr)
     maj = {s: v for s, v in a_faire.items() if (faites.get(s) or {}).get("listing")
            and (faites[s].get("prix") != v["prix"] or faites[s].get("port") != v["port"]
-                or faites[s].get("qte") != v["qte"] or faites[s].get("img", 1) != len(v["images"]))}
+                or faites[s].get("qte") != v["qte"] or faites[s].get("img", 1) != len(v["images"])
+                or faites[s].get("desc", "?") != empreinte(v))}
     en_ligne = sum(1 for v in faites.values() if v.get("listing"))
     # Sets déjà en vente sur le compte par une annonce faite à la main : pas de seconde annonce
     deja = manuelles(faites)
