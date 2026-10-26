@@ -213,7 +213,7 @@ def remise_groupee() -> str | None:
             if f"<DiscountProfileName>{nom}</DiscountProfileName>" in b:
                 return re.search(r"<DiscountProfileID>(.*?)</DiscountProfileID>", b).group(1)
         x = trading("SetShippingDiscountProfiles",
-                    "<CurrencyID>EUR</CurrencyID><ModifyActionCode>Add</ModifyActionCode><FlatShippingDiscount>"
+                    "<CurrencyID>EUR</CurrencyID><CombinedDuration>Days_14</CombinedDuration><ModifyActionCode>Add</ModifyActionCode><FlatShippingDiscount>"
                     "<DiscountName>EachAdditionalAmountOff</DiscountName><DiscountProfile>"
                     f"<DiscountProfileName>{nom}</DiscountProfileName>"
                     f'<EachAdditionalAmountOff currencyID="EUR">{REMISE:.2f}</EachAdditionalAmountOff>'

@@ -97,7 +97,7 @@ def description(s, en, fr, b, note="") -> str:
 
 NOUVELLES_PAR_JOUR = 5
 CACHE_IMG = ICI.parent / "data" / "cache" / "brickset_images.json"
-PORT_FIG = {"fr": 4.0, "ue": None, "uk": None, "kg": 0.1, "lettre": True, "add": 1.0}   # lettre suivie 100 g, +1 € par figurine en plus
+PORT_FIG = {"fr": 4.0, "ue": None, "uk": None, "kg": 0.1, "lettre": True, "add": 1.0, "groupe": 1}   # lettre suivie 100 g, +1 € par figurine en plus
 PORT_SET_EN_PLUS = 4.0   # même annonce, chaque set en plus : +4 €
 _imgs = None
 
@@ -203,12 +203,12 @@ def main():
                 chez_lego.append(s)
             continue
         q = reglages.get("qte", {}).get(s, q)
-        p = {**p, "add": PORT_SET_EN_PLUS}
+        p = {**p, "add": PORT_SET_EN_PLUS, "groupe": 1}   # « groupe » : envoi groupé (remise du compte eBay)
         # Prix validé (à la main) sinon : en ligne = le prix actuel, nouveau = le prix calculé
         fixe = reglages.get("prix", {}).get(s)
         prix = float(fixe or (annonces[s]["prix"] if s in en_ligne else calcule))
         fiche = {"titre": t, "description": description(s, en, fr, b, reglages.get("notes", {}).get(s, "")), "prix": prix,
-                 "qte": q or 1, "port": {k: p[k] for k in ("fr", "ue", "uk", "kg", "add")}, "images": photos_set(b),
+                 "qte": q or 1, "port": {k: p[k] for k in ("fr", "ue", "uk", "kg", "add", "groupe")}, "images": photos_set(b),
                  "ean": (b.get("barcode") or {}).get("EAN"), "gamme": b.get("theme"), "pieces": b.get("pieces"),
                  "annee": b.get("year"), "nom": en}
         info = {"set": s, "nom": en, "fr": fr, "prix": calcule, "port": p["fr"], "qte": q or 1, "cout": v.get("cout"),
