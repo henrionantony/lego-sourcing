@@ -114,8 +114,18 @@ def politiques() -> dict:
     ret = next((p["returnPolicyId"] for p in ret if p["name"] == "LegoHQ sans retour"), None) or creer(
         "/sell/account/v1/return_policy", {"name": "LegoHQ sans retour", "marketplaceId": MARCHE,
         "categoryTypes": [{"name": "ALL_EXCLUDING_MOTORS_VEHICLES"}], "returnsAccepted": False}, "returnPolicyId")
-    ful = {p["name"]: p["fulfillmentPolicyId"] for p in
-           (appel("GET", "/sell/account/v1/fulfillment_policy" + q) or {}).get("fulfillmentPolicies", [])}
+    pols = (appel("GET", "/sell/account/v1/fulfillment_policy" + q) or {}).get("fulfillmentPolicies", [])
+    ful = {p["name"]: p["fulfillmentPolicyId"] for p in pols}
+    # Délai d'expédition : DELAI jours ouvrés partout (27/10), y compris les politiques déjà créées
+    for p in pols:
+        if p["name"].startswith("LegoHQ") and (p.get("handlingTime") or {}).get("value") != DELAI:
+            corps = {k: v for k, v in p.items() if k not in ("fulfillmentPolicyId", "warnings")}
+            corps["handlingTime"] = {"value": DELAI, "unit": "DAY"}
+            try:
+                appel("PUT", f"/sell/account/v1/fulfillment_policy/{p['fulfillmentPolicyId']}", corps)
+                JOURNAL.append(f"délai {DELAI} j : {p['name']}")
+            except Erreur as e:
+                JOURNAL.append(f"délai {p['name']} : {e}")
     services = services_port()
     remise = remise_groupee()
 
@@ -144,7 +154,7 @@ def politiques() -> dict:
                      "shipToLocations": {"regionIncluded": [{"regionName": "GB"}]}}]})
             corps = {
                 "name": nom, "marketplaceId": MARCHE, "categoryTypes": [{"name": "ALL_EXCLUDING_MOTORS_VEHICLES"}],
-                "handlingTime": {"value": 2, "unit": "DAY"}, "shippingOptions": options,
+                "handlingTime": {"value": DELAI, "unit": "DAY"}, "shippingOptions": options,
                 "shipToLocations": {"regionIncluded": [{"regionName": c} for c in (["FR"] if lettre else pays_ue + ["GB", "FR"])]}}
             try:
                 ful[nom] = creer("/sell/account/v1/fulfillment_policy", corps, "fulfillmentPolicyId")
@@ -191,6 +201,7 @@ def services_port() -> dict:
     return {"fr": fr, "int": it, "lettre": lettre}
 
 
+DELAI = 3      # délai d'expédition en jours ouvrés (3 minimum, demandé le 27/10)
 REMISE = 3.0   # envoi groupé : chaque article en plus coûte son port moins 3 € (figurine 4 € → +1 €)
 
 
@@ -469,6 +480,19 @@ def main():
             except Erreur as e:
                 JOURNAL.append(f"retrait {s} : {e}")
     a_faire = {s: v for s, v in a_faire.items() if not (faites.get(s) or {}).get("retire")}
+    # Annonces créées par l'outil (SKU LHQ-<set>) mais absentes de ebay/annonces : reprises en main,
+    # sinon elles passent pour « faites à la main » et gardent leurs anciens prix et quantités
+    deja = manuelles(faites)
+    for s in [s for s in a_faire if s.split("-")[0] in deja and not (faites.get(s) or {}).get("listing")]:
+        try:
+            ex = (appel("GET", f"/sell/inventory/v1/offer?sku=LHQ-{s}&marketplace_id={MARCHE}", ok_404=True) or {}).get("offers") or []
+        except Erreur:
+            continue
+        lid = str(((ex[0].get("listing") or {}).get("listingId")) or "") if ex else ""
+        if lid and ex[0].get("status") == "PUBLISHED" and lid in {a["id"] for a in deja[s.split("-")[0]]}:
+            faites[s] = {"sku": f"LHQ-{s}", "offre": ex[0]["offerId"], "listing": lid, "repris": dt.date.today().isoformat()}
+            deja[s.split("-")[0]] = [a for a in deja[s.split("-")[0]] if a["id"] != lid]
+            JOURNAL.append(f"{s} : annonce de l'outil reprise ({lid})")
     # Annonces en ligne dont le prix ou le port a changé : mises à jour ; nouvelles : PAR_JOUR au plus
     # (rythme choisi, et 150 annonces gratuites par mois sur eBay.fr)
     maj = {s: v for s, v in a_faire.items() if (faites.get(s) or {}).get("listing")
@@ -477,8 +501,7 @@ def main():
                 or faites[s].get("desc", "?") != empreinte(v) or faites[s].get("plancher") != v.get("plancher"))}
     en_ligne = sum(1 for v in faites.values() if v.get("listing"))
     # Sets déjà en vente sur le compte par une annonce faite à la main : pas de seconde annonce
-    deja = manuelles(faites)
-    for s in [s for s in a_faire if s.split("-")[0] in deja and not (faites.get(s) or {}).get("listing")]:
+    for s in [s for s in a_faire if deja.get(s.split("-")[0]) and not (faites.get(s) or {}).get("listing")]:
         JOURNAL.append(f"{s} : déjà en vente à la main sur eBay, pas de nouvelle annonce")
         del a_faire[s]
     # Rythme réglable sans code : « par_jour » dans ebay/reglages (sinon EBAY_PAR_JOUR, 5 par défaut)

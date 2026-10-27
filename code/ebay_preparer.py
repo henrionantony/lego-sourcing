@@ -196,6 +196,10 @@ def main():
         # (au moins 3), mais jamais sous le plancher de marge (coût × marge brute minimale).
         eb = prix_ebay.get(s) or {}
         plancher = max(float(v.get("plancher") or 0), regles.PRIX_MIN)
+        if not v.get("cout"):
+            # Set offert (coût 0) : sans ce plancher le mode vente le bradait au prix minimum
+            # (40913 parti à 16 € le 27/10 au lieu de 30-35 €)
+            plancher = max(plancher, 0.9 * float(v.get("estime") or regles.GWP_DEFAUT))
         marche = eb["med"] - p["fr"] if (eb.get("n") or 0) >= 3 and eb.get("med") else None
         sous_plancher = bool(marche and marche < plancher)
         if marche:
@@ -218,7 +222,7 @@ def main():
         # Prix validé (à la main) sinon : en ligne = le prix actuel, nouveau = le prix calculé
         prix = float(fixe or (annonces[s]["prix"] if s in en_ligne else calcule))
         if reglages.get("vente_rapide"):
-            prix = min(prix, calcule)   # en mode vente, on ne fait que baisser, jamais sous le plancher
+            prix = max(min(prix, calcule), float(math.ceil(plancher)))   # en mode vente, on ne fait que baisser, jamais sous le plancher
         fiche = {"titre": t, "description": description(s, en, fr, b, reglages.get("notes", {}).get(s, "")), "prix": prix,
                  "qte": q or 1, "port": {k: p[k] for k in ("fr", "ue", "uk", "kg", "add", "groupe")}, "images": photos_set(b),
                  "ean": (b.get("barcode") or {}).get("EAN"), "gamme": b.get("theme"), "pieces": b.get("pieces"),
