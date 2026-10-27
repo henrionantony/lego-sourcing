@@ -163,6 +163,9 @@ def main():
     for s, q in derniers_recus().items():
         voulus[s] = max(q, voulus.get(s, 0))
     reglages = base.doc("ebay/reglages") or {}
+    # Sets dont tu as confirmé avoir la boîte (stock de la base pas encore remis à jour)
+    for s in reglages.get("confirmes", []):
+        voulus.setdefault(str(s), 1)
     annonces = base.doc("ebay/annonces") or {}
     prix_ebay = base.doc("ebay/prix") or {}
     en_ligne = {s for s, a in annonces.items() if not a.get("retire")}
@@ -205,14 +208,14 @@ def main():
         # sans baisser de plus de 15 % d'un coup : les offres acceptées seules font le reste
         if reglages.get("vente_rapide") and eb.get("bas"):
             calcule = float(max(min(calcule, round(eb["bas"] - p["fr"] - 1)), round(calcule * 0.85), math.ceil(plancher)))
-        if v.get("st") == "en vente" and pp and calcule + p["fr"] > pp:
+        fixe = reglages.get("prix", {}).get(s)
+        if v.get("st") == "en vente" and pp and float(fixe or calcule) + p["fr"] > pp:
             if s in en_ligne:
                 chez_lego.append(s)
             continue
         q = reglages.get("qte", {}).get(s, q)
         p = {**p, "add": PORT_SET_EN_PLUS, "groupe": 1}   # « groupe » : envoi groupé (remise du compte eBay)
         # Prix validé (à la main) sinon : en ligne = le prix actuel, nouveau = le prix calculé
-        fixe = reglages.get("prix", {}).get(s)
         prix = float(fixe or (annonces[s]["prix"] if s in en_ligne else calcule))
         if reglages.get("vente_rapide"):
             prix = min(prix, calcule)   # en mode vente, on ne fait que baisser, jamais sous le plancher
