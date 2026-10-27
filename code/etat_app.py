@@ -280,8 +280,57 @@ def virements_dus() -> dict[int, list]:
     return dus
 
 
+# Commandes sans nouvelles depuis trop longtemps (remplie par a_regulariser, envoyée sur Telegram par main)
+RETARDS: list[dict] = []
+# Jours sans nouvelles avant d'alerter, selon la dernière étape connue
+DELAI_RETARD = {"commande": 5, "expedie": 6, "a_retirer": 5, "livre": 2}
+
+
+def retard(achat: dict, sv: dict | None) -> str | None:
+    """Phrase d'alerte si une commande pas encore reçue traîne : pas d'expédition, colis
+    parti mais jamais arrivé, colis à retirer bientôt renvoyé, ou « livré » mais pas reçu
+    (cas Fnac : contester tout de suite)."""
+    if not achat.get("date_achat"):
+        return None
+    auj = dt.date.today()
+    etape = sv["colis"] if sv else "commande"
+    depuis = dt.date.fromisoformat(str((sv or {}).get("d") or achat["date_achat"])[:10])
+    n = (auj - depuis).days
+    if etape == "a_retirer" and sv.get("jusqu"):
+        reste = (dt.date.fromisoformat(sv["jusqu"][:10]) - auj).days
+        return f"Pick up before {jour(sv['jusqu'])}, or it goes back to the shop" if reste <= 2 else None
+    if n < DELAI_RETARD[etape]:
+        return None
+    return {"commande": f"No shipping email {n} days after ordering: check the order on the shop's site",
+            "expedie": f"Shipped {n} days ago and still not arrived: check the tracking",
+            "a_retirer": f"Waiting at the pickup point for {n} days: pick it up soon",
+            "livre": f"Marked delivered {n} days ago: if you don't have it, contact the shop now"}[etape]
+
+
+def prevenir_retards():
+    """Un message Telegram par commande et par étape en retard (une seule fois)."""
+    if not RETARDS:
+        return
+    lu = base.doc("cache/retards_alertes")
+    if lu is None:   # base illisible : on ne renvoie pas tout
+        return
+    deja = set(lu.get("cles") or [])
+    nouveaux = [r for r in RETARDS if f"{r['achat_id']}-{r['etape']}" not in deja]
+    if not nouveaux:
+        return
+    import alertes
+    texte = "⏰ Commande à vérifier\n\n" + "\n\n".join(
+        f"{r['titre']} : {', '.join(r['articles'][:3])}\n{r['alerte']}" for r in nouveaux)
+    try:
+        alertes.telegram(texte, True, False)
+        base.doc_ecrire("cache/retards_alertes", {"cles": sorted(deja | {f"{r['achat_id']}-{r['etape']}" for r in nouveaux})})
+    except Exception as e:
+        print(f"Telegram retards : {e}")
+
+
 def a_regulariser(obj: dict) -> list[dict]:
     out = []
+    RETARDS.clear()
     # Commandes en cours de livraison : à confirmer à la réception
     arts = base.lire("articles", "select=id,achat_id,id_set,designation,quantite,notes&notes=ilike.*livraison*&limit=1000")
     achats = {a["id"]: a for a in base.lire("achats", "select=*&cashback=gt.0&limit=10000")}
@@ -311,7 +360,11 @@ def a_regulariser(obj: dict) -> list[dict]:
             suivi_url = (f"https://www.chronopost.fr/tracking-no-cms/suivi-page?listeNumerosLT={sv['suivi']}"
                          if "chrono" in (sv.get("transporteur") or "").lower()
                          else f"https://www.laposte.fr/outils/suivre-vos-envois?code={sv['suivi']}")
-        livs.append({"id": f"recu-{aid}", "d": a.get("date_achat"), "titre": f"{magasin(a.get('lieu'))} · {jour(a.get('date_achat'))}",
+        alerte = retard(a, sv)
+        if alerte:
+            RETARDS.append({"achat_id": aid, "etape": sv["colis"] if sv else "commande", "titre": f"{magasin(a.get('lieu'))} · {jour(a.get('date_achat'))}",
+                            "articles": [nom_set(x) for x in lignes], "alerte": alerte})
+        livs.append({"id": f"recu-{aid}", "d": a.get("date_achat"), "alerte": alerte, "titre": f"{magasin(a.get('lieu'))} · {jour(a.get('date_achat'))}",
                      "sous": f"{n} item{'s' if n > 1 else ''}{etat}", "pret": bool(sv and sv["colis"] == "a_retirer"),
                      "etape": min(etape, 2), "arrivee": "Pick up" if sv and sv["colis"] == "a_retirer" else "Delivered" if etape == 3 else "Arrived",
                      "suivi": sv.get("suivi") if sv else None, "suivi_url": suivi_url,
@@ -346,8 +399,9 @@ def a_regulariser(obj: dict) -> list[dict]:
                     "lignes": lignes})
     if livs:
         prets = sum(l["pret"] for l in livs)
+        lents = sum(bool(l["alerte"]) for l in livs)
         out.append({"id": "livraisons", "type": "livraison", "titre": f"{len(livs)} order{'s' if len(livs) > 1 else ''} on the way"
-                    + (f" · {prets} ready to pick up" if prets else ""),
+                    + (f" · {prets} ready to pick up" if prets else "") + (f" · ⚠️ {lents} to check" if lents else ""),
                     "detail": "Ready to pick up first, then oldest first. Open an order to check each quantity, then tap Received when everything is there.",
                     "lignes": livs})
     # Cashback : à confirmer (rien reçu d'iGraal) → en attente (iGraal l'a enregistré) → payé.
@@ -615,6 +669,7 @@ def main():
         if len(json.dumps(etat, ensure_ascii=False, default=str).encode()) <= 230_000:
             break
         d["img"] = None
+    prevenir_retards()
     SORTIE.parent.mkdir(parents=True, exist_ok=True)
     SORTIE.write_text(json.dumps(etat, ensure_ascii=False, default=str))
     print(f"{SORTIE} : {len(etat['automatisations'])} automatisations, {len(etat['a_faire'])} à régulariser, "
