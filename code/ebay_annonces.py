@@ -419,7 +419,19 @@ def publier(s: str, v: dict, pol: dict, essai: bool, deja: dict | None = None) -
     if deja and deja.get("listing"):
         res["listing"] = deja["listing"]          # annonce en ligne : la mise à jour de l'offre suffit
     elif not essai:
-        res["listing"] = appel("POST", f"/sell/inventory/v1/offer/{oid}/publish")["listingId"]
+        try:
+            res["listing"] = appel("POST", f"/sell/inventory/v1/offer/{oid}/publish")["listingId"]
+        except Erreur as e:
+            # 25002 « code JavaScript » sans rien de tel chez nous : vient de la fiche catalogue
+            # eBay rattachée à l'EAN ; on republie une fois sans EAN
+            if "25002" not in str(e) or "ean" not in produit:
+                raise
+            del produit["ean"]
+            appel("PUT", f"/sell/inventory/v1/inventory_item/{sku}", {
+                "product": produit, "condition": "NEW",
+                "availability": {"shipToLocationAvailability": {"quantity": int(v["qte"])}},
+                "packageWeightAndSize": {"weight": {"value": v["port"]["kg"], "unit": "KILOGRAM"}}})
+            res["listing"] = appel("POST", f"/sell/inventory/v1/offer/{oid}/publish")["listingId"]
     return res
 
 
