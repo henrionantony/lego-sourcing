@@ -486,10 +486,13 @@ def main():
     for s in [s for s in a_faire if s.split("-")[0] in deja and not (faites.get(s) or {}).get("listing")]:
         try:
             ex = (appel("GET", f"/sell/inventory/v1/offer?sku=LHQ-{s}&marketplace_id={MARCHE}", ok_404=True) or {}).get("offers") or []
-        except Erreur:
+        except Erreur as e:
+            JOURNAL.append(f"{s} : offre LHQ-{s} illisible ({e})")
             continue
         lid = str(((ex[0].get("listing") or {}).get("listingId")) or "") if ex else ""
-        if lid and ex[0].get("status") == "PUBLISHED" and lid in {a["id"] for a in deja[s.split("-")[0]]}:
+        if not (lid and ex[0].get("status") == "PUBLISHED" and lid in {a["id"] for a in deja[s.split("-")[0]]}):
+            JOURNAL.append(f"{s} : pas reprise ({len(ex)} offre, {ex[0].get('status') if ex else '-'}, annonce {lid or '-'})")
+        else:
             faites[s] = {"sku": f"LHQ-{s}", "offre": ex[0]["offerId"], "listing": lid, "repris": dt.date.today().isoformat()}
             deja[s.split("-")[0]] = [a for a in deja[s.split("-")[0]] if a["id"] != lid]
             JOURNAL.append(f"{s} : annonce de l'outil reprise ({lid})")
@@ -511,6 +514,7 @@ def main():
     a_faire = {s: a_faire[s] for s in list(maj) + neuves}
     if not a_faire:
         base.doc_ecrire("ebay/annonces", faites)
+        base.doc_ecrire("journal/ebay", {"le": dt.datetime.now().isoformat(timespec="minutes"), "lignes": JOURNAL})
         print(f"rien à publier, {retirees} annonces retirées")
         return
     try:
