@@ -529,7 +529,9 @@ def main():
         JOURNAL.append(f"{s} : déjà en vente à la main sur eBay, pas de nouvelle annonce")
         del a_faire[s]
     # Rythme réglable sans code : « par_jour » dans ebay/reglages (sinon EBAY_PAR_JOUR, 5 par défaut)
-    par_jour = int((base.doc("ebay/reglages") or {}).get("par_jour") or PAR_JOUR)
+    # par_jour 0 = pause des nouvelles annonces (quota gratuit épuisé) ; les mises à jour continuent
+    pj = (base.doc("ebay/reglages") or {}).get("par_jour")
+    par_jour = int(PAR_JOUR if pj is None else pj)
     # Dans l'ordre choisi (figurines d'abord) : la base ne garde pas l'ordre des clés
     neuves = [s for s in sorted(a_faire, key=lambda s: a_faire[s].get("ordre", 1000)) if not (faites.get(s) or {}).get("listing")][:max(0, min(par_jour, MAX_EN_LIGNE - en_ligne))]
     a_faire = {s: a_faire[s] for s in list(maj) + neuves}
