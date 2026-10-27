@@ -244,6 +244,14 @@ def remise_groupee() -> str | None:
     return None
 
 
+def reviser(item: str, prix: float, qte: int):
+    """Prix et quantité d'une annonce par l'API Trading (annonces dont l'offre n'est plus rattachée)."""
+    x = trading("ReviseInventoryStatus", f"<InventoryStatus><ItemID>{item}</ItemID>"
+                f"<StartPrice>{prix:.2f}</StartPrice><Quantity>{int(qte)}</Quantity></InventoryStatus>")
+    if "<Ack>Failure</Ack>" in x:
+        raise Erreur(" | ".join(re.findall(r"<LongMessage>(.*?)</LongMessage>", x))[:300])
+
+
 def manuelles(faites: dict) -> dict:
     """Annonces en ligne sur le compte eBay qui ne viennent pas de l'outil (mises à la main) :
     {numéro de set: [annonces]}. Leurs sets ne reçoivent pas de nouvelle annonce (pas de doublon).
@@ -460,7 +468,7 @@ def main():
     faites = base.doc("ebay/annonces") or {}
     # Annonces retirées à la main sur eBay : notées « retire », jamais republiées ni mises à jour
     for s, v in faites.items():
-        if v.get("listing") and not v.get("retire"):
+        if v.get("listing") and not v.get("retire") and not v.get("trading"):
             try:
                 o = appel("GET", f"/sell/inventory/v1/offer/{v['offre']}", ok_404=True) or {}
             except Erreur:
@@ -490,7 +498,20 @@ def main():
             JOURNAL.append(f"{s} : offre LHQ-{s} illisible ({e})")
             continue
         lid = str(((ex[0].get("listing") or {}).get("listingId")) or "") if ex else ""
-        if not (lid and ex[0].get("status") == "PUBLISHED" and lid in {a["id"] for a in deja[s.split("-")[0]]}):
+        if lid and lid in {a["id"] for a in deja[s.split("-")[0]]} and ex[0].get("status") != "PUBLISHED":
+            # Annonce en ligne mais offre détachée : prix et quantité corrigés par l'API Trading
+            v = a_faire[s]
+            try:
+                if not essai:
+                    reviser(lid, v["prix"], v["qte"])
+                faites[s] = {"sku": f"LHQ-{s}", "offre": ex[0]["offerId"], "listing": lid, "trading": True, "prix": v["prix"],
+                             "qte": v["qte"], "port": v["port"], "img": len(v["images"]), "desc": empreinte(v),
+                             "plancher": v.get("plancher"), "le": dt.datetime.now().isoformat(timespec="minutes")}
+                deja[s.split("-")[0]] = [a for a in deja[s.split("-")[0]] if a["id"] != lid]
+                JOURNAL.append(f"{s} : annonce reprise, {v['prix']:.0f} € × {v['qte']} ({lid})")
+            except Erreur as e:
+                JOURNAL.append(f"{s} : correction {lid} refusée ({e})")
+        elif not (lid and ex[0].get("status") == "PUBLISHED" and lid in {a["id"] for a in deja[s.split("-")[0]]}):
             JOURNAL.append(f"{s} : pas reprise ({len(ex)} offre, {ex[0].get('status') if ex else '-'}, annonce {lid or '-'})")
         else:
             faites[s] = {"sku": f"LHQ-{s}", "offre": ex[0]["offerId"], "listing": lid, "repris": dt.date.today().isoformat()}
@@ -527,7 +548,13 @@ def main():
     ok = err = 0
     for s, v in a_faire.items():
         try:
-            faites[s] = publier(s, v, pol, essai, faites.get(s))
+            if (faites.get(s) or {}).get("trading"):
+                if not essai:
+                    reviser(faites[s]["listing"], v["prix"], v["qte"])
+                faites[s].update(prix=v["prix"], qte=v["qte"], port=v["port"], img=len(v["images"]), desc=empreinte(v),
+                                 plancher=v.get("plancher"), le=dt.datetime.now().isoformat(timespec="minutes"))
+            else:
+                faites[s] = publier(s, v, pol, essai, faites.get(s))
             ok += 1
         except Erreur as e:
             err += 1
