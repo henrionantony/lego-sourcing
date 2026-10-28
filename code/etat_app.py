@@ -167,7 +167,7 @@ def automatisations() -> list[dict]:
 
 
 def objectifs() -> dict:
-    annee = base.lire("ventes", f"select=date_vente,prix_vente,article_id,produit&date_vente=gte.{DEBUT_ANNEE}&limit=10000")
+    annee = base.lire("ventes", f"select=date_vente,prix_vente,revenu_net,article_id,produit&date_vente=gte.{DEBUT_ANNEE}&limit=10000")
     ca = sum(float(v["prix_vente"] or 0) for v in annee)
     d = base.lire("ventes", "select=date_vente&date_vente=not.is.null&order=date_vente.desc&limit=1")
     derniere = d[0]["date_vente"] if d else None
@@ -175,11 +175,18 @@ def objectifs() -> dict:
     for v in annee:
         mois[v["date_vente"][:7]] = mois.get(v["date_vente"][:7], 0) + float(v["prix_vente"] or 0)
     net, estime = gain_net(annee)
-    prelev = ca * PRELEVEMENTS
+    prelev = sum(float(v["prix_vente"] or 0) - encaisse(v) for v in annee)
     return {"debut": DEBUT_ANNEE.isoformat(), "ca": round(ca, 2), "cible_ca": CIBLE_CA, "cible_net": CIBLE_NET,
             "net_frais": round(ca * (1 - PRELEVEMENTS), 2), "net": round(net, 2), "net_estime": round(estime, 2),
             "prelev": round(prelev, 2), "couts": round(ca - prelev - net, 2), "ventes": len(annee), "derniere_vente": derniere,
             "mois": mois}
+
+
+def encaisse(v: dict) -> float:
+    """Ce qui reste de la vente après prélèvements et frais d'envoi (revenu_net, sinon prix × (1 − prélèvements))."""
+    if v.get("revenu_net") is not None:
+        return float(v["revenu_net"])
+    return float(v.get("prix_vente") or 0) * (1 - PRELEVEMENTS)
 
 
 def gain_net(ventes: list) -> tuple[float, float]:
@@ -201,7 +208,7 @@ def gain_net(ventes: list) -> tuple[float, float]:
         a = arts.get(v.get("article_id"))
         if not a:
             cout = prix / M
-            estime += prix * (1 - PRELEVEMENTS) - cout
+            estime += encaisse(v) - cout
         else:
             unit = 0.0 if a.get("offert") else float(a.get("prix_achat") or 0) / max(1, int(a.get("quantite") or 1))
             if v.get("produit") == "SET":
@@ -211,7 +218,7 @@ def gain_net(ventes: list) -> tuple[float, float]:
                 cible = pp.get(s, 0) * M or unit * M or prix
                 cout = min(unit * prix / cible, unit - deja.get(a["id"], 0)) if cible else 0
                 deja[a["id"]] = deja.get(a["id"], 0) + cout
-        net += prix * (1 - PRELEVEMENTS) - cout
+        net += encaisse(v) - cout
     return net, estime
 
 

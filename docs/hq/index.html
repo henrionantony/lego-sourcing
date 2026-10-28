@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="665c04e3c2"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="50c9fa81f7"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -878,7 +878,7 @@ const actions = {};         // id de tâche ou de deal -> action envoyée depuis
 let db = null, filtre = "todo", vue = "home", dfiltre = "achète", ETAT = null, ouvert = null;
 const pending = {};
 const $ = (s) => document.querySelector(s);
-const eur = (n) => (+n).toLocaleString("en-GB", { maximumFractionDigits: n >= 1000 ? 0 : 2 }) + " €";
+const eur = (n) => (+n).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
 
 /* ---------- Navigation ---------- */
 function montrer(v){
@@ -935,9 +935,9 @@ function rendreHome(){
     <div class="panel"><div class="lbl">Revenue</div><div class="big">${eur(o.ca)} <small>/ ${eur(o.cible_ca)}</small></div>
       <div class="bar"><i style="width:${pct}%"></i></div>
       <div class="sub">${o.ventes} sales logged this year · ${o.ca ? `pace ≈ ${eur(Math.round(rythme))} a year` : "no sale logged yet"}</div>
-      ${o.net != null ? `<div class="lbl" style="margin-top:14px">Net profit</div><div class="big">${eur(Math.round(o.net))} <small>/ ${eur(o.cible_net)}</small></div>
+      ${o.net != null ? `<div class="lbl" style="margin-top:14px">Net profit</div><div class="big">${eur(o.net)} <small>/ ${eur(o.cible_net)}</small></div>
       <div class="bar"><i style="width:${Math.max(0, Math.min(100, 100 * o.net / o.cible_net))}%"></i></div>
-      <div class="sub">${o.couts != null ? `${eur(o.ca)} sold − ${eur(o.prelev)} levies (21 %) − ${eur(o.couts)} paid for the items = <b>${eur(o.net)}</b> left for you` : "After the 21 % levies and what each item cost"}${o.ca ? ` · ${Math.round(100 * o.net / o.ca)} % of revenue` : ""}${o.net_estime ? ` · ${eur(Math.round(o.net_estime))} estimated (sales with unknown purchase)` : ""}</div>` : ""}
+      <div class="sub">${o.couts != null ? `${eur(o.ca)} sold − ${eur(o.prelev)} levies (21 %) − ${eur(o.couts)} paid for the items = <b>${eur(o.net)}</b> left for you` : "After the 21 % levies and what each item cost"}${o.ca ? ` · ${Math.round(100 * o.net / o.ca)} % of revenue` : ""}${o.net_estime ? ` · ${eur(o.net_estime)} estimated (sales with unknown purchase)` : ""}</div>` : ""}
       ${o.derniere_vente && (Date.now() - new Date(o.derniere_vente)) > 14 * 864e5 ? `<div class="sub" style="color:var(--gap);margin-top:6px">Last sale logged on ${new Date(o.derniere_vente).toLocaleDateString("en-GB")}: these numbers are behind until sales are logged.</div>` : ""}</div>
     <h2 class="sec">Cash</h2>
     <div class="panel">${t ? `<div class="lbl">Cash available</div><div class="big">${eur(t.solde)}</div>
