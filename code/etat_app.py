@@ -618,9 +618,9 @@ def historique(n_achats: int = 120, n_ventes: int = 250) -> dict:
         if a["id"] in dus:
             ha[-1]["rg"] = "Loyalty credit not moved to the LEGO account yet"
     ventes = base.lire("ventes", f"select=id,article_id,date_vente,plateforme,produit,nom_article,quantite,prix_vente,"
-                                 f"co_investisseur&order=date_vente.desc.nullslast,id.desc&limit={n_ventes}")
+                                 f"co_investisseur,commande_id&order=date_vente.desc.nullslast,id.desc&limit={n_ventes}")
     ids = ",".join({str(v["article_id"]) for v in ventes if v.get("article_id")}) or "0"
-    sets = {x["id"]: x for x in base.lire("articles", f"select=id,id_set,designation&id=in.({ids})&limit=10000")}
+    sets = {x["id"]: x for x in base.lire("articles", f"select=id,id_set,designation,achat_id&id=in.({ids})&limit=10000")}
     hv = []
     for v in ventes:
         x = sets.get(v.get("article_id"))
@@ -631,7 +631,7 @@ def historique(n_achats: int = 120, n_ventes: int = 250) -> dict:
         hv.append({"id": v["id"], "d": v["date_vente"], "p": str(v.get("plateforme") or "").title(),
                    "k": str(v.get("produit") or "").lower(), "n": nom, "q": v.get("quantite") or 1,
                    "px": v.get("prix_vente"), "co": 1 if v.get("co_investisseur") else 0,
-                   "a": v.get("article_id")})
+                   "a": v.get("article_id"), "cm": v.get("commande_id"), "la": (x or {}).get("achat_id")})
     return {"maj": maintenant().isoformat(timespec="seconds"), "achats": ha, "ventes": hv, "depenses": depenses()}
 
 
