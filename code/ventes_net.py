@@ -1,4 +1,6 @@
 """Revenu net de chaque vente : (prix + port payé par l'acheteur) − prélèvements − frais d'envoi réels.
+prix_vente = le brut tel qu'il est noté dans l'historique : prix de l'objet + (port payé − frais d'envoi réels),
+dès que les frais d'envoi sont connus (avant : prix de l'objet seul).
 
 Usage : python3 ventes_net.py remplir                     (ventes sans revenu net)
         python3 ventes_net.py frais <vente_id> <montant> [port_paye]
@@ -9,8 +11,10 @@ import base
 from regles import PRELEVEMENTS
 
 
-def net(prix, port_paye=None, frais_envoi=None) -> float:
-    return round((float(prix or 0) + float(port_paye or 0)) * (1 - PRELEVEMENTS) - float(frais_envoi or 0), 2)
+def net(prix_vente, port_paye=None, frais_envoi=None) -> float:
+    if frais_envoi is not None:  # prix_vente contient déjà port payé − frais d'envoi
+        return round((float(prix_vente or 0) + float(frais_envoi)) * (1 - PRELEVEMENTS) - float(frais_envoi), 2)
+    return round((float(prix_vente or 0) + float(port_paye or 0)) * (1 - PRELEVEMENTS), 2)
 
 
 def remplir() -> int:
@@ -25,10 +29,14 @@ def remplir() -> int:
 
 
 def frais(vente_id: int, montant: float, port_paye=None):
-    v = base.lire("ventes", f"select=id,prix_vente,port_paye&id=eq.{vente_id}")[0]
-    port = v["port_paye"] if port_paye is None else float(port_paye)
-    r = net(v["prix_vente"], port, montant)
-    base.modifier("ventes", f"id=eq.{vente_id}", {"frais_envoi": float(montant), "port_paye": port, "revenu_net": r})
+    v = base.lire("ventes", f"select=id,prix_vente,port_paye,frais_envoi&id=eq.{vente_id}")[0]
+    objet = float(v["prix_vente"] or 0)
+    if v["frais_envoi"] is not None:  # brut déjà corrigé : revenir au prix de l'objet
+        objet += float(v["frais_envoi"]) - float(v["port_paye"] or 0)
+    port = float(v["port_paye"] or 0) if port_paye is None else float(port_paye)
+    brut = round(objet + port - float(montant), 2)
+    r = net(brut, port, float(montant))
+    base.modifier("ventes", f"id=eq.{vente_id}", {"prix_vente": brut, "frais_envoi": float(montant), "port_paye": port, "revenu_net": r})
     return r
 
 
