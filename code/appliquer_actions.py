@@ -14,6 +14,7 @@ from pathlib import Path
 import base
 import figs_sets
 from regles import PRELEVEMENTS
+from ventes_net import net
 
 
 REVERSEE = "Cagnotte reversée perso → pro"
@@ -283,6 +284,7 @@ def vente_lot(a):
                              "produit": "FIGURINE" if (figs or l.get("fig")) else "SET", "id_minifig": l.get("fig") or None,
                              "nom_article": str(l.get("titre") or l.get("set") or l.get("fig") or "")[:300], "quantite": 1,
                              "prix_vente": round(float(l["prix"]), 2),
+                             "revenu_net": net(l["prix"]),
                              "commande_id": cmd,
                              "notes": note + ("" if l.get("article_id") else " (origine inconnue)")} for l in lignes],
                          "return=representation") or []
@@ -327,6 +329,8 @@ def vente(a):
                                         "produit": "FIGURINE" if a.get("fig") else "SET",
                                         "nom_article": str(a.get("titre") or "")[:300], "quantite": 1,
                                         "prix_vente": float(a["prix"]), "id_minifig": a.get("fig") or None,
+                                        "port_paye": float(a["port"]) if a.get("port") else None,
+                                        "revenu_net": net(a["prix"], a.get("port")),
                                         "notes": "Saisie depuis l'application" + ("" if art else " (origine inconnue)")}],
                     "return=representation")
     if v:
