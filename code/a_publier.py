@@ -24,8 +24,8 @@ EXEMPLAIRES = LEGO / "stock" / "app" / "exemplaires.json"
 
 
 def arrondi(p: float) -> float:
-    """Prix d'annonce rond : au 5 € au-dessus dès 30 €, à l'euro en dessous."""
-    return float(math.ceil(p / 5) * 5) if p >= 30 else float(math.ceil(p))
+    """Prix d'annonce rond : au 5 € au-dessus dès 20 € (Vinted : prix ronds), à l'euro en dessous."""
+    return float(math.ceil(p / 5) * 5) if p >= 20 else float(math.ceil(p))
 
 
 def mes_ventes() -> dict[str, list]:
