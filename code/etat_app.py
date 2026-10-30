@@ -480,7 +480,32 @@ def a_regulariser(obj: dict) -> list[dict]:
         out.append({"id": "tresorerie", "type": "reglage", "titre": "Set up the cash balance",
                     "detail": "Paste the treasury SQL in Supabase and confirm your starting cash, so alerts know how much you can spend."})
     out += partage("rappels", lambda: json.loads(RAPPELS.read_text())) or []
+    u = urssaf()
+    if u:
+        out.insert(0, u)   # au premier plan
     return out
+
+
+def urssaf() -> dict | None:
+    """Prochaine déclaration URSSAF trimestrielle (micro-entreprise) : 31/01, 30/04, 31/07, 31/10.
+    Carte calme jusqu'à 14 jours avant, puis en haut de la liste et comptée dans le badge.
+    Disparaît quand « Paid » est touché (fichier partagé « urssaf »)."""
+    payes = base.json_partage("urssaf", STOCK / "urssaf.json", {})
+    auj = dt.date.today()
+    for an in (auj.year - 1, auj.year, auj.year + 1):
+        for mois, jourm, trim in ((1, 31, 4), (4, 30, 1), (7, 31, 2), (10, 31, 3)):
+            d = dt.date(an, mois, jourm)
+            if str(d) in payes or d < auj - dt.timedelta(days=30):
+                continue
+            n = (d - auj).days
+            q = f"Q{trim} {an - 1 if trim == 4 else an}"
+            quand = "today" if n == 0 else "tomorrow" if n == 1 else f"in {n} days" if n > 0 else f"{-n} days late"
+            return {"id": f"urssaf-{d}", "type": "impots", "calme": n > 14,
+                    "titre": f"Pay URSSAF for {q} before {d.strftime('%d/%m')} ({quand})",
+                    "detail": "Declare the turnover of the quarter and pay on autoentrepreneur.urssaf.fr. "
+                              "Pay a day or two early: the deadline is the last day. Tap Paid once done.",
+                    "action": {"type": "urssaf_paye", "echeance": str(d), "label": "Paid"}}
+    return None
 
 
 def explication_note(nt: dict) -> str:

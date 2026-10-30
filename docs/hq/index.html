@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="50c9fa81f7"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="75232f53a5"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -77,7 +77,7 @@ h1{font-family:var(--display);font-weight:800;font-size:20px;margin:0;display:fl
 .htab tr.alerte td:first-child{box-shadow:inset 4px 0 0 var(--gap);font-weight:700;color:var(--ink)}
 .alerte-txt{color:var(--gap)!important;font-weight:600}
 .tagc.ok{background:var(--ok-bg);color:var(--ok)}
-.task.transfert,.task.ecart{border-left-color:var(--gap)}
+.task.transfert,.task.ecart,.task.impots{border-left-color:var(--gap)}
 .task ul.tls{list-style:none;padding:0;margin:4px 0 0;display:grid;gap:8px;color:var(--ink);font-size:14px}
 .task .tl{border-top:1px solid var(--line);padding-top:8px}
 .task .tlh{display:flex;justify-content:space-between;align-items:center;gap:8px}
@@ -958,7 +958,7 @@ function taches(){
   if (s.gap) l.unshift({ id: "inv", type: "inv", titre: `${s.gap} inventory mismatch${s.gap > 1 ? "es" : ""}`, detail: "Your count differs from the database. Open each one and say what happened (sold, lost or extra): the database follows on its own.", go: "gap" });
   return l;
 }
-const GENRE = { livraison: "Delivery", cashback: "Cashback", ventes: "Sales", annonces: "Listings", reglage: "Setup", transfert: "Money to move", ecart: "To fix", decision: "Decision", inv: "Inventory" };
+const GENRE = { livraison: "Delivery", cashback: "Cashback", ventes: "Sales", annonces: "Listings", reglage: "Setup", transfert: "Money to move", ecart: "To fix", decision: "Decision", inv: "Inventory", impots: "Taxes" };
 function rendreTodo(){
   const l = taches();
   $("#b-todo").textContent = l.filter((t) => !t.calme).length || "";

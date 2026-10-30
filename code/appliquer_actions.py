@@ -480,7 +480,15 @@ def noter_scan(a):
     base.json_partage_ecrire("scans", SCANS, tout)
 
 
-GESTES = {"perte": perte, "stock_trouve": noter_scan, "expedition": noter_scan, "colis_lien": colis_lien, "recu": recu, "cashback_recu": cashback_recu, "cashback_confirme": cashback_confirme, "achete": achete, "achat_libre": achat_libre, "vente": vente, "vente_lot": vente_lot, "vire": vire, "corrige": corrige, "supprime": supprime, "figs_lier": figs_lier, "horizon": horizon}
+def urssaf_paye(a):
+    """Déclaration URSSAF du trimestre payée : la carte de la to-do disparaît."""
+    payes = base.json_partage("urssaf", URSSAF, {})
+    payes[str(a["echeance"])[:10]] = str(a.get("le") or dt.date.today())[:10]
+    base.json_partage_ecrire("urssaf", URSSAF, payes)
+
+
+URSSAF = Path(__file__).resolve().parent.parent / "stock" / "urssaf.json"
+GESTES = {"perte": perte, "stock_trouve": noter_scan, "expedition": noter_scan, "colis_lien": colis_lien, "recu": recu, "cashback_recu": cashback_recu, "cashback_confirme": cashback_confirme, "achete": achete, "achat_libre": achat_libre, "vente": vente, "vente_lot": vente_lot, "vire": vire, "corrige": corrige, "supprime": supprime, "figs_lier": figs_lier, "horizon": horizon, "urssaf_paye": urssaf_paye}
 
 
 def appliquer(liste: list[dict]) -> dict:
