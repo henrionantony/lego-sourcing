@@ -241,6 +241,9 @@ def main():
     # Les meilleurs d'abord : retirés (ça monte), puis moins chers que le moins cher d'eBay, puis le plus gros prix
     moins_cher = lambda i: not i["ebay_bas"] or i["prix"] + i["port"] <= i["ebay_bas"]
     propositions.sort(key=lambda i: (i["st"] != "retiré", not moins_cher(i), -i["prix"]))
+    # Places limitées (150 annonces gratuites) : les sets au plus gros prix passent en premier
+    for r, s in enumerate(sorted(out, key=lambda s: -out[s]["prix"])):
+        out[s]["ordre"] = 1000 + r
     # Figurines validées (liste ordonnée « figurines » des réglages) : avant les sets, dans l'ordre choisi
     figs = {}
     for i, f in enumerate(reglages.get("figurines", [])):
