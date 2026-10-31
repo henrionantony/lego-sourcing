@@ -35,7 +35,7 @@ UE = ["AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "DE", "GR", "HU", "I
       "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE", "CH"]
 JOURNAL = []
 PAR_JOUR = int(os.environ.get("EBAY_PAR_JOUR") or 5)
-MAX_EN_LIGNE = 150   # annonces gratuites par mois (une annonce renouvelée chaque mois compte à nouveau)
+MAX_EN_LIGNE = 150   # annonces gratuites déposables par mois (compteur eBay remis à zéro le 1er)
 
 
 class Erreur(Exception):
@@ -438,6 +438,7 @@ def publier(s: str, v: dict, pol: dict, essai: bool, deja: dict | None = None) -
     if deja and deja.get("listing"):
         res["listing"] = deja["listing"]          # annonce en ligne : la mise à jour de l'offre suffit
     elif not essai:
+        res["cree_le"] = dt.date.today().isoformat()   # compte dans le quota du mois
         try:
             res["listing"] = appel("POST", f"/sell/inventory/v1/offer/{oid}/publish")["listingId"]
         except Erreur as e:
@@ -532,9 +533,12 @@ def main():
     # par_jour 0 = pause des nouvelles annonces (quota gratuit épuisé) ; les mises à jour continuent
     pj = (base.doc("ebay/reglages") or {}).get("par_jour")
     par_jour = int(PAR_JOUR if pj is None else pj)
-    max_en_ligne = int((base.doc("ebay/reglages") or {}).get("max_en_ligne") or MAX_EN_LIGNE)   # réglable sans code
+    # Quota eBay : 150 annonces DÉPOSÉES par mois (remis à zéro le 1er) ; une vente ou un retrait ne rend pas de place
+    mois = dt.date.today().isoformat()[:7]
+    deposees = sum(1 for v in faites.values() if str(v.get("cree_le", "")).startswith(mois))
+    reste_mois = int((base.doc("ebay/reglages") or {}).get("max_mois") or MAX_EN_LIGNE) - deposees
     # Dans l'ordre choisi (figurines d'abord) : la base ne garde pas l'ordre des clés
-    neuves = [s for s in sorted(a_faire, key=lambda s: a_faire[s].get("ordre", 1000)) if not (faites.get(s) or {}).get("listing")][:max(0, min(par_jour, max_en_ligne - en_ligne))]
+    neuves = [s for s in sorted(a_faire, key=lambda s: a_faire[s].get("ordre", 1000)) if not (faites.get(s) or {}).get("listing")][:max(0, min(par_jour, reste_mois))]
     a_faire = {s: a_faire[s] for s in list(maj) + neuves}
     if not a_faire:
         base.doc_ecrire("ebay/annonces", faites)
