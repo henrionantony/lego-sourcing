@@ -523,7 +523,7 @@ def main():
            and (faites[s].get("prix") != v["prix"] or faites[s].get("port") != v["port"]
                 or faites[s].get("qte") != v["qte"] or faites[s].get("img", 1) != len(v["images"])
                 or faites[s].get("desc", "?") != empreinte(v) or faites[s].get("plancher") != v.get("plancher"))}
-    en_ligne = sum(1 for v in faites.values() if v.get("listing"))
+    en_ligne = sum(1 for v in faites.values() if v.get("listing") and not v.get("retire"))   # les retirées ne comptent plus
     # Sets déjà en vente sur le compte par une annonce faite à la main : pas de seconde annonce
     for s in [s for s in a_faire if deja.get(s.split("-")[0]) and not (faites.get(s) or {}).get("listing")]:
         JOURNAL.append(f"{s} : déjà en vente à la main sur eBay, pas de nouvelle annonce")
@@ -532,8 +532,9 @@ def main():
     # par_jour 0 = pause des nouvelles annonces (quota gratuit épuisé) ; les mises à jour continuent
     pj = (base.doc("ebay/reglages") or {}).get("par_jour")
     par_jour = int(PAR_JOUR if pj is None else pj)
+    max_en_ligne = int((base.doc("ebay/reglages") or {}).get("max_en_ligne") or MAX_EN_LIGNE)   # réglable sans code
     # Dans l'ordre choisi (figurines d'abord) : la base ne garde pas l'ordre des clés
-    neuves = [s for s in sorted(a_faire, key=lambda s: a_faire[s].get("ordre", 1000)) if not (faites.get(s) or {}).get("listing")][:max(0, min(par_jour, MAX_EN_LIGNE - en_ligne))]
+    neuves = [s for s in sorted(a_faire, key=lambda s: a_faire[s].get("ordre", 1000)) if not (faites.get(s) or {}).get("listing")][:max(0, min(par_jour, max_en_ligne - en_ligne))]
     a_faire = {s: a_faire[s] for s in list(maj) + neuves}
     if not a_faire:
         base.doc_ecrire("ebay/annonces", faites)
