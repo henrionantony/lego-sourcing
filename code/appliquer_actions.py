@@ -510,6 +510,17 @@ def emplacement(a):
             neuf = [zone] if int(l.get("reste") or 1) <= n or not avant else (avant + [zone])
             base.modifier("articles", f"id=eq.{int(l['id'])}", {"emplacement": ", ".join(neuf)[:60]})
             n -= int(l.get("reste") or 1)
+    # Exemplaire désigné dans le scan (« This one ») quand un set vient de plusieurs achats
+    par_id = {str(int(l["id"])): l for l in stock}
+    for art, n in (a.get("articles") or {}).items():
+        l = par_id.get(str(int(art)))
+        if not l:
+            continue
+        avant = [x.strip() for x in str(l.get("emplacement") or "").split(",") if x.strip()]
+        if zone in avant:
+            continue
+        neuf = [zone] if int(l.get("reste") or 1) <= int(n) or not avant else (avant + [zone])
+        base.modifier("articles", f"id=eq.{int(l['id'])}", {"emplacement": ", ".join(neuf)[:60]})
 
 
 def strategie(a):
