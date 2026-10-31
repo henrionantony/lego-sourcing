@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="b28481d604"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="263800f36e"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -348,8 +348,9 @@ h2.sec:first-child{margin-top:4px}
 .scan-m{display:flex;gap:6px;margin-top:8px}
 .scan-m input{flex:1;min-width:0;font:inherit;font-size:16px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)}
 .zone-box{display:grid;gap:6px;border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:0 0 10px;background:var(--surface)}
-.zone-box label{display:grid;gap:2px}.zone-box small{color:var(--muted)}
-.zone-box input{font-size:18px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);text-transform:uppercase;max-width:10em}
+.zone-box small{color:var(--muted)}.zone-num{display:flex;align-items:center;gap:8px}
+.zone-box input{font-size:17px;padding:6px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);width:4.5em}
+.zone-recents .btn.on{background:var(--brick);color:var(--brick-ink);border-color:var(--brick)}
 .strat{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px}.strat .btn{padding:4px 10px;font-size:13px}
 .strat .btn.on{background:var(--brick);color:var(--brick-ink);border-color:var(--brick)}.strat em{font-size:12px;color:var(--muted);font-style:normal}
 .zone-recents{display:flex;flex-wrap:wrap;gap:6px}.zone-recents:empty{display:none}
@@ -600,9 +601,10 @@ dialog.confirmer::backdrop{background:rgba(0,0,0,.45)} dialog.confirmer p{margin
   <div id="scan-go" hidden>
     <div class="scan-bandeau" id="scan-bandeau"></div>
     <div id="zone-box" class="zone-box" hidden>
-      <label for="zone"><b>📍 Where are these boxes?</b><small>A = wardrobe, D = dressing, L = under the bed, C = bedroom, then the shelf or bin number (A2, L1…). Stays set until you change it.</small></label>
-      <input id="zone" maxlength="12" autocomplete="off" autocapitalize="characters" placeholder="e.g. A2">
-      <div id="zone-recents" class="zone-recents"></div>
+      <b>📍 Où sont ces boîtes ?</b>
+      <div id="zone-lieux" class="zone-recents"></div>
+      <label class="zone-num" for="zone-n"><small>N° d'étagère ou de bac (facultatif)</small><input id="zone-n" inputmode="numeric" maxlength="3" autocomplete="off" placeholder="—"></label>
+      <small>Reste choisi jusqu'à ce que tu le changes.</small>
     </div>
     <label class="scan-photo" id="scan-photo"><input type="file" id="scan-f" accept="image/*" capture="environment" hidden>
       <span class="viseur" id="viseur"><span></span></span><b>📷 Scan a barcode</b><small>Opens the camera. Fill the photo with the barcode, then tap Use Photo.</small></label>
@@ -1100,22 +1102,24 @@ $("#v-scan").addEventListener("click", async (e) => {
   }
   if (b.id === "cam-on"){ flux ? arreterCam() : demarrerCam(); return; }
 });
-// Emplacement des boîtes (inventaire) : gardé sur le téléphone tant qu'on ne le change pas
-const lireLS = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch (e) { return d; } };
-const ecrireLS = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
-const zoneActuelle = () => String(lireLS("zone", "") || "").trim().toUpperCase().slice(0, 12);
+// Emplacement des boîtes (inventaire), gardé sur le téléphone. Fonctions déclarées (pas de const) :
+// l'onglet Scan peut s'afficher avant que cette partie du script ait tourné.
+function lireLS(k, d){ try { const v = JSON.parse(localStorage.getItem(k)); return v ?? d; } catch (e) { return d; } }
+function ecrireLS(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+// Lieux de rangement d'le vendeur (en français, à sa demande) : code court enregistré dans la base + n° facultatif
+function lieux(){ return { A: "Armoire", DL: "Derrière le lit", SL: "Sous le lit", D: "Dressing", CU: "Cuisine" }; }
+function zl(){ if (!zl.v) zl.v = lireLS("zl", { l: "", n: "" }); return zl.v; }
+function zoneActuelle(){ const z = zl(); return z.l ? z.l + (z.n || "") : ""; }
+// « A2 » → « Armoire 2 » ; un code inconnu reste tel quel
+function libZone(z){ const m = String(z || "").trim().match(/^([A-Z]+)(\d*)$/), L = lieux(); return m && L[m[1]] ? L[m[1]] + (m[2] ? " " + m[2] : "") : String(z || ""); }
 function rendreZone(){
-  const z = zoneActuelle(), el = $("#zone");
-  if (document.activeElement !== el) el.value = z;
-  $("#zone-recents").innerHTML = lireLS("zones", []).filter((x) => x !== z).slice(0, 8).map((x) => `<button class="btn" data-zone="${esc(x)}">${esc(x)}</button>`).join("");
+  const z = zl();
+  $("#zone-lieux").innerHTML = Object.entries(lieux()).map(([k, v]) => `<button class="btn${z.l === k ? " on" : ""}" data-lieu="${k}" aria-pressed="${z.l === k}">${v}</button>`).join("");
+  const el = $("#zone-n"); if (document.activeElement !== el) el.value = z.n || "";
 }
-function choisirZone(z){
-  z = String(z || "").trim().toUpperCase().slice(0, 12); ecrireLS("zone", z);
-  if (z) ecrireLS("zones", [z, ...lireLS("zones", []).filter((x) => x !== z)].slice(0, 12));
-  rendreZone(); rendreScan();
-}
-$("#zone").addEventListener("change", (e) => choisirZone(e.target.value));
-$("#zone-recents").addEventListener("click", (e) => { const b = e.target.closest("[data-zone]"); if (b) choisirZone(b.dataset.zone); });
+function majZone(){ ecrireLS("zl", zl()); rendreZone(); rendreScan(); }
+$("#zone-lieux").addEventListener("click", (e) => { const b = e.target.closest("[data-lieu]"); if (!b) return; const z = zl(); z.l = z.l === b.dataset.lieu ? "" : b.dataset.lieu; majZone(); });
+$("#zone-n").addEventListener("input", (e) => { zl().n = e.target.value.replace(/\D/g, "").slice(0, 3); majZone(); });
 function msgScan(t, ok){ const el = $("#scan-msg"); el.textContent = t; el.className = "scan-msg" + (ok === false ? " ko" : ok ? " ok" : ""); el.hidden = !t; }
 function ajouterScan(s){
   SC.scans[s] = (SC.scans[s] || 0) + 1; sauverScan(); rendreScan();
@@ -1154,7 +1158,7 @@ const enBase = (s) => EXEMP[s] ? EXEMP[s].c.reduce((a, x) => a + x[4], 0) : null
 // Où ranger les comptages : les lignes de Stock, plus « b<set> » pour un set de la base absent de cette liste
 // Où sont rangées les boîtes de ce set (zones notées pendant l'inventaire)
 function zonesSet(s){ const z = [...new Set((EXEMP[s]?.c || []).flatMap((x) => String(x[7] || "").split(",")).map((x) => x.trim()).filter(Boolean))];
-  return z.length ? `<span>📍 ${esc(z.join(", "))}</span>` : ""; }
+  return z.length ? `<span>📍 ${esc(z.map(libZone).join(", "))}</span>` : ""; }
 // Stratégie de vente des boîtes en stock de ce set : E = entier, P = part-out ; mélange ou rien = ""
 function stratBase(s){ const v = [...new Set((EXEMP[s]?.c || []).map((x) => x[8] || ""))]; return v.length === 1 ? v[0] : v.length ? "mix" : ""; }
 function blocStrat(s){
@@ -1171,7 +1175,7 @@ function resInventaire(){
       const apres = c + n, ecart = apres - q;
       return `<div class="scan-l${it.length ? "" : " hors"}">${vignetteSet(s)}<span><b>${n} ×</b> ${esc(nomSet(s))} · ${esc(s)}<small>${it.length ? `In database: <b>${q}</b> · Counted: <b>${c} → ${apres}</b>`
         + `<em class="${ecart ? "ec-ko" : "ec-ok"}">${ecart === 0 ? "✓ matches the database" : ecart > 0 ? `⚠ ${ecart} more than the database` : `${-ecart} still to find`}</em>` : "⚠ Database says 0 in stock (purchase not recorded, or all marked sold). Kept on a side list; your purchases are not changed"}</small>${it.length && EXEMP[s] ? blocStrat(s) : ""}</span>${moins(s)}</div>`; }).join("")}</div>
-    <div class="row"><button class="btn yes" id="inv-ok">Add ${nbScans()} to my inventory${zoneActuelle() ? " · 📍 " + esc(zoneActuelle()) : ""}</button></div>`;
+    <div class="row"><button class="btn yes" id="inv-ok">Add ${nbScans()} to my inventory${zoneActuelle() ? " · 📍 " + esc(libZone(zoneActuelle())) : ""}</button></div>`;
 }
 /* Vente : un colis = une vente, éventuellement en lot. Chaque article scanné est rattaché à un
    exemplaire acheté, le moins cher d'abord (règle d'le vendeur) ; le prix total est réparti au prix public Lego. */
@@ -1215,8 +1219,8 @@ function resVente(){
   return `<div class="scan-cmd">${L.map((l) => l.fig ? `<div class="scan-l">${vignetteFig(l.s)}<span><b>${esc(l.nom)}</b> · ${esc(l.s)}
       <small>Minifigure · linked to its purchase later</small>
       <small class="vpart" data-i="${L.indexOf(l)}">${total ? "Share of the price: " + eur(l.prix) : ""}</small></span>${l.k === 0 ? moinsFig(l.s) : ""}</div>` : `<div class="scan-l${l.e ? "" : " hors"}">${vignetteSet(l.s)}<span><b>${esc(nomSet(l.s) || l.s)}</b> · ${esc(l.s)}
-      <small>${l.e ? (l.libres.length > 1 ? `<select class="vex" data-s="${esc(l.s)}" data-k="${l.k}" aria-label="Which copy">${l.libres.map((x) => `<option value="${x.id}"${x.id === l.e.id ? " selected" : ""}>Cost ${eur(x.cout)} · ${esc(x.lieu)} ${dateFr(x.d)}${x.zone ? " · 📍 " + esc(x.zone) : ""}</option>`).join("")}</select>`
-        : `Cost ${eur(l.e.cout)} · ${esc(l.e.lieu)} ${dateFr(l.e.d)}${l.e.zone ? ` · <b>📍 ${esc(l.e.zone)}</b>` : ""}`) : "Not in stock in the database: the sale is saved without its purchase"}</small>
+      <small>${l.e ? (l.libres.length > 1 ? `<select class="vex" data-s="${esc(l.s)}" data-k="${l.k}" aria-label="Which copy">${l.libres.map((x) => `<option value="${x.id}"${x.id === l.e.id ? " selected" : ""}>Cost ${eur(x.cout)} · ${esc(x.lieu)} ${dateFr(x.d)}${x.zone ? " · 📍 " + esc(x.zone.split(",").map(libZone).join(", ")) : ""}</option>`).join("")}</select>`
+        : `Cost ${eur(l.e.cout)} · ${esc(l.e.lieu)} ${dateFr(l.e.d)}${l.e.zone ? ` · <b>📍 ${esc(l.e.zone.split(",").map(libZone).join(", "))}</b>` : ""}`) : "Not in stock in the database: the sale is saved without its purchase"}</small>
       <small class="vpart" data-i="${L.indexOf(l)}">${total ? "Share of the price: " + eur(l.prix) : ""}</small></span>${l.k === 0 ? moins(l.s) : ""}</div>`).join("")}</div>
     <form class="vente-f" id="vente-f">
       <label>${L.length > 1 ? `Total price of the bundle (${L.length} items)` : "Sale price"} (€)<input name="total" type="number" inputmode="decimal" step="0.01" min="0" value="${esc(v.total || "")}" required></label>
