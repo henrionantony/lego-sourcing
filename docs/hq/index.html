@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="263800f36e"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="f68819399d"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -332,9 +332,9 @@ h2.sec:first-child{margin-top:4px}
 .mode .ic{font-size:26px}
 .mode b{display:block;font-size:17px}
 .mode small{display:block;color:var(--muted);font-size:13px;margin-top:2px}
-.m-delivery{border-left-color:#2f7de1} .m-inventory{border-left-color:#8a55d6} .m-sale{border-left-color:#1f8a4c}
+.m-delivery{border-left-color:#2f7de1} .m-inventory{border-left-color:#8a55d6} .m-move{border-left-color:#b5651d} .m-sale{border-left-color:#1f8a4c}
 .scan-bandeau{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;border-radius:12px;color:#fff;margin:4px 0 10px}
-.scan-bandeau.m-delivery{background:#2f7de1} .scan-bandeau.m-inventory{background:#8a55d6} .scan-bandeau.m-sale{background:#1f8a4c}
+.scan-bandeau.m-delivery{background:#2f7de1} .scan-bandeau.m-inventory{background:#8a55d6} .scan-bandeau.m-move{background:#b5651d} .scan-bandeau.m-sale{background:#1f8a4c}
 .scan-bandeau b{font-size:16px} .scan-bandeau .btn{padding:4px 12px;font-size:13px}
 .cam{position:relative;aspect-ratio:4/3;background:#000;border-radius:14px;overflow:hidden;margin-bottom:8px}
 .cam video{width:100%;height:100%;object-fit:cover;display:none}
@@ -595,6 +595,7 @@ dialog.confirmer::backdrop{background:rgba(0,0,0,.45)} dialog.confirmer p{margin
     <p class="sub">Pick one first, so nothing lands in the wrong place.</p>
     <button class="mode m-delivery" data-mode="delivery"><span class="ic">📦</span><span><b>Delivery</b><small>A parcel I just received</small></span></button>
     <button class="mode m-inventory" data-mode="inventory"><span class="ic">📋</span><span><b>Inventory</b><small>Counting the stock I already have</small></span></button>
+    <button class="mode m-move" data-mode="move"><span class="ic">📍</span><span><b>Move</b><small>Change where boxes are stored, or their strategy (no counting)</small></span></button>
     <button class="mode m-sale" data-mode="sale"><span class="ic">🏷️</span><span><b>Sale</b><small>Items I'm packing to ship</small></span></button>
   </div>
   <div id="scan-cmds" hidden></div>
@@ -1010,7 +1011,7 @@ function rendreTodo(){
 }
 // Onglet Scan : on choisit d'abord le mode (Delivery, Inventory, Sale), puis la caméra lit
 // les codes-barres dans le cadre. Les scans restent sur ce téléphone jusqu'à leur envoi.
-const MODES = { delivery: "📦 Delivery", inventory: "📋 Inventory", sale: "🏷️ Sale" };
+const MODES = { delivery: "📦 Delivery", inventory: "📋 Inventory", move: "📍 Move", sale: "🏷️ Sale" };
 let SC = { mode: null, cmd: null, scans: {} };
 try { SC = { ...SC, ...JSON.parse(localStorage.getItem("scan") || "{}") }; } catch (e) {}
 function sauverScan(){ try { localStorage.setItem("scan", JSON.stringify(SC)); } catch (e) {} }
@@ -1087,9 +1088,9 @@ function rendreScanVue(){
   $("#scan-bandeau").className = "scan-bandeau m-" + SC.mode;
   $("#scan-bandeau").innerHTML = `<b>${MODES[SC.mode]}${cmd ? " · " + esc(cmd.titre) : ""}</b><button class="btn" data-changer="1">Change</button>`;
   $("#cam-ligne").hidden = !camPossible();
-  $("#figbox").hidden = SC.mode === "delivery";
-  $("#zone-box").hidden = SC.mode !== "inventory";
-  if (SC.mode === "inventory") rendreZone();
+  $("#zone-box").hidden = SC.mode !== "inventory" && SC.mode !== "move";
+  if (!$("#zone-box").hidden) rendreZone();
+  $("#figbox").hidden = SC.mode === "delivery" || SC.mode === "move";
   rendreScan();
 }
 $("#v-scan").addEventListener("click", async (e) => {
@@ -1126,7 +1127,7 @@ function ajouterScan(s){
   const nom = nomSet(s); msgScan(`✓ ${nom ? nom + " · " : ""}${s}`, true);
 }
 function rendreScan(){
-  const r = SC.mode === "delivery" ? resDelivery() : SC.mode === "inventory" ? resInventaire() : resVente();
+  const r = SC.mode === "delivery" ? resDelivery() : SC.mode === "inventory" ? resInventaire() : SC.mode === "move" ? resDeplacer() : resVente();
   const nb = nbScans();
   $("#scan-res").innerHTML = r + (nb ? `<div class="row"><button class="btn" id="scan-vider">Clear ${nb} scan${nb > 1 ? "s" : ""}</button></div>` : "");
 }
@@ -1167,6 +1168,13 @@ function blocStrat(s){
   return `<span class="strat">${b("E")}${b("P")}<em>${choix !== avant ? "will be saved" : avant === "mix" ? "some whole, some part-out" : avant ? "" : "no strategy yet"}</em></span>`;
 }
 function lignesCompte(s){ const it = lignesStock(s); return EXEMP[s] && !it.some((x) => x.id === "b" + s) ? [...it, { id: "b" + s, q: 0 }] : it; }
+// Déplacer : on rescanne des boîtes déjà comptées pour changer leur lieu ou leur stratégie, sans toucher aux comptages
+function resDeplacer(){
+  const l = Object.entries(SC.scans), z = zoneActuelle();
+  if (!l.length) return `<p class="empty">Scan the boxes you moved. Pick the new place above. Counts are not changed.</p>`;
+  return `<div class="scan-cmd">${l.map(([s, n]) => `<div class="scan-l${EXEMP[s] ? "" : " hors"}">${vignetteSet(s)}<span><b>${n} ×</b> ${esc(nomSet(s))} · ${esc(s)}<small>${EXEMP[s] ? `Now: ${zonesSet(s) || "no place yet"}` : "⚠ Not in stock in the database: nothing to move"}</small>${EXEMP[s] ? blocStrat(s) : ""}</span>${moins(s)}</div>`).join("")}</div>
+    <div class="row"><button class="btn yes" id="move-ok">${z ? `Move ${nbScans()} to 📍 ${esc(libZone(z))}` : "Save"}</button></div>`;
+}
 function resInventaire(){
   const l = Object.entries(SC.scans), fl = figsL();
   if (!l.length && !fl.length) return `<p class="empty">Scan the boxes on a shelf. Counts are added to the Stock tab when you save.</p>`;
@@ -1251,6 +1259,17 @@ $("#scan-res").addEventListener("click", async (e) => {
     sauverScan(); rendreScanVue(); rendreTodo(); msgScan(`✓ ${x.titre} marked received`, true); return;
   }
   if (b.dataset.strat){ SC.strat = SC.strat || {}; SC.strat[b.dataset.strat] = b.dataset.k; sauverScan(); rendreScan(); return; }
+  if (b.id === "move-ok"){
+    const z = zoneActuelle(), sets = Object.fromEntries(Object.entries(SC.scans).filter(([s]) => EXEMP[s]));
+    const strats = Object.fromEntries(Object.entries(SC.strat || {}).filter(([s, k]) => sets[s] && k !== stratBase(s)).map(([s, k]) => [s, k === "P" ? "LOT/DETAILS" : "ENTIER"]));
+    if (!Object.keys(sets).length || (!z && !Object.keys(strats).length)){ msgScan(z ? "None of these boxes is in stock in the database." : "Pick a place above, or change a strategy.", false); return; }
+    b.disabled = true; let ko = 0;
+    if (z && !await envoyerAction("zone-" + Date.now(), { type: "emplacement", zone: z, sets, deplacer: true })) ko++;
+    if (Object.keys(strats).length && !await envoyerAction("strat-" + Date.now(), { type: "strategie", sets: strats })) ko++;
+    if (ko){ b.disabled = false; msgScan("Not saved. Check your connection and tap again.", false); return; }
+    const nb = nbScans(); SC.scans = {}; SC.strat = {}; sauverScan(); rendreScan();
+    msgScan(`✓ ${nb} box${nb > 1 ? "es" : ""} updated${z ? " · 📍 " + libZone(z) : ""}. The app shows it after the next refresh.`, true); return;
+  }
   if (b.id === "inv-ok"){
     b.disabled = true; let ko = 0; const trouves = {}; const nbTot = nbScans();
     for (const [s, n] of Object.entries(SC.scans)){

@@ -497,7 +497,8 @@ def emplacement(a):
     for s, n in (a.get("sets") or {}).items():
         s, n = str(s), int(n)
         lignes = [l for l in stock if str(l.get("id_set") or "").split("-")[0].removesuffix(".0") == s]
-        lignes.sort(key=lambda l: (bool(l.get("emplacement")), l["id"]))
+        # inventaire : les boîtes pas encore rangées d'abord ; déplacement : celles déjà rangées ailleurs d'abord
+        lignes.sort(key=lambda l: (bool(l.get("emplacement")) != bool(a.get("deplacer")), l["id"]))
         for l in lignes:
             if n <= 0:
                 break
