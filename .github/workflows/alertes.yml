@@ -71,9 +71,11 @@ jobs:
             fi
             for i in 1 2 3 4 5 6; do
               sleep 5
-              [ ! -e /tmp/appli.encours ] && python3 gestes_attente.py && appli
+              if [ ! -e /tmp/appli.encours ] && python3 gestes_attente.py; then appli; fi
             done
           done
+          # Fin normale du passage : ne pas finir sur le code du dernier test (affiché en erreur dans l'appli)
+          true
       - uses: actions/cache/save@v4
         if: always()
         with:
