@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="d406b6274d"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="96eefcbbd7"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -352,7 +352,7 @@ h2.sec:first-child{margin-top:4px}
 .zone-box input{font-size:17px;padding:6px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);width:4.5em}
 .zone-recents .btn.on{background:var(--brick);color:var(--brick-ink);border-color:var(--brick)}
 .strat{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px}.strat .btn{padding:4px 10px;font-size:13px}
-.strat .btn.on{background:var(--brick);color:var(--brick-ink);border-color:var(--brick)}.strat em{font-size:12px;color:var(--muted);font-style:normal}
+.strat .btn.on{background:var(--brick);color:var(--brick-ink);border-color:var(--brick)}.strat-ex{flex-direction:column;align-items:stretch}.strat-l{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:6px 0;border-top:1px solid var(--line)}.strat-l small{flex-basis:100%;font-weight:500}.strat em{font-size:12px;color:var(--muted);font-style:normal}
 .ou{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:4px}.ou li{display:grid}.ou span{font-size:12px;color:var(--muted)}
 .zone-recents{display:flex;flex-wrap:wrap;gap:6px}.zone-recents:empty{display:none}
 .figbox{margin-top:10px;border:1px solid var(--line);border-radius:12px;padding:8px 12px;background:var(--card)}
@@ -1163,9 +1163,29 @@ function zonesSet(s){ const z = [...new Set((EXEMP[s]?.c || []).flatMap((x) => S
 // Stratégie de vente des boîtes en stock de ce set : E = entier, P = part-out ; mélange ou rien = ""
 function stratBase(s){ const v = [...new Set((EXEMP[s]?.c || []).map((x) => x[8] || ""))]; return v.length === 1 ? v[0] : v.length ? "mix" : ""; }
 function blocStrat(s){
+  const c = EXEMP[s]?.c || [], lib = { E: "Whole set", P: "Part-out" };
+  // Plusieurs exemplaires venant d'achats différents : une ligne par exemplaire, la stratégie se choisit pour chacun
+  if (c.length > 1){
+    const ch = (SC.stratA || {})[s] || {};
+    return `<span class="strat strat-ex"><em>Several copies from different purchases: pick for each one.</em>${c.map((x) => {
+      const avant = x[8] || "", choix = ch[x[0]] || avant;
+      const b = (k) => `<button class="btn${choix === k ? " on" : ""}" data-strata="${esc(s)}" data-art="${esc(x[0])}" data-k="${k}" aria-pressed="${choix === k}">${k === "E" ? "📦" : "✂"} ${lib[k]}</button>`;
+      return `<span class="strat-l"><small>${x[4] > 1 ? `<b>${x[4]} ×</b> ` : ""}${esc(x[3] || "")} ${dateFr(x[2])} · cost ${eur(x[1])}${x[7] ? " · 📍 " + esc(String(x[7]).split(",").map(libZone).join(", ")) : ""}</small>${b("E")}${b("P")}<em>${choix !== avant ? "will be saved" : avant ? "" : "no strategy yet"}</em></span>`; }).join("")}</span>`;
+  }
   const avant = stratBase(s), choix = (SC.strat || {})[s] || avant;
-  const lib = { E: "Whole set", P: "Part-out" }, b = (k) => `<button class="btn${choix === k ? " on" : ""}" data-strat="${esc(s)}" data-k="${k}" aria-pressed="${choix === k}">${k === "E" ? "📦" : "✂"} ${lib[k]}</button>`;
+  const b = (k) => `<button class="btn${choix === k ? " on" : ""}" data-strat="${esc(s)}" data-k="${k}" aria-pressed="${choix === k}">${k === "E" ? "📦" : "✂"} ${lib[k]}</button>`;
   return `<span class="strat">${b("E")}${b("P")}<em>${choix !== avant ? "will be saved" : avant === "mix" ? "some whole, some part-out" : avant ? "" : "no strategy yet"}</em></span>`;
+}
+// Choix de stratégie à envoyer : par set (un seul exemplaire) et par exemplaire (articles), seulement ce qui change
+function stratsAEnvoyer(garde){
+  const K = (k) => k === "P" ? "LOT/DETAILS" : "ENTIER";
+  const sets = Object.fromEntries(Object.entries(SC.strat || {}).filter(([s, k]) => garde(s) && (EXEMP[s]?.c || []).length <= 1 && k !== stratBase(s)).map(([s, k]) => [s, K(k)]));
+  const articles = {};
+  for (const [s, m] of Object.entries(SC.stratA || {})) if (garde(s)) for (const [id, k] of Object.entries(m)){
+    const x = (EXEMP[s]?.c || []).find((r) => String(r[0]) === String(id));
+    if (x && k !== (x[8] || "")) articles[id] = K(k);
+  }
+  return Object.keys(sets).length || Object.keys(articles).length ? { sets, articles } : null;
 }
 function lignesCompte(s){ const it = lignesStock(s); return EXEMP[s] && !it.some((x) => x.id === "b" + s) ? [...it, { id: "b" + s, q: 0 }] : it; }
 // Exemplaires d'un set par lieu : « 2 × Armoire 2 », « 1 × no place yet », avec achat et coût
@@ -1261,6 +1281,8 @@ $("#scan-res").addEventListener("click", async (e) => {
   if (b.dataset.fplus){ const x = SC.figs[b.dataset.fplus]; if (x) x.n++; sauverScan(); rendreScan(); return; }
   if (b.dataset.plus){ const s = b.dataset.plus; SC.scans[s] = (SC.scans[s] || 0) + 1; sauverScan(); rendreScan(); return; }
   if (b.dataset.moins){ const s = b.dataset.moins; SC.scans[s] = (SC.scans[s] || 1) - 1; if (SC.scans[s] <= 0) delete SC.scans[s]; sauverScan(); rendreScan(); return; }
+  if (b.dataset.strat){ SC.strat = SC.strat || {}; SC.strat[b.dataset.strat] = b.dataset.k; sauverScan(); rendreScan(); return; }
+  if (b.dataset.strata){ SC.stratA = SC.stratA || {}; const m = SC.stratA[b.dataset.strata] = SC.stratA[b.dataset.strata] || {}; m[b.dataset.art] = b.dataset.k; sauverScan(); rendreScan(); return; }
   if (!db){ msgScan("Not connected. Reload the page and try again.", false); return; }
   if (b.dataset.recu){
     const x = enCours().find((y) => y.id === b.dataset.recu); if (!x) return;
@@ -1270,16 +1292,15 @@ $("#scan-res").addEventListener("click", async (e) => {
     if (SC.cmd === x.id) SC.cmd = null;
     sauverScan(); rendreScanVue(); rendreTodo(); msgScan(`✓ ${x.titre} marked received`, true); return;
   }
-  if (b.dataset.strat){ SC.strat = SC.strat || {}; SC.strat[b.dataset.strat] = b.dataset.k; sauverScan(); rendreScan(); return; }
   if (b.id === "move-ok"){
     const z = zoneActuelle(), sets = Object.fromEntries(Object.entries(SC.scans).filter(([s]) => EXEMP[s]));
-    const strats = Object.fromEntries(Object.entries(SC.strat || {}).filter(([s, k]) => sets[s] && k !== stratBase(s)).map(([s, k]) => [s, k === "P" ? "LOT/DETAILS" : "ENTIER"]));
-    if (!Object.keys(sets).length || (!z && !Object.keys(strats).length)){ msgScan(z ? "None of these boxes is in stock in the database." : "Pick a place above, or change a strategy.", false); return; }
+    const strats = stratsAEnvoyer((s) => sets[s]);
+    if (!Object.keys(sets).length || (!z && !strats)){ msgScan(z ? "None of these boxes is in stock in the database." : "Pick a place above, or change a strategy.", false); return; }
     b.disabled = true; let ko = 0;
     if (z && !await envoyerAction("zone-" + Date.now(), { type: "emplacement", zone: z, sets, deplacer: true })) ko++;
-    if (Object.keys(strats).length && !await envoyerAction("strat-" + Date.now(), { type: "strategie", sets: strats })) ko++;
+    if (strats && !await envoyerAction("strat-" + Date.now(), { type: "strategie", ...strats })) ko++;
     if (ko){ b.disabled = false; msgScan("Not saved. Check your connection and tap again.", false); return; }
-    const nb = nbScans(); SC.scans = {}; SC.strat = {}; sauverScan(); rendreScan();
+    const nb = nbScans(); SC.scans = {}; SC.strat = {}; SC.stratA = {}; sauverScan(); rendreScan();
     msgScan(`✓ ${nb} box${nb > 1 ? "es" : ""} updated${z ? " · 📍 " + libZone(z) : ""}. The app shows it after the next refresh.`, true); return;
   }
   if (b.id === "inv-ok"){
@@ -1303,10 +1324,10 @@ $("#scan-res").addEventListener("click", async (e) => {
     if (Object.keys(trouves).length && !await envoyerAction("trouve-" + Date.now(), { type: "stock_trouve", sets: trouves, ...(zone ? { zone } : {}) })) ko++;
     const ranges = Object.fromEntries(Object.entries(SC.scans).filter(([s]) => !trouves[s]));
     if (zone && Object.keys(ranges).length && !await envoyerAction("zone-" + Date.now(), { type: "emplacement", zone, sets: ranges })) ko++;
-    const strats = Object.fromEntries(Object.entries(SC.strat || {}).filter(([s, k]) => SC.scans[s] && !trouves[s] && k !== stratBase(s)).map(([s, k]) => [s, k === "P" ? "LOT/DETAILS" : "ENTIER"]));
-    if (Object.keys(strats).length && !await envoyerAction("strat-" + Date.now(), { type: "strategie", sets: strats })) ko++;
+    const strats = stratsAEnvoyer((s) => SC.scans[s] && !trouves[s]);
+    if (strats && !await envoyerAction("strat-" + Date.now(), { type: "strategie", ...strats })) ko++;
     if (ko){ b.disabled = false; msgScan("Part of it was not saved. Check your connection and tap again.", false); return; }
-    const nb = nbTot; SC.scans = {}; SC.figs = {}; SC.strat = {}; sauverScan(); rendreScan(); rendre();
+    const nb = nbTot; SC.scans = {}; SC.figs = {}; SC.strat = {}; SC.stratA = {}; sauverScan(); rendreScan(); rendre();
     msgScan(`✓ ${nb} item${nb > 1 ? "s" : ""} added to your inventory`, true); return;
   }
 });

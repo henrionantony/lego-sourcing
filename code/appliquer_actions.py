@@ -513,8 +513,9 @@ def emplacement(a):
 
 
 def strategie(a):
-    """Stratégie choisie au scan d'inventaire (Whole set / Part-out) : appliquée à toutes les boîtes
-    en stock de ce set. Revenir dessus plus tard = rescanner et choisir l'autre."""
+    """Stratégie choisie au scan d'inventaire (Whole set / Part-out). « sets » : appliquée à toutes les
+    boîtes en stock de ce set (un seul exemplaire) ; « articles » : à un exemplaire précis (plusieurs achats).
+    Revenir dessus plus tard = rescanner et choisir l'autre."""
     stock = base.lire("stock", "select=id,id_set&reste=gt.0&categorie=eq.SET&limit=10000") or []
     for s, v in (a.get("sets") or {}).items():
         if v not in ("ENTIER", "LOT/DETAILS"):
@@ -522,6 +523,14 @@ def strategie(a):
         ids = [str(int(l["id"])) for l in stock if str(l.get("id_set") or "").split("-")[0].removesuffix(".0") == str(s)]
         if ids:
             base.modifier("articles", f"id=in.({','.join(ids)})", {"strategie": v})
+    # Plusieurs exemplaires du même set venant d'achats différents : choix exemplaire par exemplaire
+    en_stock = {str(int(l["id"])) for l in stock}
+    for art, v in (a.get("articles") or {}).items():
+        if v not in ("ENTIER", "LOT/DETAILS"):
+            raise ValueError("stratégie inconnue")
+        art = str(int(art))
+        if art in en_stock:
+            base.modifier("articles", f"id=eq.{art}", {"strategie": v})
 
 
 def urssaf_paye(a):
