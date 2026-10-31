@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="f68819399d"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="d406b6274d"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -332,9 +332,9 @@ h2.sec:first-child{margin-top:4px}
 .mode .ic{font-size:26px}
 .mode b{display:block;font-size:17px}
 .mode small{display:block;color:var(--muted);font-size:13px;margin-top:2px}
-.m-delivery{border-left-color:#2f7de1} .m-inventory{border-left-color:#8a55d6} .m-move{border-left-color:#b5651d} .m-sale{border-left-color:#1f8a4c}
+.m-delivery{border-left-color:#2f7de1} .m-inventory{border-left-color:#8a55d6} .m-move{border-left-color:#b5651d} .m-find{border-left-color:#0e7c86} .m-sale{border-left-color:#1f8a4c}
 .scan-bandeau{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;border-radius:12px;color:#fff;margin:4px 0 10px}
-.scan-bandeau.m-delivery{background:#2f7de1} .scan-bandeau.m-inventory{background:#8a55d6} .scan-bandeau.m-move{background:#b5651d} .scan-bandeau.m-sale{background:#1f8a4c}
+.scan-bandeau.m-delivery{background:#2f7de1} .scan-bandeau.m-inventory{background:#8a55d6} .scan-bandeau.m-move{background:#b5651d} .scan-bandeau.m-find{background:#0e7c86} .scan-bandeau.m-sale{background:#1f8a4c}
 .scan-bandeau b{font-size:16px} .scan-bandeau .btn{padding:4px 12px;font-size:13px}
 .cam{position:relative;aspect-ratio:4/3;background:#000;border-radius:14px;overflow:hidden;margin-bottom:8px}
 .cam video{width:100%;height:100%;object-fit:cover;display:none}
@@ -353,6 +353,7 @@ h2.sec:first-child{margin-top:4px}
 .zone-recents .btn.on{background:var(--brick);color:var(--brick-ink);border-color:var(--brick)}
 .strat{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px}.strat .btn{padding:4px 10px;font-size:13px}
 .strat .btn.on{background:var(--brick);color:var(--brick-ink);border-color:var(--brick)}.strat em{font-size:12px;color:var(--muted);font-style:normal}
+.ou{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:4px}.ou li{display:grid}.ou span{font-size:12px;color:var(--muted)}
 .zone-recents{display:flex;flex-wrap:wrap;gap:6px}.zone-recents:empty{display:none}
 .figbox{margin-top:10px;border:1px solid var(--line);border-radius:12px;padding:8px 12px;background:var(--card)}
 .figbox summary{font-weight:600;cursor:pointer}
@@ -595,6 +596,7 @@ dialog.confirmer::backdrop{background:rgba(0,0,0,.45)} dialog.confirmer p{margin
     <p class="sub">Pick one first, so nothing lands in the wrong place.</p>
     <button class="mode m-delivery" data-mode="delivery"><span class="ic">📦</span><span><b>Delivery</b><small>A parcel I just received</small></span></button>
     <button class="mode m-inventory" data-mode="inventory"><span class="ic">📋</span><span><b>Inventory</b><small>Counting the stock I already have</small></span></button>
+    <button class="mode m-find" data-mode="find"><span class="ic">🔎</span><span><b>Find</b><small>Where are my copies of a set? Type or scan it</small></span></button>
     <button class="mode m-move" data-mode="move"><span class="ic">📍</span><span><b>Move</b><small>Change where boxes are stored, or their strategy (no counting)</small></span></button>
     <button class="mode m-sale" data-mode="sale"><span class="ic">🏷️</span><span><b>Sale</b><small>Items I'm packing to ship</small></span></button>
   </div>
@@ -604,7 +606,6 @@ dialog.confirmer::backdrop{background:rgba(0,0,0,.45)} dialog.confirmer p{margin
     <div id="zone-box" class="zone-box" hidden>
       <b>📍 Où sont ces boîtes ?</b>
       <div id="zone-lieux" class="zone-recents"></div>
-      <label class="zone-num" for="zone-n"><small>N° d'étagère ou de bac (facultatif)</small><input id="zone-n" inputmode="numeric" maxlength="3" autocomplete="off" placeholder="—"></label>
       <small>Reste choisi jusqu'à ce que tu le changes.</small>
     </div>
     <label class="scan-photo" id="scan-photo"><input type="file" id="scan-f" accept="image/*" capture="environment" hidden>
@@ -1011,7 +1012,7 @@ function rendreTodo(){
 }
 // Onglet Scan : on choisit d'abord le mode (Delivery, Inventory, Sale), puis la caméra lit
 // les codes-barres dans le cadre. Les scans restent sur ce téléphone jusqu'à leur envoi.
-const MODES = { delivery: "📦 Delivery", inventory: "📋 Inventory", move: "📍 Move", sale: "🏷️ Sale" };
+const MODES = { delivery: "📦 Delivery", inventory: "📋 Inventory", move: "📍 Move", find: "🔎 Find", sale: "🏷️ Sale" };
 let SC = { mode: null, cmd: null, scans: {} };
 try { SC = { ...SC, ...JSON.parse(localStorage.getItem("scan") || "{}") }; } catch (e) {}
 function sauverScan(){ try { localStorage.setItem("scan", JSON.stringify(SC)); } catch (e) {} }
@@ -1090,7 +1091,7 @@ function rendreScanVue(){
   $("#cam-ligne").hidden = !camPossible();
   $("#zone-box").hidden = SC.mode !== "inventory" && SC.mode !== "move";
   if (!$("#zone-box").hidden) rendreZone();
-  $("#figbox").hidden = SC.mode === "delivery" || SC.mode === "move";
+  $("#figbox").hidden = SC.mode === "delivery" || SC.mode === "move" || SC.mode === "find";
   rendreScan();
 }
 $("#v-scan").addEventListener("click", async (e) => {
@@ -1108,26 +1109,25 @@ $("#v-scan").addEventListener("click", async (e) => {
 function lireLS(k, d){ try { const v = JSON.parse(localStorage.getItem(k)); return v ?? d; } catch (e) { return d; } }
 function ecrireLS(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
 // Lieux de rangement d'le vendeur (en français, à sa demande) : code court enregistré dans la base + n° facultatif
-function lieux(){ return { A: "Armoire", DL: "Derrière le lit", SL: "Sous le lit", D: "Dressing", CU: "Cuisine" }; }
+// Liste privée (données de l'appli, pas le code public) ; noms génériques si elle manque
+function lieux(){ let l = null; try { l = __LIEUX__; } catch (e) {} return l && Object.keys(l).length ? l : { A: "Armoire", DL: "Derrière le lit", SL: "Sous le lit", D: "Dressing", CU: "Cuisine", SA: "Salon" }; }
 function zl(){ if (!zl.v) zl.v = lireLS("zl", { l: "", n: "" }); return zl.v; }
-function zoneActuelle(){ const z = zl(); return z.l ? z.l + (z.n || "") : ""; }
+function zoneActuelle(){ return zl().l || ""; }
 // « A2 » → « Armoire 2 » ; un code inconnu reste tel quel
 function libZone(z){ const m = String(z || "").trim().match(/^([A-Z]+)(\d*)$/), L = lieux(); return m && L[m[1]] ? L[m[1]] + (m[2] ? " " + m[2] : "") : String(z || ""); }
 function rendreZone(){
   const z = zl();
   $("#zone-lieux").innerHTML = Object.entries(lieux()).map(([k, v]) => `<button class="btn${z.l === k ? " on" : ""}" data-lieu="${k}" aria-pressed="${z.l === k}">${v}</button>`).join("");
-  const el = $("#zone-n"); if (document.activeElement !== el) el.value = z.n || "";
 }
 function majZone(){ ecrireLS("zl", zl()); rendreZone(); rendreScan(); }
 $("#zone-lieux").addEventListener("click", (e) => { const b = e.target.closest("[data-lieu]"); if (!b) return; const z = zl(); z.l = z.l === b.dataset.lieu ? "" : b.dataset.lieu; majZone(); });
-$("#zone-n").addEventListener("input", (e) => { zl().n = e.target.value.replace(/\D/g, "").slice(0, 3); majZone(); });
 function msgScan(t, ok){ const el = $("#scan-msg"); el.textContent = t; el.className = "scan-msg" + (ok === false ? " ko" : ok ? " ok" : ""); el.hidden = !t; }
 function ajouterScan(s){
   SC.scans[s] = (SC.scans[s] || 0) + 1; sauverScan(); rendreScan();
   const nom = nomSet(s); msgScan(`✓ ${nom ? nom + " · " : ""}${s}`, true);
 }
 function rendreScan(){
-  const r = SC.mode === "delivery" ? resDelivery() : SC.mode === "inventory" ? resInventaire() : SC.mode === "move" ? resDeplacer() : resVente();
+  const r = SC.mode === "delivery" ? resDelivery() : SC.mode === "inventory" ? resInventaire() : SC.mode === "move" ? resDeplacer() : SC.mode === "find" ? resTrouver() : resVente();
   const nb = nbScans();
   $("#scan-res").innerHTML = r + (nb ? `<div class="row"><button class="btn" id="scan-vider">Clear ${nb} scan${nb > 1 ? "s" : ""}</button></div>` : "");
 }
@@ -1168,11 +1168,23 @@ function blocStrat(s){
   return `<span class="strat">${b("E")}${b("P")}<em>${choix !== avant ? "will be saved" : avant === "mix" ? "some whole, some part-out" : avant ? "" : "no strategy yet"}</em></span>`;
 }
 function lignesCompte(s){ const it = lignesStock(s); return EXEMP[s] && !it.some((x) => x.id === "b" + s) ? [...it, { id: "b" + s, q: 0 }] : it; }
+// Exemplaires d'un set par lieu : « 2 × Armoire 2 », « 1 × no place yet », avec achat et coût
+function ouSet(s){
+  const c = EXEMP[s]?.c || [];
+  if (!c.length) return `<small>⚠ Not in stock in the database</small>`;
+  return `<ul class="ou">${c.map((x) => `<li><b>${x[4]} × 📍 ${x[7] ? esc(String(x[7]).split(",").map(libZone).join(", ")) : "no place yet"}</b><span>${esc(x[3] || "")} ${dateFr(x[2])} · cost ${eur(x[1])}${x[8] === "P" ? " · ✂ part-out" : ""}</span></li>`).join("")}</ul>`;
+}
+// Trouver : rien n'est enregistré, on montre seulement où sont les boîtes
+function resTrouver(){
+  const l = Object.keys(SC.scans);
+  if (!l.length) return `<p class="empty">Type or scan a set number: you'll see where each copy is stored.</p>`;
+  return `<div class="scan-cmd">${l.map((s) => `<div class="scan-l">${vignetteSet(s)}<span><b>${esc(nomSet(s))}</b> · ${esc(s)}${ouSet(s)}</span></div>`).join("")}</div>`;
+}
 // Déplacer : on rescanne des boîtes déjà comptées pour changer leur lieu ou leur stratégie, sans toucher aux comptages
 function resDeplacer(){
   const l = Object.entries(SC.scans), z = zoneActuelle();
   if (!l.length) return `<p class="empty">Scan the boxes you moved. Pick the new place above. Counts are not changed.</p>`;
-  return `<div class="scan-cmd">${l.map(([s, n]) => `<div class="scan-l${EXEMP[s] ? "" : " hors"}">${vignetteSet(s)}<span><b>${n} ×</b> ${esc(nomSet(s))} · ${esc(s)}<small>${EXEMP[s] ? `Now: ${zonesSet(s) || "no place yet"}` : "⚠ Not in stock in the database: nothing to move"}</small>${EXEMP[s] ? blocStrat(s) : ""}</span>${moins(s)}</div>`).join("")}</div>
+  return `<div class="scan-cmd">${l.map(([s, n]) => `<div class="scan-l${EXEMP[s] ? "" : " hors"}">${vignetteSet(s)}<span><b>${n} ×</b> ${esc(nomSet(s))} · ${esc(s)}${EXEMP[s] ? ouSet(s) : "<small>⚠ Not in stock in the database: nothing to move</small>"}${EXEMP[s] ? blocStrat(s) : ""}</span>${moins(s)}</div>`).join("")}</div>
     <div class="row"><button class="btn yes" id="move-ok">${z ? `Move ${nbScans()} to 📍 ${esc(libZone(z))}` : "Save"}</button></div>`;
 }
 function resInventaire(){
