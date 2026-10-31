@@ -297,7 +297,9 @@ def details(s: str, prix: float, ref, tresor=None, en_stock: int = 0, part_out=N
         lignes.append(f"Demande : {dm} ({x.demande_detail})")
     dv = int(x.get("deja_vendus", 0) or 0)
     if note is not None:
-        note.update(prix_public=pp, risque=nr, demande=dm if dm == dm and dm else None, calc=calc, dv=dv,
+        note.update(prix_public=pp, risque=nr, demande=dm if dm == dm and dm else None)
+        # Données du message court Telegram, rangées à part (l'appli copie la note telle quelle)
+        note["_court"] = dict(calc=calc, dv=dv,
                     retrait=quand if quand == quand else None, statut=x.statut,
                     niveau_retrait=x.get("niveau_retrait") if x.get("niveau_retrait") == x.get("niveau_retrait") else None,
                     sources_retrait=x.get("sources_retrait") if x.get("sources_retrait") == x.get("sources_retrait") else None,
@@ -482,6 +484,7 @@ def message_court(tete: str, titre: str, prix: float, nt: dict, det: list, treso
     """Alerte condensée (31/10 : on lit surtout les 2-3 premières lignes) :
     verdict, set et prix, gain, un avis en une ou deux phrases, la quantité, le lien.
     Le détail complet reste dans LEGO HQ › Deals."""
+    nt = {**nt, **(nt.get("_court") or {})}
     pp = nt.get("prix_public")
     boutique = re.findall(r"\(([^()]{2,40})\)\s*$", titre)
     l2 = f"{nt.get('nom') or titre[:60]} ({str(nt.get('set_num') or '').split('-')[0]}) · {euros(prix)}"
@@ -707,12 +710,12 @@ def main(essai: bool):
             # Seules les grosses affaires (note A) et les raretés sonnent ; le reste arrive en silencieux
             gros = v_dec == "achète" and nt.get("lettre") == "A"
             texte, photo = "\n".join(corps), None
-            if nt.get("calc") is not None:
+            if nt.get("_court") is not None:
                 try:  # message court ; en cas de souci, l'alerte complète part quand même
                     extra = [x for x in (local(d["titre"]), canal(d["titre"]), douteux) if x]
                     texte = message_court(corps[0], d["titre"], d["prix"], nt, det, tresor, extra, d["id"])
-                    if nt.get("set_num"):
-                        photo = f"https://cdn.rebrickable.com/media/sets/{str(nt['set_num']).lower()}.jpg"
+                    if nt["_court"].get("set_num"):
+                        photo = f"https://cdn.rebrickable.com/media/sets/{str(nt['_court']['set_num']).lower()}.jpg"
                 except Exception as e:
                     print("message court :", e)
             telegram(texte, gros or bool(rare), essai, photo)

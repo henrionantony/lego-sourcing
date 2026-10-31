@@ -650,7 +650,7 @@ def deals() -> list[dict]:
             v = juger_set(d["id_set"], float(d["prix"]), ref)
             nt = {}
             det = alertes.details(d["id_set"], float(d["prix"]), ref, tresor, stock.get(d["id_set"], 0), part_out, nt, engage)
-            d.update(verdict="à regarder" if nt.get("assez") and v.decision == "achète" else v.decision, prix_max=round(v.prix_max, 2) if v.prix_max else None, raison=v.raison, **nt,
+            d.update(verdict="à regarder" if nt.get("assez") and v.decision == "achète" else v.decision, prix_max=round(v.prix_max, 2) if v.prix_max else None, raison=v.raison, **{k: w for k, w in nt.items() if k != "_court"},
                      # Lignes déjà montrées autrement sur la carte : stratégie, prix public, retrait
                      details=[l for l in det if not l.startswith(("👉", "Prix public", "🔚", "✋", "Quantité conseillée"))]
                      , memo=memo_note(nt) if nt.get("lettre") else None, img=vignette(d["id_set"]),
