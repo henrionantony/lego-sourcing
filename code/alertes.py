@@ -115,11 +115,11 @@ def github_surveille() -> bool:
 MUET = False
 
 
-def telegram(texte: str, sonne: bool, essai: bool):
+def telegram(texte: str, sonne: bool, essai: bool, photo: str | None = None):
     if MUET and not essai:
         return
     if essai:
-        print(("🔔 " if sonne else "   ") + texte.replace("\n", " | "))
+        print(("🔔 " if sonne else "   ") + (f"[photo {photo}] " if photo else "") + texte.replace("\n", " | "))
         return
     jeton = os.environ["TELEGRAM_BOT_TOKEN"]
     api = f"https://api.telegram.org/bot{jeton}/"
@@ -128,8 +128,17 @@ def telegram(texte: str, sonne: bool, essai: bool):
     chat = os.environ.get("TELEGRAM_CHAT_ID") or regles.TELEGRAM_CHAT_ID
     if not chat:
         sys.exit("TELEGRAM_CHAT_ID manquant (fichier privé parametres.json)")
-    data = urllib.parse.urlencode({"chat_id": chat, "text": texte,
-                                   "disable_notification": "false" if sonne else "true"}).encode()
+    commun = {"chat_id": chat, "disable_notification": "false" if sonne else "true"}
+    # Photo du set avec le texte en légende (demandée le 31/10) ; légende limitée à 1024 caractères
+    if photo and len(texte) <= 1000:
+        try:
+            data = urllib.parse.urlencode({**commun, "photo": photo, "caption": texte}).encode()
+            urllib.request.urlopen(api + "sendPhoto", data=data, timeout=30)
+            return
+        except Exception as e:  # image introuvable : le texte part quand même
+            print("photo Telegram :", e)
+    data = urllib.parse.urlencode({**commun, "text": texte,
+                                   "link_preview_options": json.dumps({"is_disabled": True})}).encode()
     urllib.request.urlopen(api + "sendMessage", data=data, timeout=30)
 
 
@@ -228,6 +237,7 @@ def details(s: str, prix: float, ref, tresor=None, en_stock: int = 0, part_out=N
         niv = f" ({niv} : {x.sources_retrait})" if niv == niv and niv else " (Brickset seul)"
         lignes.insert(0, f"🔚 PRIORITÉ : quitte le catalogue le {rt:%d/%m/%Y}{niv}"
                       + (" · exclusivité Lego, souvent épuisée au Black Friday" if x.get("exclusif") in (True, "True") else ""))
+    quand = rt if rt == rt else pd.to_datetime(x.retrait, errors="coerce")
     scen = []  # (nom, prix de revente, jours)
     if x.get("pv_rapide") == x.get("pv_rapide") and x.get("pv_rapide"):
         scen.append(("Revente rapide (set encore au catalogue)", float(x.pv_rapide), int(x.j_rapide)))
@@ -287,7 +297,12 @@ def details(s: str, prix: float, ref, tresor=None, en_stock: int = 0, part_out=N
         lignes.append(f"Demande : {dm} ({x.demande_detail})")
     dv = int(x.get("deja_vendus", 0) or 0)
     if note is not None:
-        note.update(prix_public=pp, risque=nr, demande=dm if dm == dm and dm else None)
+        note.update(prix_public=pp, risque=nr, demande=dm if dm == dm and dm else None, calc=calc, dv=dv,
+                    retrait=quand if quand == quand else None, statut=x.statut,
+                    niveau_retrait=x.get("niveau_retrait") if x.get("niveau_retrait") == x.get("niveau_retrait") else None,
+                    sources_retrait=x.get("sources_retrait") if x.get("sources_retrait") == x.get("sources_retrait") else None,
+                    nom=x.get("name") if x.get("name") == x.get("name") else "", set_num=x.get("set_num"),
+                    ebay_bas=eb.get("bas") if eb and eb.get("n", 0) >= 3 and eb["bas"] < (est or float(x.prix_vente_estime)) else None)
     if meilleur and note is not None:
         note["score"], note["lettre"] = note_deal(meilleur[0], meilleur[1], nr, dm)
         part = gammes_phares().get(str(x.get("gamme", "")).strip().upper())
@@ -301,6 +316,8 @@ def details(s: str, prix: float, ref, tresor=None, en_stock: int = 0, part_out=N
     if meilleur:
         garde = meilleur[3].startswith("Si tu gardes")
         opportunite = meilleur[0] / prix >= 0.5 and nr == "sûr"
+        if note is not None:
+            note["opportunite"] = opportunite
         q = quantite(prix, meilleur[0] / prix, nr, dv, tresor["solde"] if tresor else None, opportunite)
         cap = plafond_garde(prix, opportunite)
         if garde and cap is not None:
@@ -453,6 +470,86 @@ def ligne_gain(nt: dict) -> str | None:
     g = nt["gain"]
     mot = " · gros potentiel" if g >= GAIN_FORT else " · gain faible" if g < GAIN_MOYEN else ""
     return f"{pastille(g)} GAIN NET {'+' if g > 0 else ''}{euros(g)} par boîte ({nt['pct']:+.0%}) en {duree(nt['jours'])}{mot}"
+
+
+def black_friday(jour: dt.date) -> dt.date:
+    """Quatrième vendredi de novembre."""
+    d = dt.date(jour.year, 11, 1)
+    return d + dt.timedelta(days=(4 - d.weekday()) % 7 + 21)
+
+
+def message_court(tete: str, titre: str, prix: float, nt: dict, det: list, tresor, extra: list, id_deal) -> str:
+    """Alerte condensée (31/10 : on lit surtout les 2-3 premières lignes) :
+    verdict, set et prix, gain, un avis en une ou deux phrases, la quantité, le lien.
+    Le détail complet reste dans LEGO HQ › Deals."""
+    pp = nt.get("prix_public")
+    boutique = re.findall(r"\(([^()]{2,40})\)\s*$", titre)
+    l2 = f"{nt.get('nom') or titre[:60]} ({str(nt.get('set_num') or '').split('-')[0]}) · {euros(prix)}"
+    if pp:
+        l2 += f" ({prix / pp - 1:+.0%} vs LEGO)"
+    if boutique:
+        l2 += f" · {boutique[0]}"
+    lignes = [tete, l2]
+    if re.search(r"cagnott|sur la carte|via \d", titre, re.I):
+        lignes.append("💳 Prix avec la cagnotte")
+    calc = nt.get("calc") or []
+    best = next((c for c in calc if round(c[3], 2) == nt.get("gain")), None)
+    if best:
+        g = best[3]
+        lignes.append(f"{pastille(g)} {'+' if g > 0 else ''}{euros(g)} net par boîte · {best[1] / prix - 1:+.0%} brut · en {duree(best[2])}")
+    # L'avis, comme on le dirait : la stratégie, ce qui rassure, ce qui retient
+    avis = []
+    rapide = next((c for c in calc if c[0].startswith("Revente rapide")), None)
+    plancher = getattr(regles, "MARGE_BRUTE_PLANCHER", 1.4)
+    if best and nt.get("garde"):
+        r = nt.get("retrait")
+        t = f"À garder jusqu'au retrait ({r:%m/%Y})" if r is not None else "À garder jusqu'au retrait"
+        if rapide and rapide[1] / prix < plancher:
+            t += f" : en revente rapide, seulement {rapide[1] / prix - 1:+.0%} brut"
+        avis.append(t)
+    elif best and nt.get("statut") == "retiré":
+        avis.append(f"Set déjà retiré : revente vers {euros(best[1])}")
+    elif best:
+        avis.append(f"Revente rapide possible vers {euros(best[1])}")
+    elif calc:
+        avis.append("Pas rentable à ce prix, quel que soit le scénario")
+    bits = []
+    dm = nt.get("demande")
+    if dm:
+        bits.append({"forte": "demande forte", "moyenne": "demande moyenne"}.get(dm, f"demande {dm} : ça peut traîner"))
+    if nt.get("risque") and nt["risque"] != "sûr":
+        bits.append(f"risque {nt['risque']}")
+    nv = str(nt.get("niveau_retrait") or "")
+    if nt.get("garde") and nv and nv not in ("confirmé", "très probable"):
+        bits.append(f"retrait {nv} ({nt.get('sources_retrait') or '1 source'})")
+    if bits:
+        t = ", ".join(bits)
+        avis.append(t[0].upper() + t[1:])
+    dv = nt.get("dv") or 0
+    avis.append(f"Tu en as déjà vendu {dv}" if dv else "Tu n'as jamais vendu ce set")
+    if nt.get("ebay_bas"):
+        avis.append(f"⚠ Déjà moins cher sur eBay (dès {euros(nt['ebay_bas'])})")
+    auj = dt.date.today()
+    bf = black_friday(auj)
+    r = nt.get("retrait")
+    if 0 < (bf - auj).days <= 35 and (r is None or r.date() > bf):
+        avis.append(f"Black Friday dans {(bf - auj).days} jours : ce prix peut revenir, ou baisser")
+    if nt.get("opportunite"):
+        avis.append("⚡ Vraie opportunité")
+    lignes.append("💭 " + ". ".join(avis) + ".")
+    q = nt.get("quantite")
+    if q:
+        l = f"👉 {q} boîte{'s' if q > 1 else ''} · {euros(q * prix)} engagés"
+        if tresor:
+            l += f" · tréso après {euros(tresor['solde'] - q * prix)}"
+        lignes.append(l)
+    else:
+        stop = next((x for x in det if x.startswith(("✋", "⛔", "Quantité conseillée : 0"))), None)
+        if stop:
+            lignes.append("⛔ Pas de cash libre sans toucher la réserve" if stop.startswith("⛔") else stop)
+    lignes += extra
+    lignes.append(f"🛒 https://www.dealabs.com/visit/threadmain/{id_deal}")
+    return "\n".join(lignes)
 
 
 NOTE_MOTS = {"A": "⭐⭐⭐ Excellente affaire", "B": "⭐⭐ Bonne affaire", "C": "⭐ Affaire correcte"}
@@ -609,7 +706,16 @@ def main(essai: bool):
             corps.insert(pos, f"🛒 Acheter : https://www.dealabs.com/visit/threadmain/{d['id']}")
             # Seules les grosses affaires (note A) et les raretés sonnent ; le reste arrive en silencieux
             gros = v_dec == "achète" and nt.get("lettre") == "A"
-            telegram("\n".join(corps), gros or bool(rare), essai)
+            texte, photo = "\n".join(corps), None
+            if nt.get("calc") is not None:
+                try:  # message court ; en cas de souci, l'alerte complète part quand même
+                    extra = [x for x in (local(d["titre"]), canal(d["titre"]), douteux) if x]
+                    texte = message_court(corps[0], d["titre"], d["prix"], nt, det, tresor, extra, d["id"])
+                    if nt.get("set_num"):
+                        photo = f"https://cdn.rebrickable.com/media/sets/{str(nt['set_num']).lower()}.jpg"
+                except Exception as e:
+                    print("message court :", e)
+            telegram(texte, gros or bool(rare), essai, photo)
     if not essai:
         VUS.parent.mkdir(parents=True, exist_ok=True)
         VUS.write_text(json.dumps(sorted(vus)))
