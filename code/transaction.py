@@ -6,6 +6,8 @@ peut descendre sous ce seuil tant que le reste de l'achat compense. Pour chaque 
 réparti entre les exemplaires encore en stock au prorata de leur prix LEGO (un cadeau compte aussi).
 Plancher d'un exemplaire = sa part, jamais au-dessus de son plancher seul (coût × marge minimale),
 jamais sous son propre coût prélèvements payés (pas de vente à perte).
+Article payé en points Insiders (offert, points_utilises) : les points doivent travailler aussi.
+Plancher = valeur des points (POINTS_PAR_EURO points = 1 €) × FACTEUR_POINTS, jamais relâché par l'achat.
 prix_achat d'un article = prix de la ligne entière (ta part s'il est co-investi), d'où le ÷ quantité.
 """
 import csv
@@ -36,12 +38,14 @@ def planchers() -> dict[int, dict]:
     plancher = prix minimal d'un exemplaire calculé sur l'achat ; seul = l'ancien plancher, article seul."""
     m = regles.MARGE_BRUTE_PLANCHER
     pp = _prix_lego()
-    art = base.lire("articles", "select=id,achat_id,prix_achat,quantite,id_set,offert&limit=10000")
+    art = base.lire("articles", "select=id,achat_id,prix_achat,quantite,id_set,offert,points_utilises&limit=10000")
     ven = base.lire("ventes", "select=article_id,prix_vente&limit=20000")
     reste = {r["id"]: int(r.get("reste") or 0) for r in base.lire("stock", "select=id,reste&reste=gt.0&limit=10000")}
     vendu: dict[int, float] = {}
     for v in ven:
         vendu[v["article_id"]] = vendu.get(v["article_id"], 0) + float(v.get("prix_vente") or 0)
+    points = {a["id"]: float(a["points_utilises"]) for a in art if a.get("offert") and a.get("points_utilises")}
+    quantite = {a["id"]: int(a.get("quantite") or 1) for a in art}
     achats: dict[int, list] = {}
     for a in art:
         achats.setdefault(a["achat_id"], []).append(a)
@@ -63,6 +67,12 @@ def planchers() -> dict[int, dict]:
             # (autre article vendu sous le seuil), on garde le plancher de l'article seul.
             out[i] = {"plancher": round(max(min(part, unite * m), unite / (1 - regles.PRELEVEMENTS)), 2),
                       "seul": round(unite * m, 2), "achat": aid}
+            pts = points.get(i)
+            if pts:
+                valeur = pts / regles.POINTS_PAR_EURO / max(1, quantite.get(i, 1))
+                out[i]["points"] = round(valeur, 2)
+                out[i]["plancher"] = round(max(out[i]["plancher"], valeur * regles.FACTEUR_POINTS), 2)
+                out[i]["seul"] = round(max(out[i]["seul"], valeur * regles.FACTEUR_POINTS), 2)
     return out
 
 

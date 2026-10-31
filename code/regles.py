@@ -206,6 +206,10 @@ BUDGET = 1000.0
 GWP_DEFAUT = 25.0                 # revente d'un cadeau Lego.com non chiffré
 PRIX_MIN = 5.0                    # prix d'annonce minimal (polybags…), vraie valeur dans le fichier privé
 MARGE_BRUTE_PLANCHER = 1.30       # prix plancher d'annonce tant que le lot n'est pas remboursé
+# Points Insiders : 750 points = 5 € de bon. Une boîte payée en points doit rapporter
+# au moins FACTEUR_POINTS fois la valeur des points dépensés (vraie valeur dans le fichier privé).
+POINTS_PAR_EURO = 150.0
+FACTEUR_POINTS = 2.0
 PRIX_DEPART = 1.15                # prix de départ d'une nouvelle annonce = estimation × ça, puis −5 % / 30 j jusqu'au plancher
 TELEGRAM_CHAT_ID = None           # destinataire des alertes (privé)
 # Part de la trésorerie qu'un deal peut engager : PART_MAX_DEAL pour un deal
