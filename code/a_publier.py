@@ -71,7 +71,8 @@ def main():
         couts.setdefault(s, []).append((cout, l.get("details_etat") or ""))
         if l["id"] in tx:
             planchers[s] = min(planchers.get(s, tx[l["id"]]["plancher"]), tx[l["id"]]["plancher"])
-        ex.setdefault(s, []).append([l["id"], round(cout, 2), l.get("date_achat") or "", l.get("lieu") or "", int(l.get("reste") or 1), *hz.get(l["id"], ("", ""))])
+        ex.setdefault(s, []).append([l["id"], round(cout, 2), l.get("date_achat") or "", l.get("lieu") or "", int(l.get("reste") or 1), *hz.get(l["id"], ("", "")), l.get("emplacement") or "",
+                                  {"LOT/DETAILS": "P", "ENTIER": "E"}.get(str(l.get("strategie") or "").strip().upper(), "")])
     out = {}
     for s, c in couts.items():
         r = ref.get(s, {})

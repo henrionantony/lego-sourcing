@@ -476,8 +476,51 @@ def noter_scan(a):
     tout = base.json_partage("scans", SCANS, [])
     if any(x.get("id") == a.get("id") for x in tout):
         return
-    tout.append({"id": a.get("id"), "type": a["type"], "le": a.get("le"), "sets": {str(k): int(v) for k, v in (a.get("sets") or {}).items()}})
+    tout.append({"id": a.get("id"), "type": a["type"], "le": a.get("le"), "sets": {str(k): int(v) for k, v in (a.get("sets") or {}).items()},
+                 **({"zone": zone_propre(a["zone"])} if a.get("zone") else {})})
     base.json_partage_ecrire("scans", SCANS, tout)
+
+
+def zone_propre(z) -> str:
+    """Code d'emplacement saisi dans l'appli (A2, L1…) : lettres, chiffres, tirets, 12 caractères."""
+    return re.sub(r"[^A-Z0-9 -]", "", str(z or "").upper()).strip()[:12]
+
+
+def emplacement(a):
+    """Inventaire avec une zone choisie : les boîtes scannées sont rangées à cet endroit dans la base
+    (articles.emplacement). Les exemplaires sans emplacement sont servis d'abord ; une ligne de
+    plusieurs boîtes rangées à deux endroits garde les deux (« A2, D1 »)."""
+    zone = zone_propre(a.get("zone"))
+    if not zone:
+        return
+    stock = base.lire("stock", "select=id,id_set,reste,emplacement&reste=gt.0&categorie=eq.SET&limit=10000") or []
+    for s, n in (a.get("sets") or {}).items():
+        s, n = str(s), int(n)
+        lignes = [l for l in stock if str(l.get("id_set") or "").split("-")[0].removesuffix(".0") == s]
+        lignes.sort(key=lambda l: (bool(l.get("emplacement")), l["id"]))
+        for l in lignes:
+            if n <= 0:
+                break
+            avant = [x.strip() for x in str(l.get("emplacement") or "").split(",") if x.strip()]
+            if zone in avant:
+                n -= int(l.get("reste") or 1)
+                continue
+            # une boîte seule déménage ; une ligne de plusieurs boîtes garde aussi l'ancien endroit
+            neuf = [zone] if int(l.get("reste") or 1) <= n or not avant else (avant + [zone])
+            base.modifier("articles", f"id=eq.{int(l['id'])}", {"emplacement": ", ".join(neuf)[:60]})
+            n -= int(l.get("reste") or 1)
+
+
+def strategie(a):
+    """Stratégie choisie au scan d'inventaire (Whole set / Part-out) : appliquée à toutes les boîtes
+    en stock de ce set. Revenir dessus plus tard = rescanner et choisir l'autre."""
+    stock = base.lire("stock", "select=id,id_set&reste=gt.0&categorie=eq.SET&limit=10000") or []
+    for s, v in (a.get("sets") or {}).items():
+        if v not in ("ENTIER", "LOT/DETAILS"):
+            raise ValueError("stratégie inconnue")
+        ids = [str(int(l["id"])) for l in stock if str(l.get("id_set") or "").split("-")[0].removesuffix(".0") == str(s)]
+        if ids:
+            base.modifier("articles", f"id=in.({','.join(ids)})", {"strategie": v})
 
 
 def urssaf_paye(a):
@@ -517,7 +560,7 @@ def vitrine_rembourse(a):
 
 
 URSSAF = Path(__file__).resolve().parent.parent / "stock" / "urssaf.json"
-GESTES = {"perte": perte, "stock_trouve": noter_scan, "expedition": noter_scan, "colis_lien": colis_lien, "recu": recu, "cashback_recu": cashback_recu, "cashback_confirme": cashback_confirme, "achete": achete, "achat_libre": achat_libre, "vente": vente, "vente_lot": vente_lot, "vire": vire, "corrige": corrige, "supprime": supprime, "figs_lier": figs_lier, "horizon": horizon, "urssaf_paye": urssaf_paye, "vitrine": vitrine, "vitrine_rembourse": vitrine_rembourse}
+GESTES = {"perte": perte, "stock_trouve": noter_scan, "expedition": noter_scan, "colis_lien": colis_lien, "recu": recu, "cashback_recu": cashback_recu, "cashback_confirme": cashback_confirme, "achete": achete, "achat_libre": achat_libre, "vente": vente, "vente_lot": vente_lot, "vire": vire, "corrige": corrige, "supprime": supprime, "figs_lier": figs_lier, "horizon": horizon, "urssaf_paye": urssaf_paye, "vitrine": vitrine, "vitrine_rembourse": vitrine_rembourse, "emplacement": emplacement, "strategie": strategie}
 
 
 def appliquer(liste: list[dict]) -> dict:

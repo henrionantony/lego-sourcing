@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="75232f53a5"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="b28481d604"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -347,6 +347,12 @@ h2.sec:first-child{margin-top:4px}
 .scan-in .btn{cursor:pointer}
 .scan-m{display:flex;gap:6px;margin-top:8px}
 .scan-m input{flex:1;min-width:0;font:inherit;font-size:16px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)}
+.zone-box{display:grid;gap:6px;border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:0 0 10px;background:var(--surface)}
+.zone-box label{display:grid;gap:2px}.zone-box small{color:var(--muted)}
+.zone-box input{font-size:18px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);text-transform:uppercase;max-width:10em}
+.strat{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px}.strat .btn{padding:4px 10px;font-size:13px}
+.strat .btn.on{background:var(--brick);color:var(--brick-ink);border-color:var(--brick)}.strat em{font-size:12px;color:var(--muted);font-style:normal}
+.zone-recents{display:flex;flex-wrap:wrap;gap:6px}.zone-recents:empty{display:none}
 .figbox{margin-top:10px;border:1px solid var(--line);border-radius:12px;padding:8px 12px;background:var(--card)}
 .figbox summary{font-weight:600;cursor:pointer}
 .figbox .sub{margin:6px 0}
@@ -593,6 +599,11 @@ dialog.confirmer::backdrop{background:rgba(0,0,0,.45)} dialog.confirmer p{margin
   <div id="scan-cmds" hidden></div>
   <div id="scan-go" hidden>
     <div class="scan-bandeau" id="scan-bandeau"></div>
+    <div id="zone-box" class="zone-box" hidden>
+      <label for="zone"><b>📍 Where are these boxes?</b><small>A = wardrobe, D = dressing, L = under the bed, C = bedroom, then the shelf or bin number (A2, L1…). Stays set until you change it.</small></label>
+      <input id="zone" maxlength="12" autocomplete="off" autocapitalize="characters" placeholder="e.g. A2">
+      <div id="zone-recents" class="zone-recents"></div>
+    </div>
     <label class="scan-photo" id="scan-photo"><input type="file" id="scan-f" accept="image/*" capture="environment" hidden>
       <span class="viseur" id="viseur"><span></span></span><b>📷 Scan a barcode</b><small>Opens the camera. Fill the photo with the barcode, then tap Use Photo.</small></label>
     <div class="cam" id="cam" hidden><video id="cam-v" playsinline muted autoplay></video><div class="cadre" id="cadre"></div><p class="cam-aide" id="cam-aide">Camera off</p></div>
@@ -1075,6 +1086,8 @@ function rendreScanVue(){
   $("#scan-bandeau").innerHTML = `<b>${MODES[SC.mode]}${cmd ? " · " + esc(cmd.titre) : ""}</b><button class="btn" data-changer="1">Change</button>`;
   $("#cam-ligne").hidden = !camPossible();
   $("#figbox").hidden = SC.mode === "delivery";
+  $("#zone-box").hidden = SC.mode !== "inventory";
+  if (SC.mode === "inventory") rendreZone();
   rendreScan();
 }
 $("#v-scan").addEventListener("click", async (e) => {
@@ -1087,6 +1100,22 @@ $("#v-scan").addEventListener("click", async (e) => {
   }
   if (b.id === "cam-on"){ flux ? arreterCam() : demarrerCam(); return; }
 });
+// Emplacement des boîtes (inventaire) : gardé sur le téléphone tant qu'on ne le change pas
+const lireLS = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch (e) { return d; } };
+const ecrireLS = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+const zoneActuelle = () => String(lireLS("zone", "") || "").trim().toUpperCase().slice(0, 12);
+function rendreZone(){
+  const z = zoneActuelle(), el = $("#zone");
+  if (document.activeElement !== el) el.value = z;
+  $("#zone-recents").innerHTML = lireLS("zones", []).filter((x) => x !== z).slice(0, 8).map((x) => `<button class="btn" data-zone="${esc(x)}">${esc(x)}</button>`).join("");
+}
+function choisirZone(z){
+  z = String(z || "").trim().toUpperCase().slice(0, 12); ecrireLS("zone", z);
+  if (z) ecrireLS("zones", [z, ...lireLS("zones", []).filter((x) => x !== z)].slice(0, 12));
+  rendreZone(); rendreScan();
+}
+$("#zone").addEventListener("change", (e) => choisirZone(e.target.value));
+$("#zone-recents").addEventListener("click", (e) => { const b = e.target.closest("[data-zone]"); if (b) choisirZone(b.dataset.zone); });
 function msgScan(t, ok){ const el = $("#scan-msg"); el.textContent = t; el.className = "scan-msg" + (ok === false ? " ko" : ok ? " ok" : ""); el.hidden = !t; }
 function ajouterScan(s){
   SC.scans[s] = (SC.scans[s] || 0) + 1; sauverScan(); rendreScan();
@@ -1123,6 +1152,16 @@ const lignesStock = (s) => ITEMS.filter((x) => x.s === s && /^[bv]/.test(x.id));
 // Boîtes en stock d'après la base (achetées − vendues), pas d'après les annonces : une annonce peut couvrir 2 boîtes
 const enBase = (s) => EXEMP[s] ? EXEMP[s].c.reduce((a, x) => a + x[4], 0) : null;
 // Où ranger les comptages : les lignes de Stock, plus « b<set> » pour un set de la base absent de cette liste
+// Où sont rangées les boîtes de ce set (zones notées pendant l'inventaire)
+function zonesSet(s){ const z = [...new Set((EXEMP[s]?.c || []).flatMap((x) => String(x[7] || "").split(",")).map((x) => x.trim()).filter(Boolean))];
+  return z.length ? `<span>📍 ${esc(z.join(", "))}</span>` : ""; }
+// Stratégie de vente des boîtes en stock de ce set : E = entier, P = part-out ; mélange ou rien = ""
+function stratBase(s){ const v = [...new Set((EXEMP[s]?.c || []).map((x) => x[8] || ""))]; return v.length === 1 ? v[0] : v.length ? "mix" : ""; }
+function blocStrat(s){
+  const avant = stratBase(s), choix = (SC.strat || {})[s] || avant;
+  const lib = { E: "Whole set", P: "Part-out" }, b = (k) => `<button class="btn${choix === k ? " on" : ""}" data-strat="${esc(s)}" data-k="${k}" aria-pressed="${choix === k}">${k === "E" ? "📦" : "✂"} ${lib[k]}</button>`;
+  return `<span class="strat">${b("E")}${b("P")}<em>${choix !== avant ? "will be saved" : avant === "mix" ? "some whole, some part-out" : avant ? "" : "no strategy yet"}</em></span>`;
+}
 function lignesCompte(s){ const it = lignesStock(s); return EXEMP[s] && !it.some((x) => x.id === "b" + s) ? [...it, { id: "b" + s, q: 0 }] : it; }
 function resInventaire(){
   const l = Object.entries(SC.scans), fl = figsL();
@@ -1131,8 +1170,8 @@ function resInventaire(){
       return `<div class="scan-l">${vignetteFig(c)}<span><b>${x.n} ×</b> ${esc(x.nom || "Minifigure")} · ${esc(c)}<small>Counted: <b>${avant} → ${avant + x.n}</b></small></span>${moinsFig(c)}</div>`; }).join("")}${l.map(([s, n]) => { const it = lignesCompte(s), q = enBase(s) ?? it.reduce((a, x) => a + (x.q || 1), 0), c = it.reduce((a, x) => a + ((counts[x.id] || {}).n || 0), 0);
       const apres = c + n, ecart = apres - q;
       return `<div class="scan-l${it.length ? "" : " hors"}">${vignetteSet(s)}<span><b>${n} ×</b> ${esc(nomSet(s))} · ${esc(s)}<small>${it.length ? `In database: <b>${q}</b> · Counted: <b>${c} → ${apres}</b>`
-        + `<em class="${ecart ? "ec-ko" : "ec-ok"}">${ecart === 0 ? "✓ matches the database" : ecart > 0 ? `⚠ ${ecart} more than the database` : `${-ecart} still to find`}</em>` : "⚠ Database says 0 in stock (purchase not recorded, or all marked sold). Kept on a side list; your purchases are not changed"}</small></span>${moins(s)}</div>`; }).join("")}</div>
-    <div class="row"><button class="btn yes" id="inv-ok">Add ${nbScans()} to my inventory</button></div>`;
+        + `<em class="${ecart ? "ec-ko" : "ec-ok"}">${ecart === 0 ? "✓ matches the database" : ecart > 0 ? `⚠ ${ecart} more than the database` : `${-ecart} still to find`}</em>` : "⚠ Database says 0 in stock (purchase not recorded, or all marked sold). Kept on a side list; your purchases are not changed"}</small>${it.length && EXEMP[s] ? blocStrat(s) : ""}</span>${moins(s)}</div>`; }).join("")}</div>
+    <div class="row"><button class="btn yes" id="inv-ok">Add ${nbScans()} to my inventory${zoneActuelle() ? " · 📍 " + esc(zoneActuelle()) : ""}</button></div>`;
 }
 /* Vente : un colis = une vente, éventuellement en lot. Chaque article scanné est rattaché à un
    exemplaire acheté, le moins cher d'abord (règle d'le vendeur) ; le prix total est réparti au prix public Lego. */
@@ -1140,7 +1179,7 @@ function exemplairesLibres(s){
   const pris = {};
   for (const a of Object.values(actions)) if (a.type === "vente_lot" && a.le >= EXEMP_LE) for (const l of a.lignes || []) if (l.article_id) pris[l.article_id] = (pris[l.article_id] || 0) + 1;
   const out = [];
-  for (const [id, cout, d, lieu, reste] of (EXEMP[s]?.c || [])) for (let k = 0; k < reste - (pris[id] || 0); k++) out.push({ id, cout, d, lieu });
+  for (const [id, cout, d, lieu, reste, , , zone] of (EXEMP[s]?.c || [])) for (let k = 0; k < reste - (pris[id] || 0); k++) out.push({ id, cout, d, lieu, zone });
   return out;
 }
 function lignesVente(){
@@ -1176,8 +1215,8 @@ function resVente(){
   return `<div class="scan-cmd">${L.map((l) => l.fig ? `<div class="scan-l">${vignetteFig(l.s)}<span><b>${esc(l.nom)}</b> · ${esc(l.s)}
       <small>Minifigure · linked to its purchase later</small>
       <small class="vpart" data-i="${L.indexOf(l)}">${total ? "Share of the price: " + eur(l.prix) : ""}</small></span>${l.k === 0 ? moinsFig(l.s) : ""}</div>` : `<div class="scan-l${l.e ? "" : " hors"}">${vignetteSet(l.s)}<span><b>${esc(nomSet(l.s) || l.s)}</b> · ${esc(l.s)}
-      <small>${l.e ? (l.libres.length > 1 ? `<select class="vex" data-s="${esc(l.s)}" data-k="${l.k}" aria-label="Which copy">${l.libres.map((x) => `<option value="${x.id}"${x.id === l.e.id ? " selected" : ""}>Cost ${eur(x.cout)} · ${esc(x.lieu)} ${dateFr(x.d)}</option>`).join("")}</select>`
-        : `Cost ${eur(l.e.cout)} · ${esc(l.e.lieu)} ${dateFr(l.e.d)}`) : "Not in stock in the database: the sale is saved without its purchase"}</small>
+      <small>${l.e ? (l.libres.length > 1 ? `<select class="vex" data-s="${esc(l.s)}" data-k="${l.k}" aria-label="Which copy">${l.libres.map((x) => `<option value="${x.id}"${x.id === l.e.id ? " selected" : ""}>Cost ${eur(x.cout)} · ${esc(x.lieu)} ${dateFr(x.d)}${x.zone ? " · 📍 " + esc(x.zone) : ""}</option>`).join("")}</select>`
+        : `Cost ${eur(l.e.cout)} · ${esc(l.e.lieu)} ${dateFr(l.e.d)}${l.e.zone ? ` · <b>📍 ${esc(l.e.zone)}</b>` : ""}`) : "Not in stock in the database: the sale is saved without its purchase"}</small>
       <small class="vpart" data-i="${L.indexOf(l)}">${total ? "Share of the price: " + eur(l.prix) : ""}</small></span>${l.k === 0 ? moins(l.s) : ""}</div>`).join("")}</div>
     <form class="vente-f" id="vente-f">
       <label>${L.length > 1 ? `Total price of the bundle (${L.length} items)` : "Sale price"} (€)<input name="total" type="number" inputmode="decimal" step="0.01" min="0" value="${esc(v.total || "")}" required></label>
@@ -1207,6 +1246,7 @@ $("#scan-res").addEventListener("click", async (e) => {
     if (SC.cmd === x.id) SC.cmd = null;
     sauverScan(); rendreScanVue(); rendreTodo(); msgScan(`✓ ${x.titre} marked received`, true); return;
   }
+  if (b.dataset.strat){ SC.strat = SC.strat || {}; SC.strat[b.dataset.strat] = b.dataset.k; sauverScan(); rendreScan(); return; }
   if (b.id === "inv-ok"){
     b.disabled = true; let ko = 0; const trouves = {}; const nbTot = nbScans();
     for (const [s, n] of Object.entries(SC.scans)){
@@ -1224,9 +1264,14 @@ $("#scan-res").addEventListener("click", async (e) => {
       const id = "f" + c, avant = (counts[id] || {}).n || 0, maj = new Date().toISOString();
       try { await db.doc("comptes/" + id).set({ n: avant + x.n, maj }); counts[id] = { n: avant + x.n, maj }; delete SC.figs[c]; } catch (err) { ko++; }
     }
-    if (Object.keys(trouves).length && !await envoyerAction("trouve-" + Date.now(), { type: "stock_trouve", sets: trouves })) ko++;
+    const zone = zoneActuelle();
+    if (Object.keys(trouves).length && !await envoyerAction("trouve-" + Date.now(), { type: "stock_trouve", sets: trouves, ...(zone ? { zone } : {}) })) ko++;
+    const ranges = Object.fromEntries(Object.entries(SC.scans).filter(([s]) => !trouves[s]));
+    if (zone && Object.keys(ranges).length && !await envoyerAction("zone-" + Date.now(), { type: "emplacement", zone, sets: ranges })) ko++;
+    const strats = Object.fromEntries(Object.entries(SC.strat || {}).filter(([s, k]) => SC.scans[s] && !trouves[s] && k !== stratBase(s)).map(([s, k]) => [s, k === "P" ? "LOT/DETAILS" : "ENTIER"]));
+    if (Object.keys(strats).length && !await envoyerAction("strat-" + Date.now(), { type: "strategie", sets: strats })) ko++;
     if (ko){ b.disabled = false; msgScan("Part of it was not saved. Check your connection and tap again.", false); return; }
-    const nb = nbTot; SC.scans = {}; SC.figs = {}; sauverScan(); rendreScan(); rendre();
+    const nb = nbTot; SC.scans = {}; SC.figs = {}; SC.strat = {}; sauverScan(); rendreScan(); rendre();
     msgScan(`✓ ${nb} item${nb > 1 ? "s" : ""} added to your inventory`, true); return;
   }
 });
@@ -2755,7 +2800,7 @@ function carte(it){
     <div class="ph">${photo(it)}</div>
     <div class="info">
       <div class="t">${esc(it.t)}</div>${it.fr ? `<div class="fr">${esc(it.fr)}</div>` : ""}
-      <div class="meta">${it.s ? `<span>Set ${esc(it.s)}</span>` : ""}<span class="tag">${src}</span>${prix}${lien}</div>
+      <div class="meta">${it.s ? `<span>Set ${esc(it.s)}</span>` : ""}<span class="tag">${src}</span>${prix}${lien}${zonesSet(it.s)}</div>
     </div>
     <div class="wide">
       ${decoupes[it.id] ? blocMorceaux(it) : `<div class="ctl${it.q === 0 ? " sold" : ""}">
