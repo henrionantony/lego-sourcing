@@ -227,7 +227,7 @@ def main():
                  "qte": q or 1, "port": {k: p[k] for k in ("fr", "ue", "uk", "kg", "add", "groupe")}, "images": photos_set(b),
                  "ean": (b.get("barcode") or {}).get("EAN"), "gamme": b.get("theme"), "pieces": b.get("pieces"),
                  "annee": b.get("year"), "nom": en,
-                 "plancher": math.ceil(plancher) if reglages.get("vente_rapide") else None}
+                 "plancher": math.ceil(plancher)}   # offres auto (acceptées ~93 %, refusées sous le plancher), mode vente ou non
         info = {"set": s, "nom": en, "fr": fr, "prix": calcule, "port": p["fr"], "qte": q or 1, "cout": v.get("cout"),
                 "estime": v.get("estime"), "st": v.get("st"), "retrait": v.get("retrait"),
                 "ebay_bas": eb.get("bas"), "ebay_med": eb.get("med"), "ebay_n": eb.get("n"),
