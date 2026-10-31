@@ -496,6 +496,17 @@ def a_regulariser(obj: dict) -> list[dict]:
                     "detail": "Paste the treasury SQL in Supabase and confirm your starting cash, so alerts know how much you can spend."})
     out += partage("rappels", lambda: json.loads(RAPPELS.read_text())) or []
     out += vitrines()
+    # Une seule carte « Money to move » : la vitrine Vinted rejoint les cagnottes à reverser
+    vit = next((c for c in out if c["id"] == "vitrines"), None)
+    vir = next((c for c in out if c["id"] == "virements"), None)
+    if vit and vir:
+        vir["lignes"] += vit["lignes"]
+        tot = sum(float(l["action"].get("montant") or 0) for l in vir["lignes"])
+        vir["titre"] = f"Move {eur(tot)} from your personal account to the LEGO account"
+        vir["detail"] += " Vinted boosts paid by the Vinted balance are listed here too."
+        out.remove(vit)
+    elif vit:
+        vit["id"] = "virements"
     u = urssaf()
     if u:
         out.insert(0, u)   # au premier plan
@@ -515,7 +526,7 @@ def vitrines() -> list:
                     "titre": f"Move {eur(sum(v['montant'] for v in dus))} from your personal account to the LEGO account (Vinted boost)",
                     "detail": "The Vinted balance paid the boost; your personal account pays it back. Tap Transferred once done.",
                     "lignes": [{"id": v["id"], "titre": f"{eur(v['montant'])} · boost {jour(v['debut'])} to {jour(v['fin'])}",
-                                "action": {"type": "vitrine_rembourse", "vitrine": v["id"], "label": "Transferred"}} for v in dus]})
+                                "action": {"type": "vitrine_rembourse", "vitrine": v["id"], "montant": v["montant"], "label": "Transferred"}} for v in dus]})
     auj = dt.date.today()
     lignes = []
     for v in sorted(tout, key=lambda v: v["debut"], reverse=True)[:6]:
