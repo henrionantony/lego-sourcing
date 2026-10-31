@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="96eefcbbd7"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="c785d69c87"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -443,6 +443,7 @@ dialog.confirmer::backdrop{background:rgba(0,0,0,.45)} dialog.confirmer p{margin
 .vex{height:34px;font-size:13px;margin-top:4px} .vente-f .two{display:grid;grid-template-columns:1fr 1fr;gap:8px} .vpart{color:var(--ink)!important;font-weight:600}
 #libre label[hidden]{display:none!important}
 .hsum .dep{display:flex;gap:10px;margin:0 0 8px}.hsum .dep>span{flex:1;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px 12px;display:flex;flex-direction:column}.hsum .dep small{font-size:12px;opacity:.75}.hsum .dep b{font-size:20px;font-variant-numeric:tabular-nums}
+.choix-l{display:flex;flex-direction:column;gap:8px;margin-top:8px}.ch{display:flex;align-items:center;gap:10px;padding:8px;border:1px solid var(--line);border-radius:10px}.ch>span{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}.ch small{color:var(--muted)}.ch small.alerte{color:var(--warn)}.ch-v{display:flex;gap:4px;flex-shrink:0}.ch-v .sv{width:44px;height:44px}.ch.imp{opacity:.6}
 </style>
 </head><body><header class="app" id="app">
   <div class="app-row"><h1><span class="stud" aria-hidden="true"></span>LEGO HQ</h1></div>
@@ -995,7 +996,9 @@ function rendreTodo(){
           ${x.suivi ? `<div class="sub suivi">Tracking ${x.suivi_url ? `<a href="${esc(x.suivi_url)}" target="_blank" rel="noopener">${esc(x.suivi)} ↗</a>` : esc(x.suivi)}</div>` : ""}
           ${x.qr || x.code ? `<div class="row"><button class="btn yes" data-a="pass">🎫 Show pickup pass</button></div>` : ""}
           ${x.url ? `<div class="row"><a class="btn" href="${esc(x.url)}" target="_blank" rel="noopener">Open the email ↗</a></div>` : ""}
-          ${x.choix ? (ax ? `<span class="sent">✓ Noted</span>` : `<div class="row choix">${x.choix.map((c, i) => `<button class="btn ${i < x.choix.length - 1 ? "yes" : ""}" data-a="choix" data-i="${i}" ${db ? "" : "disabled"}>${esc(c.label)}</button>`).join("")}</div>`) : ""}
+          ${x.choix ? (ax ? `<span class="sent">✓ Noted</span>` : `<div class="choix-l">${x.choix.map((c, i) => c.articles
+            ? `<div class="ch${c.impossible ? " imp" : ""}"><div class="ch-v">${(c.sets || []).slice(0, 4).map((s) => vignetteSet(s)).join("")}</div><span><b>${esc(c.label)}</b><small>${c.articles.map(esc).join("<br>")}</small>${c.impossible ? `<small class="alerte">⚠️ Can't be this one: ${esc(c.impossible)}</small>` : ""}</span><button class="btn${c.impossible ? "" : " yes"}" data-a="choix" data-i="${i}" ${db ? "" : "disabled"}>This one</button></div>`
+            : `<div class="row"><button class="btn" data-a="choix" data-i="${i}" ${db ? "" : "disabled"}>${esc(c.label)}</button></div>`).join("")}</div>`) : ""}
           ${x.articles && x.articles.length === 1 ? `<div class="sub">${esc(x.articles[0])}</div>` : x.articles && x.articles.length ? `<details class="more"><summary>${x.articles.length} line${x.articles.length > 1 ? "s" : ""}</summary><ul>${x.articles.map((y) => `<li>${esc(y)}</li>`).join("")}</ul></details>` : ""}</li>`; };
       const vus = li.slice(0, 3), reste = li.slice(3);
       return `<article class="task ${t.type}" data-id="${t.id}"><div class="kind">${GENRE[t.type] || ""}</div><h3>${esc(t.titre)}</h3>
@@ -1501,6 +1504,8 @@ $("#todo").addEventListener("click", async (e) => {
   if (b.dataset.a === "choix"){
     const lid = b.closest(".tl").dataset.lid, t = ETAT.a_faire.find((x) => x.id === b.closest(".task").dataset.id);
     const x = t && t.lignes.find((y) => y.id === lid), c = x && x.choix[+b.dataset.i]; if (!c || !db) return;
+    // Rattacher un colis à une commande : on redit ce qu'elle contient avant d'enregistrer
+    if (c.articles && !await confirmer(`${c.impossible ? "⚠️ This order " + c.impossible + ". " : ""}Link this parcel to ${c.label}: ${c.articles.join(", ")}?`, "Link")) return;
     actions[lid] = { ...c.action, tache: lid }; rendreTodo();
     try { await db.doc("actions/" + lid).set({ ...c.action, tache: lid, le: new Date().toISOString(), fait: false }); note(""); }
     catch (err) { delete actions[lid]; rendreTodo(); note("This was not saved. Check your connection and try again."); }
@@ -1516,7 +1521,7 @@ $("#todo").addEventListener("click", async (e) => {
     const x = t && t.lignes.find((y) => y.id === lid); if (!x || !db) return;
     if (t.type === "livraison" && x.sets){
       // Réception d'un colis : vérifier les boîtes au scan, ou valider directement
-      const r = await choisir(`${x.titre}: check the boxes before marking it received?`,
+      const r = await choisir(`${x.titre}: you received ${(x.articles || []).join(", ") || "this order"}? Check the boxes before marking it received?`,
         [{ v: "scan", label: "📷 Scan this parcel", oui: true }, { v: "ok", label: "Validate without scanning" }]);
       if (r === "scan"){ montrer("scan"); await choisirMode("delivery"); if (SC.mode === "delivery"){ SC.cmd = lid; SC.choisi = true; sauverScan(); rendreScanVue(); } return; }
       if (r !== "ok") return;

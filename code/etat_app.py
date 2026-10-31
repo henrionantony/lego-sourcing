@@ -222,6 +222,19 @@ def gain_net(ventes: list) -> tuple[float, float]:
     return net, estime
 
 
+def choix_colis(c: dict, aid: int, a: dict, lignes: list, expedie: str | None) -> dict:
+    """Une commande proposée pour un colis sans numéro : contenu, dates, et impossible si elle a été
+    passée ou expédiée après l'arrivée du colis (le colis ne peut pas être elle)."""
+    arrive, cmd = str(c.get("d") or "")[:10], str(a.get("date_achat") or "")[:10]
+    raison = ("ordered after this parcel arrived" if cmd and arrive and cmd > arrive
+              else "shipped after this parcel arrived" if expedie and arrive and expedie > arrive else None)
+    return {"label": f"{magasin(a.get('lieu'))} · ordered {jour(cmd)[:5]}" + (f" · shipped {jour(expedie)[:5]}" if expedie else ""),
+            "articles": [f"{int(float(x['quantite'] or 1))} × {nom_set(x)}" for x in lignes],
+            "sets": [str(x.get("id_set") or "").split("-")[0].removesuffix(".0") for x in lignes if x.get("id_set")],
+            **({"impossible": raison} if raison else {}),
+            "action": {"type": "colis_lien", "mail": c["mail"], "achat_id": aid}}
+
+
 def jour(iso) -> str:
     return dt.date.fromisoformat(str(iso)[:10]).strftime("%d/%m/%Y") if iso else "?"
 
@@ -388,6 +401,7 @@ def a_regulariser(obj: dict) -> list[dict]:
     # Colis prêts qu'aucun numéro ne relie à une commande : carte rouge à part, en tête
     if orph:
         lignes = []
+        expe = mails.expeditions()
         for c in orph:
             info = [x for x in (c.get("transporteur"), c.get("suivi") and f"tracking {c['suivi']}",
                                 c.get("jusqu") and f"pick up before {jour(c['jusqu'])}", c.get("sujet")) if x]
@@ -397,10 +411,11 @@ def a_regulariser(obj: dict) -> list[dict]:
                            # code de retrait montré même si la commande n'est pas encore reconnue
                            **({"code": c.get("code"), "relais": c.get("lieu"), "jusqu": jour(c["jusqu"]) if c.get("jusqu") else None}
                               if c.get("code") else {}),
-                           "choix": [{"label": f"{magasin(achats.get(a, {}).get('lieu'))} {jour(achats.get(a, {}).get('date_achat'))[:5]} · "
-                                               + ", ".join(nom_set(x).split(" · ")[-1] for x in par_achat.get(a, [])),
-                                      "action": {"type": "colis_lien", "mail": c["mail"], "achat_id": a}} for a in c["candidats"]]
-                                    + [{"label": "Not mine / ignore", "action": {"type": "colis_lien", "mail": c["mail"], "achat_id": 0}}]})
+                           "choix": sorted((choix_colis(c, a, achats.get(a, {}), par_achat.get(a, []), expe.get(a)) for a in c["candidats"]),
+                                           key=lambda x: bool(x.get("impossible")))
+                                    + [{"label": "Not mine / already received", "action": {"type": "colis_lien", "mail": c["mail"], "achat_id": 0}}]})
+            if all(x.get("impossible") for x in lignes[-1]["choix"][:-1]):
+                lignes[-1]["sous"] = "None of your open orders fits this parcel: probably an order you already marked received. " + lignes[-1]["sous"]
         out.append({"id": "colis-inconnus", "type": "ecart", "titre": f"📦 {len(lignes)} parcel{'s' if len(lignes) > 1 else ''} to pick up, order unknown",
                     "detail": "A carrier says a parcel is waiting but doesn't give the order number. Open the email, then tap the order it belongs to.",
                     "lignes": lignes})

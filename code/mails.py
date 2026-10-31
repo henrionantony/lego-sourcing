@@ -95,6 +95,20 @@ def controle() -> dict:
 ORDRE_COLIS = {"expedie": 1, "a_retirer": 2, "livre": 3}
 
 
+def expeditions() -> dict[int, str]:
+    """Date du premier mail « expédié » de chaque commande reconnue (numéro, achat choisi ou suivi)."""
+    entrees, nums = tout(), controle()["nums"]
+    par_suivi = {c["suivi"]: c.get("achat_id") or nums.get(c.get("num")) for c in entrees
+                 if c.get("suivi") and (c.get("achat_id") or nums.get(c.get("num")))}
+    res: dict[int, str] = {}
+    for c in entrees:
+        if c.get("colis") == "expedie" and c.get("d") and not c.get("ecarte"):
+            aid = c.get("achat_id") or nums.get(c.get("num")) or par_suivi.get(c.get("suivi"))
+            if aid and (aid not in res or c["d"] < res[aid]):
+                res[aid] = c["d"]
+    return res
+
+
 def colis(ouverts: dict[int, dict]) -> dict[int, dict]:
     """Dernier état connu du colis de chaque commande en cours de livraison.
 
