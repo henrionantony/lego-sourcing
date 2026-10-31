@@ -480,9 +480,49 @@ def a_regulariser(obj: dict) -> list[dict]:
         out.append({"id": "tresorerie", "type": "reglage", "titre": "Set up the cash balance",
                     "detail": "Paste the treasury SQL in Supabase and confirm your starting cash, so alerts know how much you can spend."})
     out += partage("rappels", lambda: json.loads(RAPPELS.read_text())) or []
+    out += vitrines()
     u = urssaf()
     if u:
         out.insert(0, u)   # au premier plan
+    return out
+
+
+def vitrines() -> list:
+    """Vitrines Vinted : à rembourser par le perso, et effet sur les ventes Vinted
+    (ventes par jour pendant la vitrine, la semaine d'avant et la semaine d'après)."""
+    tout = base.json_partage("vitrines", STOCK / "vitrines.json", [])
+    if not tout:
+        return []
+    out = []
+    dus = [v for v in tout if not v.get("rembourse_le")]
+    if dus:
+        out.append({"id": "vitrines", "type": "transfert",
+                    "titre": f"Move {eur(sum(v['montant'] for v in dus))} from your personal account to the LEGO account (Vinted boost)",
+                    "detail": "The Vinted balance paid the boost; your personal account pays it back. Tap Transferred once done.",
+                    "lignes": [{"id": v["id"], "titre": f"{eur(v['montant'])} · boost {jour(v['debut'])} to {jour(v['fin'])}",
+                                "action": {"type": "vitrine_rembourse", "vitrine": v["id"], "label": "Transferred"}} for v in dus]})
+    auj = dt.date.today()
+    lignes = []
+    for v in sorted(tout, key=lambda v: v["debut"], reverse=True)[:6]:
+        d, f = dt.date.fromisoformat(v["debut"]), dt.date.fromisoformat(v["fin"])
+        n = (f - d).days + 1
+        def par_jour(a, b):
+            b = min(b, auj)
+            if b < a:
+                return None
+            vs = [x for x in base.lire("ventes", f"select=prix_vente,plateforme&date_vente=gte.{a}&date_vente=lte.{b}&limit=1000")
+                  if "VINTED" in str(x.get("plateforme") or "").upper()]
+            j = (b - a).days + 1
+            return len(vs) / j, sum(float(x["prix_vente"] or 0) for x in vs) / j
+        p = [par_jour(d - dt.timedelta(days=n), d - dt.timedelta(days=1)), par_jour(d, f),
+             par_jour(f + dt.timedelta(days=1), f + dt.timedelta(days=n))]
+        txt = lambda r: f"{r[0]:.1f} sales/day ({eur(r[1])})" if r else "not yet"
+        lignes.append({"id": v["id"] + "-m", "titre": f"Boost {jour(v['debut'])} to {jour(v['fin'])} · {eur(v['montant'])}",
+                       "sous": f"before {txt(p[0])} · during {txt(p[1])} · after {txt(p[2])}"})
+    out.append({"id": "vitrines-effet", "type": "ventes", "calme": True,
+                "titre": "Vinted boost: effect on sales",
+                "detail": "Vinted sales per day in the week before, during and after each boost. Only logged sales count.",
+                "lignes": lignes})
     return out
 
 

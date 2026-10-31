@@ -487,8 +487,37 @@ def urssaf_paye(a):
     base.json_partage_ecrire("urssaf", URSSAF, payes)
 
 
+VITRINES = Path(__file__).resolve().parent.parent / "stock" / "vitrines.json"
+
+
+def vitrine(a):
+    """Profil Vinted mis en vitrine : payé par la cagnotte Vinted (compte pro),
+    remboursé ensuite par le compte perso (carte « Money to move » dans To do)."""
+    tout = base.json_partage("vitrines", VITRINES, [])
+    debut = dt.date.fromisoformat(str(a["debut"])[:10])
+    fin = debut + dt.timedelta(days=int(a.get("jours") or 7) - 1)
+    vid = f"vit-{debut}"
+    if any(v["id"] == vid for v in tout):
+        return
+    montant = round(float(a["montant"]), 2)
+    tout.append({"id": vid, "debut": str(debut), "fin": str(fin), "montant": montant, "rembourse_le": None})
+    base.json_partage_ecrire("vitrines", VITRINES, tout)
+    caisse(debut, -montant, f"Vitrine Vinted du {debut:%d/%m} au {fin:%d/%m} (payée par la cagnotte Vinted)")
+
+
+def vitrine_rembourse(a):
+    """Vitrine remboursée par le compte perso au compte pro."""
+    tout = base.json_partage("vitrines", VITRINES, [])
+    for v in tout:
+        if v["id"] == a["vitrine"] and not v.get("rembourse_le"):
+            v["rembourse_le"] = str(a.get("le") or dt.date.today())[:10]
+            base.json_partage_ecrire("vitrines", VITRINES, tout)
+            caisse(v["rembourse_le"], v["montant"], f"Vitrine Vinted remboursée perso → pro (du {v['debut'][8:10]}/{v['debut'][5:7]})")
+            return
+
+
 URSSAF = Path(__file__).resolve().parent.parent / "stock" / "urssaf.json"
-GESTES = {"perte": perte, "stock_trouve": noter_scan, "expedition": noter_scan, "colis_lien": colis_lien, "recu": recu, "cashback_recu": cashback_recu, "cashback_confirme": cashback_confirme, "achete": achete, "achat_libre": achat_libre, "vente": vente, "vente_lot": vente_lot, "vire": vire, "corrige": corrige, "supprime": supprime, "figs_lier": figs_lier, "horizon": horizon, "urssaf_paye": urssaf_paye}
+GESTES = {"perte": perte, "stock_trouve": noter_scan, "expedition": noter_scan, "colis_lien": colis_lien, "recu": recu, "cashback_recu": cashback_recu, "cashback_confirme": cashback_confirme, "achete": achete, "achat_libre": achat_libre, "vente": vente, "vente_lot": vente_lot, "vire": vire, "corrige": corrige, "supprime": supprime, "figs_lier": figs_lier, "horizon": horizon, "urssaf_paye": urssaf_paye, "vitrine": vitrine, "vitrine_rembourse": vitrine_rembourse}
 
 
 def appliquer(liste: list[dict]) -> dict:
