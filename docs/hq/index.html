@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="a089b3929a"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="17be31b5fe"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -358,6 +358,13 @@ h2.sec:first-child{margin-top:4px}
 .figbox{margin-top:10px;border:1px solid var(--line);border-radius:12px;padding:8px 12px;background:var(--card)}
 .figbox summary{font-weight:600;cursor:pointer}
 .figbox .sub{margin:6px 0}
+.fsrc{display:grid;gap:6px;margin:8px 0;padding:8px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.fsrc-l{display:flex;gap:6px;flex-wrap:wrap}.fsrc-l .seg{flex:1;min-width:180px}
+.fsrc-l input{flex:1;min-width:90px;font:inherit;font-size:16px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)}
+.fsrc-r p{margin:0}.fsrc-r .ok{color:var(--ok);font-weight:600}.fsrc-r .ko,.scan-l+ .ko{color:var(--gap)}
+.fsrc-c{display:block;width:100%;text-align:left;margin-top:4px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);font:inherit;cursor:pointer}
+.fsrc-c[aria-pressed="true"]{background:var(--ink);color:var(--surface)}
+.fsrc small{color:var(--muted)}
 .fig-m{display:flex;gap:6px;align-items:flex-end}
 .fig-m textarea{flex:1;min-width:0;font:inherit;font-size:16px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);resize:vertical}
 .scan-msg{margin:10px 0;padding:8px 10px;border-radius:10px;background:var(--chip)}
@@ -616,6 +623,11 @@ dialog.confirmer::backdrop{background:rgba(0,0,0,.45)} dialog.confirmer p{margin
     <form id="scan-m" class="scan-m"><input id="scan-s" inputmode="numeric" placeholder="or type a set number" aria-label="Set number"><button class="btn">Add</button></form>
     <details class="figbox" id="figbox"><summary>🧍 Minifigures</summary>
       <p class="sub">Recognize them in <a href="https://henrionantony.github.io/lego-sourcing/" target="_blank" rel="noopener">LEGO Scan</a> (instant), tap <b>Copy list</b>, then paste it here.</p>
+      <div class="fsrc" id="fsrc"><b>📦 From which purchase?</b>
+        <div class="fsrc-l"><div class="seg" role="group" aria-label="ID type"><button type="button" data-fk="a" aria-pressed="true">ID Achat</button><button type="button" data-fk="l" aria-pressed="false">Lot ID</button></div>
+        <input id="fsrc-n" inputmode="numeric" autocomplete="off" placeholder="e.g. 285" aria-label="Purchase ID"></div>
+        <div id="fsrc-r" class="fsrc-r"></div>
+        <small>Optional. Kept for every list you paste, until you tap <b>Add to my inventory</b>. Then it resets for the next purchase.</small></div>
       <form id="fig-m" class="fig-m"><textarea id="fig-t" rows="3" autocapitalize="off" autocorrect="off" placeholder="Paste the list, or type refs like sw0607 ×2" aria-label="Minifigure references"></textarea><button class="btn">Add</button></form></details>
     <p id="scan-msg" class="scan-msg" hidden></p>
     <div id="scan-res"></div>
@@ -1022,6 +1034,29 @@ function sauverScan(){ try { localStorage.setItem("scan", JSON.stringify(SC)); }
 const nbScans = () => Object.values(SC.scans).reduce((a, n) => a + n, 0) + Object.values(SC.figs || {}).reduce((a, x) => a + x.n, 0);
 // Minifigs collées depuis LEGO Scan : SC.figs[code] = {n, nom}. Comptées dans « comptes/f<code> ».
 const figsL = () => Object.entries(SC.figs || {});
+// Achat d'origine des minifigs collées (le vendeur 31/10 : rangées par ID Achat / Lot ID).
+// FIGART[article] = [achat, libellé, quantité, catégorie]. SC.figSrc = {k: "a"|"l", n, art}
+const FIGART = __FIGART__;
+function artsDuLot(n){ return Object.entries(FIGART).filter(([, a]) => String(a[0]) === String(n)); }
+function libArt(id){ const a = FIGART[id]; return a ? `${a[1]} · ID Achat ${id} · Lot ID ${a[0]}${a[2] > 1 ? " · " + a[2] + " pcs" : ""}` : ""; }
+function rendreFsrc(){
+  const f = SC.figSrc || { k: "a", n: "" }, r = $("#fsrc-r"); if (!r) return;
+  document.querySelectorAll("[data-fk]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.fk === f.k)));
+  if ($("#fsrc-n").value !== String(f.n || "")) $("#fsrc-n").value = f.n || "";
+  if (!f.n){ r.innerHTML = ""; return; }
+  if (f.k === "a"){
+    r.innerHTML = FIGART[f.n] ? `<p class="ok">✓ ${esc(libArt(f.n))}</p>` : `<p class="ko">No inventory line ${esc(f.n)} in your purchases.</p>`; return; }
+  const l = artsDuLot(f.n);
+  if (!l.length){ r.innerHTML = `<p class="ko">No purchase ${esc(f.n)} found.</p>`; return; }
+  if (l.length === 1){ r.innerHTML = `<p class="ok">✓ ${esc(libArt(l[0][0]))}</p>`; return; }
+  r.innerHTML = `<p class="sub">This purchase has ${l.length} lines. Which one?</p>` + l.map(([id]) =>
+    `<button type="button" class="fsrc-c" data-fart="${esc(id)}" aria-pressed="${String(f.art === id)}">${esc(libArt(id))}</button>`).join("");
+}
+function figArt(){
+  const f = SC.figSrc; if (!f || !f.n) return null;
+  if (f.k === "a") return FIGART[f.n] ? String(f.n) : null;
+  const l = artsDuLot(f.n); return l.length === 1 ? l[0][0] : (l.some(([id]) => id === f.art) ? f.art : null);
+}
 const moinsFig = (c) => `<span class="pm"><button class="btn" data-fmoins="${esc(c)}" aria-label="Remove one ${esc(c)}">−</button><button class="btn" data-fplus="${esc(c)}" aria-label="Add one ${esc(c)}">+</button></span>`;
 const vignetteFig = (c) => `<span class="sv"><span class="ref">🧍</span></span>`;
 function enCours(){
@@ -1225,7 +1260,7 @@ function resInventaire(){
       const apres = c + n, ecart = apres - q;
       return `<div class="scan-l${it.length ? "" : " hors"}">${vignetteSet(s)}<span><b>${n} ×</b> ${esc(nomSet(s))} · ${esc(s)}<small>${it.length ? `In database: <b>${q}</b> · Counted: <b>${c} → ${apres}</b>`
         + `<em class="${ecart ? "ec-ko" : "ec-ok"}">${ecart === 0 ? "✓ matches the database" : ecart > 0 ? `⚠ ${ecart} more than the database` : `${-ecart} still to find`}</em>` : "⚠ Database says 0 in stock (purchase not recorded, or all marked sold). Kept on a side list; your purchases are not changed"}</small>${it.length && EXEMP[s] ? blocStrat(s) : ""}</span>${moins(s)}</div>`; }).join("")}</div>
-    <div class="row"><button class="btn yes" id="inv-ok">Add ${nbScans()} to my inventory${zoneActuelle() ? " · 📍 " + esc(libZone(zoneActuelle())) : ""}</button></div>`;
+    <div class="row"><button class="btn yes" id="inv-ok">Add ${nbScans()} to my inventory${zoneActuelle() ? " · 📍 " + esc(libZone(zoneActuelle())) : ""}${figsL().length && figArt() ? " · 📦 ID Achat " + esc(figArt()) : ""}</button></div>${figsL().length && SC.figSrc && SC.figSrc.n && !figArt() ? `<p class="ko">The purchase ID above is not valid: the minifigs will be counted but not linked to a purchase.</p>` : ""}`;
 }
 /* Vente : un colis = une vente, éventuellement en lot. Chaque article scanné est rattaché à un
    exemplaire acheté, le moins cher d'abord (règle d'le vendeur) ; le prix total est réparti au prix public Lego. */
@@ -1327,6 +1362,9 @@ $("#scan-res").addEventListener("click", async (e) => {
         try { await db.doc("comptes/" + x.id).set({ n: c + v, maj }); counts[x.id] = { n: c + v, maj }; } catch (err) { ko++; }
       }
     }
+    const fart = figArt(), fl = figsL().map(([c, x]) => ({ ref: c, nom: x.nom || "", n: x.n }));
+    if (fart && fl.length && !await envoyerAction("figsrc-" + Date.now(), { type: "figs_ajouter", article_id: +fart, figs: fl })){
+      b.disabled = false; msgScan("Not saved. Check your connection and tap again.", false); return; }
     for (const [c, x] of figsL()){
       const id = "f" + c, avant = (counts[id] || {}).n || 0, maj = new Date().toISOString();
       try { await db.doc("comptes/" + id).set({ n: avant + x.n, maj }); counts[id] = { n: avant + x.n, maj }; delete SC.figs[c]; } catch (err) { ko++; }
@@ -1338,8 +1376,8 @@ $("#scan-res").addEventListener("click", async (e) => {
     const strats = stratsAEnvoyer((s) => SC.scans[s] && !trouves[s]);
     if (strats && !await envoyerAction("strat-" + Date.now(), { type: "strategie", ...strats })) ko++;
     if (ko){ b.disabled = false; msgScan("Part of it was not saved. Check your connection and tap again.", false); return; }
-    const nb = nbTot; SC.scans = {}; SC.figs = {}; SC.strat = {}; SC.stratA = {}; SC.pick = {}; sauverScan(); rendreScan(); rendre();
-    msgScan(`✓ ${nb} item${nb > 1 ? "s" : ""} added to your inventory`, true); return;
+    const nb = nbTot; SC.scans = {}; SC.figs = {}; SC.strat = {}; SC.stratA = {}; SC.pick = {}; SC.figSrc = { k: (SC.figSrc || {}).k || "a", n: "" }; sauverScan(); rendreScan(); rendreFsrc(); rendre();
+    msgScan(`✓ ${nb} item${nb > 1 ? "s" : ""} added to your inventory${fart && fl.length ? ` · minifigs linked to ID Achat ${fart}` : ""}`, true); return;
   }
 });
 $("#scan-res").addEventListener("input", (e) => {
@@ -1366,6 +1404,17 @@ $("#scan-res").addEventListener("submit", async (e) => {
   msgScan(`✓ Sale saved: ${nb} item${nb > 1 ? "s" : ""}, ${eur(total)}. Stock updated.`, true);
 });
 // Liste copiée dans LEGO Scan : une ligne « code · nom » par figurine, ou des codes séparés
+$("#fsrc").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-fk],[data-fart]"); if (!b) return;
+  SC.figSrc = SC.figSrc || { k: "a", n: "" };
+  if (b.dataset.fk){ SC.figSrc.k = b.dataset.fk; SC.figSrc.art = null; } else SC.figSrc.art = b.dataset.fart;
+  sauverScan(); rendreFsrc(); rendreScan();
+});
+$("#fsrc-n").addEventListener("input", (e) => {
+  SC.figSrc = { k: (SC.figSrc || {}).k || "a", n: e.target.value.replace(/\D/g, "").slice(0, 6), art: null };
+  sauverScan(); rendreFsrc(); rendreScan();
+});
+rendreFsrc();
 $("#fig-m").addEventListener("submit", (e) => {
   e.preventDefault(); SC.figs = SC.figs || {};
   const t = $("#fig-t").value, lus = [];

@@ -13,6 +13,7 @@ cp "$ICI"/*.py "$ICI"/*.sh "$DEPOT/code/"
 # Page LEGO Scan (reconnaissance des minifigs), servie par GitHub Pages depuis docs/
 mkdir -p "$DEPOT/docs" && cp "$ICI/../scan/index.html" "$DEPOT/docs/index.html"
 # Application LEGO HQ : code seul (connexion), les données restent dans Supabase
+(cd "$ICI" && python3 figart.py >/dev/null) || true
 python3 "$ICI/../app-source/build_pages.py" >/dev/null
 mkdir -p "$DEPOT/docs/hq" && cp "$ICI/../app-source/pages/page.html" "$DEPOT/docs/hq/index.html"
 # Données de l'appli (stock, annonces, photos…) : dans la base privée, envoyées seulement si elles ont changé

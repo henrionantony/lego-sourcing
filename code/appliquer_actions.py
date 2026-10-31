@@ -322,6 +322,32 @@ def figs_lier(a):
     figs_sets.lier(int(a["article_id"]), a.get("figs") or [])
 
 
+def figs_ajouter(a):
+    """Inventaire des minifigs (Scan › Minifigures) avec « From which purchase? » :
+    les figurines comptées sont AJOUTÉES à l'article (une ligne par figurine, rien
+    n'est remplacé : un lot peut se compter en plusieurs fois). Pour un set découpé,
+    seules les figurines au-delà de celles déjà rattachées sont ajoutées."""
+    art_id = int(a["article_id"])
+    art = base.lire("articles", f"select=id,categorie&id=eq.{art_id}")
+    if not art:
+        raise ValueError("article inconnu")
+    deja = {}
+    if (art[0].get("categorie") or "").upper() == "SET":
+        for f in base.lire("figurines", f"select=ref&article_id=eq.{art_id}&vente_id=is.null") or []:
+            deja[f["ref"]] = deja.get(f["ref"], 0) + 1
+    rows = []
+    for f in a.get("figs") or []:
+        ref = re.sub(r"[^a-z0-9-]", "", str(f.get("ref") or "").lower())[:30]
+        n = max(0, min(200, int(f.get("n") or 1)))
+        if not ref:
+            continue
+        pris = min(n, deja.get(ref, 0))
+        deja[ref] = deja.get(ref, 0) - pris
+        rows += [{"article_id": art_id, "ref": ref, "nom": str(f.get("nom") or "")[:200], "quantite": 1}] * (n - pris)
+    if rows:
+        base.ajouter("figurines", rows)
+
+
 def vente(a):
     art = article_de(a)
     v = base._appel("POST", "ventes", [{"article_id": art, "date_vente": str(a.get("date") or a.get("le"))[:10],
@@ -581,7 +607,7 @@ def vitrine_rembourse(a):
 
 
 URSSAF = Path(__file__).resolve().parent.parent / "stock" / "urssaf.json"
-GESTES = {"perte": perte, "stock_trouve": noter_scan, "expedition": noter_scan, "colis_lien": colis_lien, "recu": recu, "cashback_recu": cashback_recu, "cashback_confirme": cashback_confirme, "achete": achete, "achat_libre": achat_libre, "vente": vente, "vente_lot": vente_lot, "vire": vire, "corrige": corrige, "supprime": supprime, "figs_lier": figs_lier, "horizon": horizon, "urssaf_paye": urssaf_paye, "vitrine": vitrine, "vitrine_rembourse": vitrine_rembourse, "emplacement": emplacement, "strategie": strategie}
+GESTES = {"perte": perte, "stock_trouve": noter_scan, "expedition": noter_scan, "colis_lien": colis_lien, "recu": recu, "cashback_recu": cashback_recu, "cashback_confirme": cashback_confirme, "achete": achete, "achat_libre": achat_libre, "vente": vente, "vente_lot": vente_lot, "vire": vire, "corrige": corrige, "supprime": supprime, "figs_lier": figs_lier, "figs_ajouter": figs_ajouter, "horizon": horizon, "urssaf_paye": urssaf_paye, "vitrine": vitrine, "vitrine_rembourse": vitrine_rembourse, "emplacement": emplacement, "strategie": strategie}
 
 
 def appliquer(liste: list[dict]) -> dict:
