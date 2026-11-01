@@ -252,6 +252,11 @@ def reviser(item: str, prix: float, qte: int):
         raise Erreur(" | ".join(re.findall(r"<LongMessage>(.*?)</LongMessage>", x))[:300])
 
 
+def jour_paris() -> str:
+    from zoneinfo import ZoneInfo
+    return dt.datetime.now(ZoneInfo("Europe/Paris")).date().isoformat()
+
+
 def manuelles(faites: dict) -> dict:
     """Annonces en ligne sur le compte eBay qui ne viennent pas de l'outil (mises à la main) :
     {numéro de set: [annonces]}. Leurs sets ne reçoivent pas de nouvelle annonce (pas de doublon).
@@ -438,7 +443,7 @@ def publier(s: str, v: dict, pol: dict, essai: bool, deja: dict | None = None) -
     if deja and deja.get("listing"):
         res["listing"] = deja["listing"]          # annonce en ligne : la mise à jour de l'offre suffit
     elif not essai:
-        res["cree_le"] = dt.date.today().isoformat()   # compte dans le quota du mois
+        res["cree_le"] = jour_paris()   # compte dans le quota du mois
         try:
             res["listing"] = appel("POST", f"/sell/inventory/v1/offer/{oid}/publish")["listingId"]
         except Erreur as e:
@@ -512,6 +517,8 @@ def main():
                 JOURNAL.append(f"{s} : annonce reprise, {v['prix']:.0f} € × {v['qte']} ({lid})")
             except Erreur as e:
                 JOURNAL.append(f"{s} : correction {lid} refusée ({e})")
+                if "terminée" in str(e):   # ancienne annonce terminée (renvoyée à tort comme active) : on en refait une
+                    deja[s.split("-")[0]] = [a for a in deja[s.split("-")[0]] if a["id"] != lid]
         elif not (lid and ex[0].get("status") == "PUBLISHED" and lid in {a["id"] for a in deja[s.split("-")[0]]}):
             JOURNAL.append(f"{s} : pas reprise ({len(ex)} offre, {ex[0].get('status') if ex else '-'}, annonce {lid or '-'})")
         else:
@@ -534,7 +541,7 @@ def main():
     pj = (base.doc("ebay/reglages") or {}).get("par_jour")
     par_jour = int(PAR_JOUR if pj is None else pj)
     # Quota eBay : 150 annonces DÉPOSÉES par mois (remis à zéro le 1er) ; une vente ou un retrait ne rend pas de place
-    mois = dt.date.today().isoformat()[:7]
+    mois = jour_paris()[:7]   # eBay remet le compteur à zéro le 1er, heure de Paris
     deposees = sum(1 for v in faites.values() if str(v.get("cree_le", "")).startswith(mois))
     reste_mois = int((base.doc("ebay/reglages") or {}).get("max_mois") or MAX_EN_LIGNE) - deposees
     # Dans l'ordre choisi (figurines d'abord) : la base ne garde pas l'ordre des clés
