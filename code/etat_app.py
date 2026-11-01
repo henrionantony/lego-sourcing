@@ -175,11 +175,17 @@ def objectifs() -> dict:
     for v in annee:
         mois[v["date_vente"][:7]] = mois.get(v["date_vente"][:7], 0) + float(v["prix_vente"] or 0)
     net, estime = gain_net(annee)
+    # Mêmes mois de l'année d'avant, pour comparer mois par mois
+    debut_avant = DEBUT_ANNEE.replace(year=DEBUT_ANNEE.year - 1)
+    avant = {}
+    for v in base.lire("ventes", f"select=date_vente,prix_vente&date_vente=gte.{debut_avant}&date_vente=lt.{DEBUT_ANNEE}&limit=10000"):
+        k = f"{int(v['date_vente'][:4]) + 1}{v['date_vente'][4:7]}"   # rangé sous le mois de cette année
+        avant[k] = round(avant.get(k, 0) + float(v["prix_vente"] or 0), 2)
     prelev = sum(float(v["prix_vente"] or 0) - encaisse(v) for v in annee)
     return {"debut": DEBUT_ANNEE.isoformat(), "ca": round(ca, 2), "cible_ca": CIBLE_CA, "cible_net": CIBLE_NET,
             "net_frais": round(ca * (1 - PRELEVEMENTS), 2), "net": round(net, 2), "net_estime": round(estime, 2),
             "prelev": round(prelev, 2), "couts": round(ca - prelev - net, 2), "ventes": len(annee), "derniere_vente": derniere,
-            "mois": mois}
+            "mois": mois, "cible_mois": _OBJ.get("mois", {}), "an_passe": avant}
 
 
 def encaisse(v: dict) -> float:

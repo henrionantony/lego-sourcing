@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="17be31b5fe"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="352653574f"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -67,6 +67,7 @@ h1{font-family:var(--display);font-weight:800;font-size:20px;margin:0;display:fl
 .htab td{padding:9px 10px;border-top:1px solid var(--line);vertical-align:top}
 .htab tr.mois td{background:var(--chip);font:600 12.5px var(--body);color:var(--muted);padding:6px 10px}
 .htab .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.mtab td{padding:4px 6px;border-top:1px solid var(--line)} .mtab .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .htab .dt{white-space:nowrap;color:var(--muted);font-variant-numeric:tabular-nums;width:1%}
 .htab .sub{color:var(--muted);font-size:12.5px;margin-top:2px}
 .htab .rid{color:var(--muted);font-size:11.5px}
@@ -943,6 +944,32 @@ function stockStats(){
   for (const it of ITEMS){ const e = etat(it); if (e !== "todo") fait++; if (e === "gap") gap++; }
   return { fait, gap, total: ITEMS.length };
 }
+// Objectif du mois (calé sur les années passées et l'objectif de l'année) et même mois l'an dernier
+function moisHome(o){
+  const cm = o.cible_mois || {}, ap = o.an_passe || {}, fait = o.mois || {};
+  const cles = Object.keys(cm).sort(); if (!cles.length) return "";
+  const nom = (k) => new Date(k + "-15").toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+  const court = (k) => new Date(k + "-15").toLocaleDateString("en-GB", { month: "short" });
+  const ici = new Date(), cle = `${ici.getFullYear()}-${String(ici.getMonth() + 1).padStart(2, "0")}`;
+  const c = cm[cle] || 0, f = fait[cle] || 0, a = ap[cle];
+  const finMois = new Date(ici.getFullYear(), ici.getMonth() + 1, 0).getDate(), jour = ici.getDate();
+  const attendu = c * jour / finMois, reste = Math.max(0, c - f), jours = finMois - jour + 1;
+  const etatM = f >= c ? `<b style="color:var(--ok)">Target reached</b>` : f >= attendu ? `<b style="color:var(--ok)">On track</b>` : `<b style="color:var(--gap)">Behind</b>`;
+  const lignes = cles.map((k) => {
+    const v = fait[k], passe = k < cle, en = k === cle;
+    const coul = v == null ? "" : v >= cm[k] ? "color:var(--ok)" : (passe ? "color:var(--gap)" : "");
+    return `<tr${en ? ' style="font-weight:600"' : ""}><td>${court(k)}</td><td class="num">${ap[k] != null ? eur(Math.round(ap[k])) : "–"}</td>
+      <td class="num">${eur(cm[k])}</td><td class="num" style="${coul}">${v != null ? eur(Math.round(v)) : (passe ? eur(0) : "")}</td></tr>`;
+  }).join("");
+  return `<h2 class="sec">This month · ${nom(cle)}</h2>
+    <div class="panel">${c ? `<div class="lbl">Revenue this month</div><div class="big">${eur(f)} <small>/ ${eur(c)}</small></div>
+      <div class="bar"><i style="width:${Math.min(100, c ? 100 * f / c : 0)}%"></i></div>
+      <div class="sub">${etatM} · ${a != null ? `same month last year: ${eur(a)}${f > a ? " (beaten ✓)" : ` (${eur(Math.round(a - f))} to beat it)`}` : ""}${reste > 0 ? ` · ${eur(Math.round(reste))} to go in ${jours} day${jours > 1 ? "s" : ""}` : ""}</div>` : ""}
+      <details style="margin-top:10px"><summary class="lbl" style="cursor:pointer">Month by month</summary>
+        <div style="overflow-x:auto"><table class="mtab" style="width:100%;border-collapse:collapse;margin-top:6px;font-size:13px">
+          <tr style="color:var(--muted)"><td></td><td class="num">Last year</td><td class="num">Target</td><td class="num">Done</td></tr>${lignes}</table></div>
+        <div class="sub">Targets follow the shape of your past years and add up to the ${eur(o.cible_ca)} goal.</div></details></div>`;
+}
 function rendreHome(){
   if (!ETAT){ $("#home").innerHTML = `<p class="empty">${db ? "Waiting for the first update…" : "Sign in to see your dashboard."}</p>`; return; }
   const o = ETAT.objectifs, t = ETAT.tresorerie, s = stockStats();
@@ -967,6 +994,7 @@ function rendreHome(){
       <div class="bar"><i style="width:${Math.max(0, Math.min(100, 100 * o.net / o.cible_net))}%"></i></div>
       <div class="sub">${o.couts != null ? `${eur(o.ca)} sold − ${eur(o.prelev)} levies (21 %) − ${eur(o.couts)} paid for the items = <b>${eur(o.net)}</b> left for you` : "After the 21 % levies and what each item cost"}${o.ca ? ` · ${Math.round(100 * o.net / o.ca)} % of revenue` : ""}${o.net_estime ? ` · ${eur(o.net_estime)} estimated (sales with unknown purchase)` : ""}</div>` : ""}
       ${o.derniere_vente && (Date.now() - new Date(o.derniere_vente)) > 14 * 864e5 ? `<div class="sub" style="color:var(--gap);margin-top:6px">Last sale logged on ${new Date(o.derniere_vente).toLocaleDateString("en-GB")}: these numbers are behind until sales are logged.</div>` : ""}</div>
+    ${moisHome(o)}
     <h2 class="sec">Cash</h2>
     <div class="panel">${t ? `<div class="lbl">Cash available</div><div class="big">${eur(t.solde)}</div>
       <div class="sub">${t.a_rendre > 0 ? `Includes ${eur(t.a_rendre)} to pay back to yourself · ` : ""}20 % kept aside, 10 % for a real opportunity</div>`
