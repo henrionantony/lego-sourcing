@@ -166,6 +166,10 @@ def main():
     # Sets dont tu as confirmé avoir la boîte (stock de la base pas encore remis à jour)
     for s in reglages.get("confirmes", []):
         voulus.setdefault(str(s), 1)
+    # Boîtes comptées à l'inventaire (scan de l'appli) : stock sûr aussi
+    for x in base.lire("inventaire", "select=id_set,n&n=gt.0&limit=5000") or []:
+        if x.get("id_set"):
+            voulus.setdefault(str(x["id_set"]), int(x["n"]))
     annonces = base.doc("ebay/annonces") or {}
     prix_ebay = base.doc("ebay/prix") or {}
     en_ligne = {s for s, a in annonces.items() if not a.get("retire")}
