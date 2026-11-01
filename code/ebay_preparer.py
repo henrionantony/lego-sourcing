@@ -170,6 +170,16 @@ def main():
     for x in base.lire("inventaire", "select=id_set,n&n=gt.0&limit=5000") or []:
         if x.get("id_set"):
             voulus.setdefault(str(x["id_set"]), int(x["n"]))
+    # Seulement les sets dont il reste au moins une boîte scellée, entière (pas en part-out),
+    # sans co-investisseur et reçue : jamais de boîte découpée ou partagée sur eBay
+    bons = set()
+    co = {a["id"] for a in base.lire("articles", "select=id&co_investisseur=not.is.null&limit=5000") or []}
+    for a in base.lire("stock", "select=id,id_set,strategie,details_etat,livre,categorie"
+                       "&reste=gt.0&categorie=eq.SET&livre=eq.true&limit=5000") or []:
+        if (a.get("strategie") or "ENTIER") == "ENTIER" and a["id"] not in co \
+                and str(a.get("details_etat") or "").upper().startswith("SCELL"):
+            bons.add(str(a["id_set"]))
+    voulus = {s: q for s, q in voulus.items() if s in bons}
     annonces = base.doc("ebay/annonces") or {}
     prix_ebay = base.doc("ebay/prix") or {}
     en_ligne = {s for s, a in annonces.items() if not a.get("retire")}
