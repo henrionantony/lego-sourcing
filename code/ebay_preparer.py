@@ -301,3 +301,10 @@ if __name__ == "__main__":
         liste(int(sys.argv[2]) if sys.argv[2:] else NOUVELLES_PAR_JOUR)
     else:
         main()
+        # Prix délégués (01/11) : les changements de prix calculés par les règles sont appliqués
+        # d'office (le vendeur est informé après coup) ; les nouvelles annonces restent à choisir
+        if (base.doc("ebay/reglages") or {}).get("auto_prix"):
+            a_jour = [i["set"] for i in (base.doc("ebay/propositions") or {}).get("maj", [])]
+            if a_jour:
+                print(f"prix appliqués d'office : {len(a_jour)}")
+                valider(a_jour)
