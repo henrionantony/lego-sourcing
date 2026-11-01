@@ -460,6 +460,25 @@ def publier(s: str, v: dict, pol: dict, essai: bool, deja: dict | None = None) -
     return res
 
 
+def vendue_et_reste(s: str, v: dict) -> bool:
+    """Annonce terminée par une vente (stock eBay à 0, pas un retrait à la main) et au moins
+    une autre boîte en stock. Tant que la vente n'est pas saisie dans la base, la boîte vendue
+    y compte encore : il en faut alors 2 pour ne jamais vendre deux fois la dernière."""
+    if not s.isdigit():
+        return False
+    try:
+        item = appel("GET", f"/sell/inventory/v1/inventory_item/{v.get('sku') or 'LHQ-' + s}", ok_404=True) or {}
+    except Erreur:
+        return False
+    q = ((item.get("availability") or {}).get("shipToLocationAvailability") or {}).get("quantity")
+    if q != 0:
+        return False
+    stock = len(base.lire("articles", f"select=id&id_set=eq.{s}&statut=neq.vendu&livre=eq.true&co_investisseur=is.null") or [])
+    depuis = str(v.get("le") or "")[:10] or "2000-01-01"
+    saisie = base.lire("ventes", f"select=id&plateforme=eq.EBAY&nom_article=ilike.*{s}*&date_vente=gte.{depuis}") or []
+    return stock >= (1 if saisie else 2)
+
+
 def main():
     global TOK
     essai = "--essai" in sys.argv
@@ -480,8 +499,15 @@ def main():
             except Erreur:
                 continue
             etat = (o.get("listing") or {}).get("listingStatus") or ""
-            if not o or o.get("status") != "PUBLISHED" or etat in ("ENDED", "INACTIVE"):
-                v.update(retire=True, retire_le=dt.date.today().isoformat(), par="vendeur")
+            if not o or o.get("status") != "PUBLISHED" or etat in ("ENDED", "INACTIVE", "OUT_OF_STOCK"):
+                if o and vendue_et_reste(s, v):
+                    # Terminée par une vente (quantité tombée à 0) et il reste du stock : une seule
+                    # boîte par annonce (choix du vendeur 01/11), on en redépose une ce soir
+                    v.setdefault("anciennes", []).append(v.pop("listing"))
+                    v["vendu_le"] = dt.date.today().isoformat()
+                    JOURNAL.append(f"{s} : vendu sur eBay, remis en vente (il en reste)")
+                else:
+                    v.update(retire=True, retire_le=dt.date.today().isoformat(), par="vendeur")
     # Sets à remettre en vente une fois (« relancer » dans ebay/reglages) : vendus sur eBay alors
     # qu'il en reste en stock. L'annonce terminée par la vente est oubliée, une nouvelle est déposée
     # sur la même offre (compte dans le quota du mois)

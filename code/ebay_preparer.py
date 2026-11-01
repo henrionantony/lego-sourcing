@@ -217,7 +217,9 @@ def main():
             if s in en_ligne:
                 chez_lego.append(s)
             continue
-        q = reglages.get("qte", {}).get(s, q)
+        # Une seule boîte par annonce (choix du vendeur 01/11 : « dernier exemplaire » pousse à acheter) ;
+        # la suivante est remise en vente après la vente (ebay_annonces.vendue_et_reste)
+        q = min(1, int(reglages.get("qte", {}).get(s, q) or 1))
         p = {**p, "add": PORT_SET_EN_PLUS, "groupe": 1}   # « groupe » : envoi groupé (remise du compte eBay)
         # Prix validé (à la main) sinon : en ligne = le prix actuel, nouveau = le prix calculé
         prix = float(fixe or (annonces[s]["prix"] if s in en_ligne else calcule))
