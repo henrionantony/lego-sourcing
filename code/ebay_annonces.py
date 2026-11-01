@@ -433,6 +433,11 @@ def publier(s: str, v: dict, pol: dict, essai: bool, deja: dict | None = None) -
     except Erreur:
         ex = {}
     ex = (ex.get("offers") or [None])[0]
+    if ex and ex.get("status") == "PUBLISHED" and not (deja and deja.get("listing")):
+        # offre encore rattachée à une annonce terminée (vendue) : eBay refuse de la republier
+        # (erreur 500) ; on l'efface et on en crée une neuve pour la remise en vente
+        appel("DELETE", f"/sell/inventory/v1/offer/{ex['offerId']}", ok_404=True)
+        ex = None
     if ex:
         oid = ex["offerId"]
         appel("PUT", f"/sell/inventory/v1/offer/{oid}", offre)
