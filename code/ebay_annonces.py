@@ -482,6 +482,16 @@ def main():
             etat = (o.get("listing") or {}).get("listingStatus") or ""
             if not o or o.get("status") != "PUBLISHED" or etat in ("ENDED", "INACTIVE"):
                 v.update(retire=True, retire_le=dt.date.today().isoformat(), par="vendeur")
+    # Sets à remettre en vente une fois (« relancer » dans ebay/reglages) : vendus sur eBay alors
+    # qu'il en reste en stock. L'annonce terminée par la vente est oubliée, une nouvelle est déposée
+    # sur la même offre (compte dans le quota du mois)
+    relance = [s for s in (base.doc("ebay/reglages") or {}).get("relancer", []) if s in faites]
+    for s in relance:
+        v = faites[s]
+        if v.get("listing"):
+            v.setdefault("anciennes", []).append(v.pop("listing"))
+        for k in ("retire", "retire_le", "par"):
+            v.pop(k, None)
     # Sets à retirer (encore moins chers chez LEGO, ou exclus à la main) : annonce retirée, offre gardée
     retirees = 0
     for s in base.doc("ebay/a_retirer") or []:
@@ -575,6 +585,11 @@ def main():
             JOURNAL.append(f"{s} : {e}")
     base.doc_ecrire("ebay/annonces", faites)
     base.doc_ecrire("journal/ebay", {"le": dt.datetime.now().isoformat(timespec="minutes"), "lignes": JOURNAL})
+    faits = [s for s in relance if (faites.get(s) or {}).get("listing")]
+    if faits and not essai:   # relance faite : retirée de la liste
+        reg = base.doc("ebay/reglages") or {}
+        reg["relancer"] = [s for s in reg.get("relancer", []) if s not in faits]
+        base.doc_ecrire("ebay/reglages", reg)
     print(f"{retirees} retirées, {ok} annonces traitées ({len(maj)} mises à jour, {len(neuves)} nouvelles{', essai' if essai else ''}), {err} erreurs")
     if err and not ok:
         sys.exit(1)
