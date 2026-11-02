@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="c41c88e403"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="5f53cc0b94"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -1842,12 +1842,30 @@ const surLbc = (a) => lbcMarques[a.id] !== undefined ? lbcMarques[a.id] : !!LBC.
 // Leboncoin : boîte neuve = « Neuf & Scellé » dans le titre et l'état ; remise en main propre en tête ; 3 premiers hashtags.
 // Toutes tes formules d'état neuf (✅ Etat : Jamais ouvert, 🟢 Boîte neuve (jamais ouverte)…), sauf « boîte non scellée ».
 const ETAT_NEUF = /^(\s*(?:✅|🟢|ℹ\uFE0F?)\s*(?:[ÉE]tat\s*:\s*)?)(jamais ouverts?|bo[îi]te neuve (?:(?:&|et) scell[ée]e )?\(jamais ouverte\)|neuf (?:&|et) scell[ée]s?)(?!\s*\(mais bo[îi]te non scell)/im;
-const boiteNeuve = (a) => ETAT_NEUF.test(a.d);
+// Boîte scellée d'après la base (a_publier : état SCELLE) quand l'annonce Vinted ne dit rien d'un état d'occasion
+const RX_OCCASION = /occasion|complet\b|mont[ée]|d[ée]j[àa] construit|sans bo[îi]te|bo[îi]te ouverte|non scell/i;
+const scelleBase = (a) => (APUB[a.n]?.etat || "").toUpperCase().startsWith("SCELL") && !RX_OCCASION.test(a.t + "\n" + a.d);
+const boiteNeuve = (a) => ETAT_NEUF.test(a.d) || scelleBase(a);
+/* Prix ronds sur Vinted et Leboncoin (02/11) : multiple de 5, vers le bas si on reste au-dessus du plancher
+   (+40 % brut sur l'achat), sinon vers le haut. Sous 10 €, à l'euro. */
+function rond5(p, plancher){
+  p = +p || 0; if (!p) return p;
+  if (p < 10) return Math.round(p);
+  const bas = 5 * Math.floor(p / 5 + 1e-9);
+  return bas >= (+plancher || 0) ? bas : 5 * Math.ceil(p / 5 - 1e-9);
+}
+// Prix Leboncoin d'un set scellé : le prix de référence (eBay croisé, a_publier) s'il est plus haut que l'annonce Vinted
+const prixLbc = (a) => { const r = APUB[a.n]; return rond5(r && boiteNeuve(a) && (+r.prix || 0) > (+a.p || 0) ? r.prix : a.p, r?.plancher); };
 const lbcTitre = (a) => boiteNeuve(a) && !/neuf\s*(&|et)\s*scell/i.test(a.t) ? a.t + " - Neuf & Scellé" : a.t;
 function lbc(a){
   const lignes = a.d.split("\n");
   const tags = lignes.filter((l) => l.trim().startsWith("#")).join(" ").match(/#[^\s#]+/g) || [];
-  const corps = lignes.filter((l) => !l.trim().startsWith("#")).join("\n").replace(ETAT_NEUF, "$1Neuf & Scellé").trim();
+  let corps = lignes.filter((l) => !l.trim().startsWith("#")).join("\n").replace(ETAT_NEUF, "$1Neuf & Scellé").trim();
+  // Annonce Vinted sans ligne d'état mais boîte scellée d'après la base : on ajoute l'état avant l'envoi
+  if (!/[ÉE]tat\s*:/i.test(corps) && scelleBase(a)){
+    const i = corps.search(/^📦/m);
+    corps = i >= 0 ? corps.slice(0, i) + "✅ Etat : Neuf & Scellé\n\n" + corps.slice(i) : corps + "\n\n✅ Etat : Neuf & Scellé";
+  }
   return "🤝 Remise en main propre possible.\n\n" + corps + (tags.length ? "\n\n" + tags.slice(0, 3).join(" ") : "");
 }
 const sansAccent = (s) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -2536,7 +2554,8 @@ function listeActions(){
   for (const a of ANNONCES){
     const relistee = pfaits["relist-" + a.id]?.etat === "fait";
     if ((a.s === "en ligne" || relistee) && !surLbc(a) && !(counts["v" + a.id]?.n === 0))
-      L.push({ k: "lbc-" + a.id, type: "lbc", pf: "Leboncoin", a, titre: a.t, prix: a.p, pr: a.pr || 0, m: "lbc", v: +a.p || 0, pourquoi: "Live on Vinted, missing on Leboncoin." });
+      L.push({ k: "lbc-" + a.id, type: "lbc", pf: "Leboncoin", a, titre: a.t, prix: prixLbc(a), pr: a.pr || 0, m: "lbc", v: +a.p || 0,
+        pourquoi: prixLbc(a) > (+a.p || 0) + 4 ? `Live on Vinted at ${eur(a.p)}, missing on Leboncoin. Post it at ${eur(prixLbc(a))}, your market price, and raise the Vinted price too.` : "Live on Vinted, missing on Leboncoin." });
   }
   for (const a of ANNONCES) if (nouveauPrix(a)) L.push({ k: "drop-" + a.id, type: "baisse", pf: "Vinted", a, titre: a.t, prix: nouveauPrix(a), avant: a.p, u: a.u, m: "baisses", v: +a.p || 0, pourquoi: "Monday list: it has been listed too long at this price." });
   // Au plancher depuis 30 jours : on supprime et on reposte (l'action disparaît quand l'ancienne annonce n'est plus dans l'export)
@@ -2555,6 +2574,12 @@ function listeActions(){
   }
   const rang = Object.fromEntries(MISSIONS.map((M, i) => [M.m, i]));
   rang.lbcneuf = 99;
+  for (const x of L) if (x.type !== "retirer" && x.prix && !x.fig){
+    const n = (x.a && x.a.n) || (x.it && x.it.s);
+    const r = rond5(x.prix, APUB[n]?.plancher);
+    // une baisse reste une baisse : jamais au-dessus du prix actuel
+    x.prix = x.type === "baisse" && x.avant && r >= x.avant ? 5 * Math.floor((x.avant - 1) / 5) : r;
+  }
   const ok = L.filter((x) => pfaits[x.k]?.etat !== "fait");
   const douteux = (z) => z.type === "publier" && z.it && !!prixDouteux(z.it.s);
   ok.sort((x, y) => rang[x.m] - rang[y.m] || (pfaits[x.k]?.etat === "passe") - (pfaits[y.k]?.etat === "passe") || douteux(x) - douteux(y)

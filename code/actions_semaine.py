@@ -124,14 +124,26 @@ def construire(export: Path):
             # plancher tant que le lot n'est pas remboursé, calculé sur l'achat entier quand on le connaît
             tx = s.plancher_tx if s.plancher_tx == s.plancher_tx else None
             plancher = max(plancher, tx if tx is not None else s.cout * MARGE_BRUTE_PLANCHER)
-        nouveau = round(a.prix * (1 - BAISSE))
+        # Prix ronds sur Vinted/Leboncoin (02/11) : multiple de 5, au moins 5 € de moins qu'avant
+        nouveau = min(5 * round(a.prix * (1 - BAISSE) / 5), 5 * math.floor((a.prix - 1) / 5))
         if not raison and nouveau < plancher:
-            raison = "au plancher"
+            haut = 5 * math.ceil(plancher / 5)
+            if haut < a.prix:
+                nouveau = haut
+            else:
+                raison = "au plancher"
+        # Déjà sous le prix du marché (prix eBay croisé, a_publier) : on ne baisse pas
+        cible = (depart.get(a.set) or {}).get("prix")
+        if not raison and cible and a.prix < cible * 0.95:
+            raison = f"déjà sous le marché ({cible:.0f} €)"
         # Encore au catalogue et plus cher que chez LEGO une fois frais et port payés :
         # on ramène au plafond tout de suite (pas d'attente d'âge ni de mois), sans passer sous le plancher
         cap = plafond_catalogue(x.get("prix_public"), a.set) if x is not None and x.get("statut") == "en vente" else None
         if cap and a.prix > cap and max(cap, math.ceil(plancher)) < a.prix:
-            nouveau, raison = max(cap, math.ceil(plancher)), None
+            c5 = 5 * math.floor(cap / 5)
+            n5 = c5 if c5 >= plancher else 5 * math.ceil(plancher / 5)
+            if n5 < a.prix:
+                nouveau, raison = n5, None
         ligne = {"Annonce": a.titre, "Set": a.set, "Prix actuel": a.prix, "Nouveau prix": nouveau,
                  "Plancher": round(plancher, 2), "Favoris": a.favoris, "Âge du stock (j)": int(s.age),
                  "Lot remboursé": "oui" if s.rembourse else "non", "Lien": a.url}
