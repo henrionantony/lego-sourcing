@@ -34,7 +34,9 @@ def numero(titre: str) -> str | None:
 
 
 def dernier_export() -> Path:
-    return sorted((STOCK / "clemz").glob("vinted_annonces_*.csv"))[-1]
+    # le plus récent des deux dossiers (extension : stock/vinted, ancien : stock/clemz)
+    fichiers = list((STOCK / "clemz").glob("vinted_annonces_*.csv")) + list((STOCK / "vinted").glob("vinted_annonces_*.csv"))
+    return max(fichiers, key=lambda f: f.name)
 
 
 def stock_detaille() -> pd.DataFrame:
@@ -95,7 +97,7 @@ def construire(export: Path):
     baisses, gardes, republier = [], [], []
     # Première fois qu'on a vu chaque annonce en ligne (l'export Vinted ne donne pas sa date de création)
     premier_vu = {}
-    for f in sorted(export.parent.glob("vinted_annonces_*.csv")):
+    for f in sorted(list((STOCK / "clemz").glob("vinted_annonces_*.csv")) + list((STOCK / "vinted").glob("vinted_annonces_*.csv")), key=lambda f: f.name):
         m = re.search(r"\d{4}-\d{2}-\d{2}", f.name)
         if m:
             for u in pd.read_csv(f, sep=";", dtype=str, encoding="utf-8-sig", usecols=["url"]).url.dropna():
