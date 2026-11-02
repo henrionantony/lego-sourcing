@@ -480,6 +480,19 @@ def black_friday(jour: dt.date) -> dt.date:
     return d + dt.timedelta(days=(4 - d.weekday()) % 7 + 21)
 
 
+def histo(s, d, r) -> str | None:
+    """Le prix situé dans l'historique Dealabs du set (plus bas vu, prix habituel) ;
+    une erreur ici ne bloque jamais l'alerte."""
+    try:
+        import historique_prix
+        pp = float(r.prix_public.iloc[0]) if len(r) and r.prix_public.iloc[0] == r.prix_public.iloc[0] else None
+        g = r.theme_bs.iloc[0] if len(r) and "theme_bs" in r else None
+        return historique_prix.verdict(s, d["prix"], d["id"], d["titre"], prix_public=pp, gamme=g)
+    except Exception as e:
+        print("historique :", e)
+        return None
+
+
 def message_court(tete: str, titre: str, prix: float, nt: dict, det: list, tresor, extra: list, id_deal) -> str:
     """Alerte condensée (31/10 : on lit surtout les 2-3 premières lignes) :
     verdict, set et prix, gain, un avis en une ou deux phrases, la quantité, le lien.
@@ -712,7 +725,7 @@ def main(essai: bool):
             texte, photo = "\n".join(corps), None
             if nt.get("_court") is not None:
                 try:  # message court ; en cas de souci, l'alerte complète part quand même
-                    extra = [x for x in (local(d["titre"]), canal(d["titre"]), douteux) if x]
+                    extra = [x for x in (local(d["titre"]), canal(d["titre"]), douteux, histo(s, d, r)) if x]
                     texte = message_court(corps[0], d["titre"], d["prix"], nt, det, tresor, extra, d["id"])
                     if nt["_court"].get("set_num"):
                         photo = f"https://cdn.rebrickable.com/media/sets/{str(nt['_court']['set_num']).lower()}.jpg"

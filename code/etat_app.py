@@ -672,6 +672,14 @@ def deals() -> list[dict]:
                 elif rt:
                     d["retrait"] = {"etat": "bientôt" if dt.date.fromisoformat(rt) <= dt.date.today() + dt.timedelta(days=183) else "plus tard",
                                     "date": rt, "sur": str(x.get("niveau_retrait") or "") if x.get("niveau_retrait") == x.get("niveau_retrait") else ""}
+            try:  # prix situé dans l'historique Dealabs du set (demande du 02/11)
+                import historique_prix
+                pp = float(x["prix_public"]) if len(x) and x.get("prix_public") == x.get("prix_public") else None
+                d["hp"] = historique_prix.verdict(str(d["id_set"]), float(d["prix"]), d["id"], d.get("titre") or "",
+                                                  jour=str(d.get("vu_le") or "")[:10] or None, prix_public=pp,
+                                                  gamme=x.get("theme_bs") if len(x) else None, en=True)
+            except Exception as e:
+                print("historique :", e)
         out.append({k: v for k, v in d.items() if v is not None})
     return out
 

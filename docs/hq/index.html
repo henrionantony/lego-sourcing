@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="352653574f"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="c41c88e403"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -1772,6 +1772,7 @@ function rendreDeals(){
       <div class="price">${d.prix != null ? `<b>${eur(d.prix)}</b>` : ""}${d.prix_public ? `<span class="sub"><s>${eur(d.prix_public)}</s> ${remise > 0 ? "−" + remise + " %" : ""}</span>` : ""}
         ${d.prix_max && d.gain != null ? `<span class="sub">· buy up to ${eur(d.prix_max)}</span>` : ""}</div></div></div>
       ${chiffres}
+      ${d.hp ? `<div class="sub hp">${esc(d.hp)}</div>` : ""}
       ${d.assez ? `<div class="reco stop">✋ You already have ${d.en_stock} in stock (${d.plafond} max advised): don't buy more</div>`
         : d.quantite > 0 ? `<div class="reco go">Buy ${d.quantite} · ${eur(d.quantite * d.prix)}${d.en_stock ? ` (${d.en_stock} already in stock)` : ""}</div>`
         : d.quantite === 0 && d.diversif ? `<div class="reco stop">⚖ Enough money already on this set or theme: skip it to stay diversified</div>`
