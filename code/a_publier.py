@@ -73,6 +73,8 @@ def main():
             planchers[s] = min(planchers.get(s, tx[l["id"]]["plancher"]), tx[l["id"]]["plancher"])
         ex.setdefault(s, []).append([l["id"], round(cout, 2), l.get("date_achat") or "", l.get("lieu") or "", int(l.get("reste") or 1), *hz.get(l["id"], ("", "")), l.get("emplacement") or "",
                                   {"LOT/DETAILS": "P", "ENTIER": "E"}.get(str(l.get("strategie") or "").strip().upper(), "")])
+    ebay_vivantes = {k: v.get("prix") for k, v in (base.doc("ebay/annonces") or {}).items()
+                     if isinstance(v, dict) and not v.get("retire") and v.get("prix")}
     out = {}
     for s, c in couts.items():
         r = ref.get(s, {})
@@ -84,6 +86,11 @@ def main():
         # Même calcul que l'alerte Telegram (regles.prix_annonce) : un seul prix partout
         pa = regles.prix_annonce(estime, cout, float(r.get("prix_public") or 0), r.get("statut") == "en vente", planchers.get(s), s)
         prix = arrondi(estime) if douteux else pa["prix"]
+        # Annonce eBay en ligne à un prix plus haut (marché eBay croisé, validé) : même niveau sur Vinted et Leboncoin,
+        # arrondi au 5 du dessous (prix ronds) ; jamais pour un set encore au catalogue (plafonné sous le prix LEGO)
+        e = ebay_vivantes.get(s)
+        if e and not pa["plafonne"] and not douteux and float(e) > (prix or 0):
+            prix = float(max(5 * math.floor(float(e) / 5), prix or 0))
         # Pour choisir « poster maintenant » ou « garder » : revente rapide, revente après retraite, date de retraite
         conseil = {"be": (be.get(s + "-1") or {}).get("date") if (be.get(s + "-1") or {}).get("valeur_neuf") else None,
                    "src": r.get("fiabilite") or "",
