@@ -74,3 +74,9 @@ def main(essai=False):
 
 if __name__ == "__main__":
     main("--essai" in sys.argv)
+    if "--essai" not in sys.argv:
+        try:  # même passage : l'historique des prix Dealabs par set se complète un peu à chaque heure
+            import historique_prix
+            historique_prix.construire(8)
+        except Exception as e:
+            print("historique des prix :", e)

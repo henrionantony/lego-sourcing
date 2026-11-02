@@ -131,27 +131,38 @@ def photos_set(b: dict) -> list:
 
 
 def fiche_figurine(f: dict, noms: dict) -> dict:
-    """Annonce d'une figurine du part-out : photos officielles BrickLink (jamais les siennes)."""
-    code, nom, s = f["code"], f["nom"], str(f["set"])
-    sfr = (noms.get(s) or {}).get("nom") or ""
+    """Annonce d'une figurine : photos officielles BrickLink (jamais les siennes).
+    etat « occasion » = figurine en vrac déjà sortie (complète, très bon état), sinon neuve du part-out."""
+    code, nom, s = f["code"], f["nom"], str(f.get("set") or "")
+    occ = f.get("etat") == "occasion"
+    sfr = (noms.get(s) or {}).get("nom") or "" if s else ""
     gamme = f.get("gamme") or ""
-    for t in (f"LEGO {gamme} Minifigure {nom} {code} - {s} - Neuve", f"LEGO Minifigure {nom} {code} - {s} - Neuve",
-              f"LEGO Minifig {nom} {code} - Neuve"):
+    fin = "Complète" if occ else "Neuve"
+    for t in ([f"LEGO {gamme} Minifigure {nom} {code} - {fin}", f"LEGO Minifigure {nom} {code} - {fin}"] if occ or not s else
+              [f"LEGO {gamme} Minifigure {nom} {code} - {s} - Neuve", f"LEGO Minifigure {nom} {code} - {s} - Neuve"]) + \
+             [f"LEGO Minifig {nom} {code} - {fin}"]:
         if len(t.replace("  ", " ")) <= 80:
             break
     t = t.replace("  ", " ")[:80]
-    d = (f"<h2>Minifigure LEGO {html.escape(gamme)} – {html.escape(nom)} ({code})</h2>"
-         f"<p><b>Neuve</b>, issue du set {s}{' ' + html.escape(sfr) if sfr else ''} acheté neuf et ouvert pour l'occasion : jamais jouée, "
-         "jamais exposée.</p><ul>"
-         f"<li>Référence BrickLink : {code}</li><li>Set d'origine : {s}</li>"
-         "<li>Figurine complète telle qu'elle sort du set, avec ses accessoires d'origine.</li></ul>"
-         "<p>Photo officielle de la figurine.</p>"
+    if occ:
+        corps = ("<p><b>Occasion, très bon état</b> : figurine complète, authentique LEGO.</p><ul>"
+                 f"<li>Référence BrickLink : {code}</li>"
+                 + (f"<li>Accessoires : {html.escape(f['accessoires'])}</li>" if f.get("accessoires") else "")
+                 + "</ul><p>Photo officielle de la figurine.</p>")
+    else:
+        corps = (f"<p><b>Neuve</b>, issue du set {s}{' ' + html.escape(sfr) if sfr else ''} acheté neuf et ouvert pour l'occasion : jamais jouée, "
+                 "jamais exposée.</p><ul>"
+                 f"<li>Référence BrickLink : {code}</li><li>Set d'origine : {s}</li>"
+                 "<li>Figurine complète telle qu'elle sort du set, avec ses accessoires d'origine.</li></ul>"
+                 "<p>Photo officielle de la figurine.</p>")
+    d = (f"<h2>Minifigure LEGO {html.escape(gamme)} – {html.escape(nom)} ({code})</h2>" + corps +
          "<p>✉️ Envoi en lettre suivie, figurine protégée. Plusieurs figurines : <b>+1 € seulement par figurine en plus</b>, "
          "tout part dans le même envoi.</p>"
          "<p>Vendeur particulier passionné, plus de 500 avis positifs sur d'autres plateformes.</p>")
     return {"titre": t, "description": d, "prix": float(f["prix"]), "qte": int(f.get("qte") or 1), "port": dict(PORT_FIG),
             "images": [f"https://img.bricklink.com/ItemImage/MN/0/{code}.png", f"https://img.bricklink.com/ItemImage/ML/{code}.png"],
-            "gamme": gamme, "nom": nom, "code": code, "figurine": True, "set_source": s}
+            "gamme": gamme, "nom": nom, "code": code, "figurine": True, "set_source": s,
+            "condition": "USED_EXCELLENT" if occ else "NEW"}
 
 
 def main():

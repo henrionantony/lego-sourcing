@@ -410,7 +410,7 @@ def publier(s: str, v: dict, pol: dict, essai: bool, deja: dict | None = None) -
     if v.get("ean"):
         produit["ean"] = [v["ean"]]
     appel("PUT", f"/sell/inventory/v1/inventory_item/{sku}", {
-        "product": produit, "condition": "NEW",
+        "product": produit, "condition": v.get("condition") or "NEW",
         "availability": {"shipToLocationAvailability": {"quantity": int(v["qte"])}},
         "packageWeightAndSize": {"weight": {"value": v["port"]["kg"], "unit": "KILOGRAM"}}})
     offre = {"sku": sku, "marketplaceId": MARCHE, "format": "FIXED_PRICE", "availableQuantity": int(v["qte"]),
@@ -458,7 +458,7 @@ def publier(s: str, v: dict, pol: dict, essai: bool, deja: dict | None = None) -
                 raise
             del produit["ean"]
             appel("PUT", f"/sell/inventory/v1/inventory_item/{sku}", {
-                "product": produit, "condition": "NEW",
+                "product": produit, "condition": v.get("condition") or "NEW",
                 "availability": {"shipToLocationAvailability": {"quantity": int(v["qte"])}},
                 "packageWeightAndSize": {"weight": {"value": v["port"]["kg"], "unit": "KILOGRAM"}}})
             res["listing"] = appel("POST", f"/sell/inventory/v1/offer/{oid}/publish")["listingId"]
