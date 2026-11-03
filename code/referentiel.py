@@ -355,6 +355,17 @@ def rapport_retrait(cr: dict, gamme, jours: float) -> float:
 ERREURS = {"BrickLink": 0.15, "gamme": 0.11, "global": 0.19, "BrickEconomy": 0.18}
 
 
+def cote_be(entree, ratio) -> tuple:
+    """(cote BrickEconomy × ratio France, variation de la cote sur 6 mois vs son plus haut) ; None si inconnue."""
+    v = (entree or {}).get("valeur_neuf")
+    if not v:
+        return None, None
+    debut = (pd.Timestamp.today() - pd.DateOffset(months=6)).strftime("%Y-%m-%d")
+    hist = [p for d, p in (entree.get("historique") or []) if d >= debut and p]
+    haut = max(hist + [v])
+    return round(v * (ratio or 1.0), 2), round(v / haut - 1, 3)
+
+
 def estimer(prix_public, statut: str, gamme, coef: dict, valeur_be=None, ratio_be=None,
             valeur_bl=None, ratio_bl=None, erreurs: dict = ERREURS, k_retrait=None):
     """Prix de vente attendu (avant commissions) et sa fiabilité.
@@ -490,6 +501,11 @@ def construire(xlsx: str, rafraichir: bool = False) -> pd.DataFrame:
                    (be.cache.get(s) or {}).get("valeur_neuf"), ratios_be.get(st, ratio_be), vbl, ratio_bl, k_retrait=kr)
            for pp, st, th, s, vbl, kr in zip(ref.prix_public, ref.statut, ref.theme_rb, ref.set_num,
                                              ref.valeur_bl, k_ret)]
+    # Cote BrickEconomy ramenée au marché français (tes ventes / cote, selon le statut) et sa tendance :
+    # les alertes s'en servent comme garde-fou (03/11, Home One 75405 : estimation 64 € mais cote 53 € en baisse).
+    ref["be_fr"], ref["be_tendance"] = zip(*[cote_be(be.cache.get(s), ratios_be.get(st, ratio_be))
+                                             for s, st in zip(ref.set_num, ref.statut)])
+    (CACHE / "ratios_be.json").write_text(json.dumps({"global": ratio_be, **ratios_be}))
     # Prise de valeur attendue au pivot (2 ans après le retrait), pour les sets retirés ou à date de retrait connue
     ref["pv_pivot"] = [round(pp * rapport_retrait(cr, gamme_par_theme.get(th), PIVOT_JOURS), 2)
                        if pp == pp and pp and r == r else None

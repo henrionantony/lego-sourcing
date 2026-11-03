@@ -318,11 +318,20 @@ def details(s: str, prix: float, ref, tresor=None, en_stock: int = 0, part_out=N
         freins = []
         if meilleur[0] / prix < MARGE_PRUDENCE:
             freins.append(f"marge juste au-dessus du minimum ({meilleur[0] / prix:+.0%} net)")
+        # Cote BrickEconomy ramenée au marché français (03/11) : la conclusion, pas le chiffre
+        bf, bt = x.get("be_fr"), x.get("be_tendance")
+        if bf == bf and bf and bf / prix < regles.MARGE_BRUTE_PLANCHER:
+            freins.append(f"la cote BrickEconomy ne laisse que {bf / prix - 1:+.0%} brut, sous ton plancher")
+        if bt == bt and bt is not None and bt <= BAISSE_COTE:
+            freins.append(f"sa cote baisse ({bt:.0%} sur 6 mois)")
         n_rec = deals_recurrents(s, prix)
         if n_rec >= 3:
             freins.append(f"ce prix est déjà passé {n_rec} fois ces 4 derniers mois")
         if freins:
             note["score"] = min(note["score"], 59 if len(freins) == 1 else 45)
+            if any(f.startswith("la cote BrickEconomy") for f in freins):
+                note["score"] = min(note["score"], 30)   # le marché ne paie pas ce prix : pas un bon coup
+                note["mauvais"] = True
             note["lettre"] = "A" if note["score"] >= 60 else "B" if note["score"] >= 35 else "C"
             note["freins"] = freins
             lignes.append("⚠ " + " ; ".join(freins))
@@ -497,6 +506,7 @@ def black_friday(jour: dt.date) -> dt.date:
 
 # Marge nette sous laquelle un deal ne peut pas être noté A (le minimum est MARGE_NETTE_MIN).
 MARGE_PRUDENCE = 0.20
+BAISSE_COTE = -0.10   # cote BrickEconomy en baisse de 10 % ou plus sur 6 mois
 
 
 def deals_recurrents(s, prix: float, jours: int = 120) -> int:
@@ -577,7 +587,8 @@ def message_court(tete: str, titre: str, prix: float, nt: dict, det: list, treso
         avis.append(t[0].upper() + t[1:])
     if nt.get("freins"):
         t = " et ".join(nt["freins"])
-        avis.append("⚠ " + t[0].upper() + t[1:] + " : pas besoin de se presser")
+        avis.append(("👎 Pas un bon coup : " + t if nt.get("mauvais")
+                     else "⚠ " + t[0].upper() + t[1:] + " : pas besoin de se presser"))
     dv = nt.get("dv") or 0
     avis.append(f"Tu en as déjà vendu {dv}" if dv else "Tu n'as jamais vendu ce set")
     if nt.get("ebay_bas"):
