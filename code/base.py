@@ -63,7 +63,7 @@ def fin_execution(id_exec, ok: bool, resume: str = "", erreur: str = ""):
 def stock_par_set() -> dict[str, int]:
     """Exemplaires encore en stock par numéro de set (vue « stock »)."""
     out: dict[str, int] = {}
-    for l in lire("stock", "select=id_set,reste&reste=gt.0&id_set=not.is.null&limit=10000"):
+    for l in lire("stock", "select=id_set,reste&reste=gt.0&id_set=not.is.null&statut=neq.termin%C3%A9&limit=10000"):
         s = str(l["id_set"]).split("-")[0].removesuffix(".0")
         out[s] = out.get(s, 0) + int(l["reste"] or 0)
     return out
