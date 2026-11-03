@@ -148,6 +148,7 @@ def fiche_figurine(f: dict, noms: dict) -> dict:
         corps = ("<p><b>Occasion, très bon état</b> : figurine complète, authentique LEGO.</p><ul>"
                  f"<li>Référence BrickLink : {code}</li>"
                  + (f"<li>Accessoires : {html.escape(f['accessoires'])}</li>" if f.get("accessoires") else "")
+                 + (f"<li>À noter : {html.escape(f['defauts'])}</li>" if f.get("defauts") else "")
                  + "</ul><p>Photo officielle de la figurine.</p>")
     else:
         corps = (f"<p><b>Neuve</b>, issue du set {s}{' ' + html.escape(sfr) if sfr else ''} acheté neuf et ouvert pour l'occasion : jamais jouée, "
