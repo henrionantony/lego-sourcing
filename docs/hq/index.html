@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="5f53cc0b94"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="207cc2943b"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -409,6 +409,11 @@ h2.sec:first-child{margin-top:4px}
 .pf-passer{justify-self:start}
 .pf-alerte{font-size:13px;color:var(--warn);background:var(--warn-bg);border-radius:8px;padding:6px 10px;margin-top:6px}
 .pf-petit{font-size:12px;opacity:.75}
+.pfps{display:flex;flex-wrap:wrap;gap:4px 6px;margin-top:6px;font-size:12px}
+.pfp{border:1px solid var(--line);border-radius:6px;padding:2px 6px;white-space:nowrap}
+.pfp.vide{opacity:.5}.pfp.bas{color:var(--gap);border-color:currentColor}
+.pfp.cible{font-weight:600}
+.pfps-n{font-size:12px;color:var(--warn);margin-top:3px}
 /* Compte d'aide : boutons d'action grisés hors Platforms et New ad (Copy et photos toujours actifs) */
 .aide .view:not(#v-ads):not(#v-new) .btn:not([data-y=copie]):not([data-y=ph]):not([data-y=tout]),
 .aide #v-ads [data-y=hz], .aide #v-ads label.btn:has(#imp-f), .aide [data-imp], .aide #scan-photo{pointer-events:none;opacity:.35}
@@ -1893,6 +1898,7 @@ function rendreAnnonces(){
   $("#ads").innerHTML = vus.map((a) => `<article class="ad" data-id="${a.id}">
       <button class="adhead" data-x="open" aria-expanded="${aouvert === a.id}">${vignetteAnnonce(a)}<span class="adt">${esc(a.t)}<span class="lbcb${surLbc(a) ? " on" : ""}">${surLbc(a) ? "✓ On Leboncoin" : "Not on Leboncoin" + (a.pr >= 3 ? " · priority ★★★" : a.pr >= 2 ? " · priority ★★" : "")}</span></span><span class="adp">${nouveauPrix(a) ? `<s>${eur(a.p)}</s> ${eur(nouveauPrix(a))}` : eur(a.p)}</span></button>
       ${aouvert === a.id ? `<div class="adbody">
+        ${prixPf(a.n) ? `<div class="adf"><div class="adl">Live prices</div>${prixPf(a.n)}</div>` : ""}
         ${nouveauPrix(a) ? `<div class="adf drop"><div class="adl">Price drop · Monday list</div><div class="adv"><b>${eur(a.p)} → ${eur(nouveauPrix(a))}</b></div>
           <div class="adbtns"><button class="btn yes" data-x="baisse-ouvrir">📋 Copy ${String(nouveauPrix(a)).replace(".", ",")} and open on Vinted</button>
           <button class="btn" data-x="baisse-ok" ${db ? "" : "disabled"}>✓ Done, price changed</button></div>
@@ -2649,6 +2655,15 @@ function detailPrix(P){
   const c = P.cout != null ? `<div class="sub pf-petit">Bought at ${P.cout ? eur(P.cout) : "0 € (free gift)"}${P.plancher ? ` · floor ${eur(P.plancher)}` : ""}</div>` : "";
   return `<div class="sub">${calc}</div>${v}${c}`;
 }
+// Prix en ligne par plateforme vs prix conseillé (le vendeur 03/11) : rouge si plus de 5 € sous le prix conseillé
+function prixPf(n){
+  const P = APUB[n]; if (!P || !P.pf || !Object.keys(P.pf).length) return "";
+  const cible = +P.prix || 0, v = Object.values(P.pf), ecart = Math.max(...v) - Math.min(...v);
+  const lib = { eb: "eBay", vi: "Vinted", lb: "Leboncoin" };
+  const cases = ["eb", "vi", "lb"].map((k) => P.pf[k] ? `<span class="pfp${cible && P.pf[k] < cible - 5 ? " bas" : ""}">${lib[k]} <b>${eur(P.pf[k])}</b></span>` : `<span class="pfp vide">${lib[k]} –</span>`).join("");
+  const bas = cible && v.some((x) => x < cible - 5);
+  return `<div class="pfps">${cases}${cible ? `<span class="pfp cible">Target <b>${eur(cible)}</b></span>` : ""}</div>${bas || ecart > 5 ? `<div class="pfps-n">${bas ? "Red = more than 5 € under the target price. " : ""}${ecart > 5 ? `Prices differ by ${eur(ecart)} between platforms.` : ""}</div>` : ""}`;
+}
 function carteAction(x){
   const T = PTYPES[x.type], a = x.a, lb = x.pf === "Leboncoin" && a && x.type !== "retirer";
   const titre = a ? (lb ? lbcTitre(a) : a.t) : x.titre, texte = a ? (lb ? lbc(a) : a.d) : "";
@@ -2665,7 +2680,7 @@ function carteAction(x){
       ${x.type !== "retirer" && x.prix ? `<div class="adf"><div class="adl">Price</div><div class="pf-prix">${x.avant ? `<s>${eur(x.avant)}</s> ` : ""}${eur(x.prix)}
         ${x.type !== "baisse" ? `<button class="btn" data-y="copie" data-c="prix">Copy price</button>` : ""}</div>
         ${apub && x.it && prixDouteux(x.it.s) ? `<div class="pf-alerte">⚠ ${prixDouteux(x.it.s)}</div>` : ""}
-        ${apub ? detailPrix(apub) : ""}</div>` : ""}
+        ${apub ? prixPf(x.it ? x.it.s : x.a?.n) + detailPrix(apub) : ""}</div>` : ""}
       ${x.type !== "retirer" && x.type !== "baisse" && x.type !== "remettre" ? `<div class="adf"><div class="adl">${x.pf} title</div><div class="adv">${esc(titre)}</div><button class="btn yes" data-y="copie" data-c="titre">Copy title</button></div>
       <div class="adf"><div class="adl">${x.pf} text</div><pre class="adv">${esc(texte)}</pre><button class="btn yes" data-y="copie" data-c="texte">Copy text</button></div>` : ""}
       ${x.type !== "retirer" && x.type !== "baisse" ? `<div class="adf"><div class="adl">Photos</div>${photos}</div>` : ""}
@@ -2972,7 +2987,7 @@ function carte(it){
     <div class="ph">${photo(it)}</div>
     <div class="info">
       <div class="t">${esc(it.t)}</div>${it.fr ? `<div class="fr">${esc(it.fr)}</div>` : ""}
-      <div class="meta">${it.s ? `<span>Set ${esc(it.s)}</span>` : ""}<span class="tag">${src}</span>${prix}${lien}${zonesSet(it.s)}</div>
+      <div class="meta">${it.s ? `<span>Set ${esc(it.s)}</span>` : ""}<span class="tag">${src}</span>${prix}${lien}${zonesSet(it.s)}</div>${it.s && it.src !== "fig" && it.src !== "decoupe" ? prixPf(it.s) : ""}
     </div>
     <div class="wide">
       ${decoupes[it.id] ? blocMorceaux(it) : `<div class="ctl${it.q === 0 ? " sold" : ""}">

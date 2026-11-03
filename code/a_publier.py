@@ -19,6 +19,7 @@ import transaction
 ICI = Path(__file__).resolve().parent
 LEGO = ICI.parent
 SORTIE = LEGO / "stock" / "app" / "a_publier.json"
+APP = SORTIE.parent
 # Exemplaires en stock par set, le moins cher d'abord, pour rattacher une vente scannée
 EXEMPLAIRES = LEGO / "stock" / "app" / "exemplaires.json"
 
@@ -75,6 +76,23 @@ def main():
                                   {"LOT/DETAILS": "P", "ENTIER": "E"}.get(str(l.get("strategie") or "").strip().upper(), "")])
     ebay_vivantes = {k: v.get("prix") for k, v in (base.doc("ebay/annonces") or {}).items()
                      if isinstance(v, dict) and not v.get("retire") and v.get("prix")}
+    # Prix en ligne sur chaque plateforme (le plus bas par set) : affichés côte à côte dans l'appli
+    vinted_en_ligne, lbc_en_ligne = {}, {}
+    try:
+        for a in json.loads((APP / "annonces.json").read_text()):
+            if a.get("s") == "en ligne" and a.get("n") and a.get("p"):
+                vinted_en_ligne[a["n"]] = min(float(a["p"]), vinted_en_ligne.get(a["n"], 1e9))
+    except Exception:
+        pass
+    try:
+        import leboncoin
+        exports = sorted((APP.parent / "leboncoin").glob("*.csv"))
+        for a in (leboncoin.lire(exports[-1]) if exports else []):
+            for n in set(a["sets"]):
+                if a.get("p"):
+                    lbc_en_ligne[n] = min(float(a["p"]), lbc_en_ligne.get(n, 1e9))
+    except Exception:
+        pass
     out = {}
     for s, c in couts.items():
         r = ref.get(s, {})
@@ -100,7 +118,8 @@ def main():
                    "pivot": float(r.get("pv_pivot") or 0) or None, "pivot_le": r.get("pivot_le") or ""}
         out[s] = {"prix": prix, "ebay": regles.prix_ebay(prix) if prix else None, "estime": round(estime, 2) or None, **conseil,
                   "cout": round(cout, 2), "plancher": pa["plancher"], "pp": float(r.get("prix_public") or 0) or None,
-                  "plafonne": pa["plafonne"], "vendus": vendus.get(s, [])[-5:], "etat": c[0][1], **({"douteux": True} if douteux else {})}
+                  "plafonne": pa["plafonne"], "vendus": vendus.get(s, [])[-5:], "etat": c[0][1], **({"douteux": True} if douteux else {}),
+                  "pf": {k: v for k, v in (("eb", ebay_vivantes.get(s)), ("vi", vinted_en_ligne.get(s)), ("lb", lbc_en_ligne.get(s))) if v}}
     SORTIE.write_text(json.dumps(out, ensure_ascii=False))
     pp = lambda s: float(ref.get(s, {}).get("prix_public") or 0) or None
     EXEMPLAIRES.write_text(json.dumps({s: {"pp": pp(s), "c": sorted(c, key=lambda x: (x[1], x[2]))} for s, c in ex.items()}, ensure_ascii=False))

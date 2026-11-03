@@ -33,6 +33,10 @@ def lire(chemin: Path, inactives: bool = False) -> list[dict]:
                 continue
             if r.get("titre") and r.get("prix"):          # extension ≥ 1.6 : titre et prix propres
                 t, p = r["titre"].strip(), float(r["prix"].replace(",", "."))
+                # l'extension colle parfois le n° de set final du titre au prix (« 10280 » + « 60 » → 1028060)
+                m = re.search(re.escape(t) + r"\s+([\d\s\u202f]+(?:,\d+)?)\s*€", r.get("texte") or "")
+                if m:
+                    p = float(re.sub(r"\s", "", m.group(1)).replace(",", "."))
             else:
                 t = titre(r.get("texte") or r["titre"])
                 prix = re.search(r"(?:Prix:|^)\s*([\d\s ]+(?:,\d+)?)\s*€", (r.get("texte") or "").replace(t, "").strip())
