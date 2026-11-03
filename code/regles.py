@@ -275,7 +275,7 @@ BONUS_GAMME_PHARE = 1.15
 # Set retiré proposé à −30 % ou plus sous son prix public : alerte « rare » qui sonne.
 SEUIL_RARE = 0.70
 
-DATE_APPORT = "2026-11-20"  # semaine du Black Friday
+DATE_APPORT = "2026-11-03"  # débloqué le 03/11 : les meilleurs prix des enseignes tombent avant le Black Friday
 
 
 def caisse_utilisable(tresor: dict, garde: bool, opportunite: bool) -> float:
