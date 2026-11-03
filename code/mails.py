@@ -47,6 +47,31 @@ def ajouter(entree: dict):
     return True
 
 
+def remplacer(entree: dict) -> bool:
+    """Remplace l'entrée déjà notée pour ce mail (ex. un favori Vinted noté « ignore » avant le 03/11)."""
+    t = tout()
+    for i, x in enumerate(t):
+        if x.get("mail") == entree.get("mail"):
+            t[i] = entree
+            base.json_partage_ecrire("commandes", FICHIER, t)
+            return True
+    return ajouter(entree)
+
+
+def signaux(jours: int = 30) -> dict[str, dict]:
+    """{set: {"favoris": n, "contacts_lbc": n}} sur les `jours` derniers jours (mails de favori Vinted et de contact Leboncoin)."""
+    debut = (dt.date.today() - dt.timedelta(days=jours)).isoformat()
+    r: dict[str, dict] = {}
+    for x in tout():
+        if not x.get("set") or (x.get("d") or "") < debut:
+            continue
+        cle = "favoris" if x.get("vinted") == "favori" else "contacts_lbc" if x.get("lbc") == "contact" else None
+        if cle:
+            s = r.setdefault(str(x["set"]), {"favoris": 0, "contacts_lbc": 0})
+            s[cle] += 1
+    return r
+
+
 def controle() -> dict:
     """{"achats": {achat_id: {"ok", "msg", "num"}}, "sans_achat": [commandes du mail absentes de la base]}"""
     cmds = commandes()
@@ -186,6 +211,11 @@ if __name__ == "__main__":
         except ValueError:
             pass
         print(json.dumps(mails_regles.retrait(brut, mails_regles.texte(brut))))
+    elif sys.argv[1:2] == ["remplacer"]:
+        print("remplacé" if remplacer(json.loads(sys.argv[2])) else "?")
+    elif sys.argv[1:2] == ["signaux"]:
+        for k, v in sorted(signaux(int(sys.argv[2]) if len(sys.argv) > 2 else 30).items(), key=lambda kv: -kv[1]["favoris"]):
+            print(k, v)
     elif sys.argv[1:2] == ["ajouter"]:
         print("ajouté" if ajouter(json.loads(sys.argv[2])) else "déjà noté")
     else:

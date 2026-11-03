@@ -289,6 +289,20 @@ def leboncoin(adresse: str, sujet: str, t: str, corps: str) -> dict | None:
     return {"lbc": etat, "set": nums[-1], "titre": titre[:200], **({"url": u.group(0)} if u else {})}
 
 
+# ---------- Vinted : article mis en favori ----------
+
+def favori_vinted(adresse: str, sujet: str) -> dict | None:
+    """{"vinted": "favori", "set", "titre"} : compté par set (intérêt sans vente = signal de prix)."""
+    if "vinted" not in adresse:
+        return None
+    m = re.search(r"Ton article (.+?) a été marqué comme favori", sujet)
+    if not m:
+        return None
+    # numéro de set, ou référence BrickLink d'une figurine (col466, njo142, sw0519, minespider05)
+    refs = re.findall(r"(?<![\w-])(\d{4,7}|[a-z]{2,12}\d{2,4}[a-z]?)(?![\w])", m.group(1))
+    return {"vinted": "favori", **({"set": refs[-1]} if refs else {}), "titre": m.group(1)[:200]}
+
+
 # ---------- Code de retrait (relais Pickup) ----------
 
 AZTEC = r"https://avisageng-colis-webexternal\.pickup-services\.com/api/barcode/AztecCode\?d=([^\"'\s)<>\]]+)"
@@ -318,6 +332,9 @@ def lire(mail_id: str, expediteur: str, sujet: str, corps: str, jour: str, url: 
     adresse = origine(expediteur, sujet, t)
     base = {"mail": mail_id}
     e = leboncoin(adresse, sujet, t, corps)
+    if e:
+        return {**base, **e, "d": jour}
+    e = favori_vinted(adresse, sujet)
     if e:
         return {**base, **e, "d": jour}
     if "vinted" in adresse and re.search(r"vendu|vente|achet|commande|bordereau|envo", sujet, re.I):

@@ -89,6 +89,11 @@ def construire(export: Path):
     ann = pd.read_csv(export, sep=";", dtype=str, encoding="utf-8-sig")
     ann["prix"] = pd.to_numeric(ann.prix, errors="coerce")
     ann["favoris"] = pd.to_numeric(ann.favoris, errors="coerce").fillna(0).astype(int)
+    try:
+        import mails
+        signaux = mails.signaux(30)
+    except Exception:
+        signaux = {}
     ann["set"] = ann.titre.map(numero)
     ref = charger().drop_duplicates("base").set_index("base")
     st = stock_detaille()
@@ -156,7 +161,11 @@ def construire(export: Path):
             elif v["action"] == "vendre" and v["prix"] and v["prix"] > nouveau + 2:
                 raison = "contrôle : " + ", ".join(v["raisons"])
         ligne = {"Annonce": a.titre, "Set": a.set, "Prix actuel": a.prix, "Nouveau prix": nouveau,
-                 "Plancher": round(plancher, 2), "Favoris": a.favoris, "Âge du stock (j)": int(s.age),
+                 "Plancher": round(plancher, 2), "Favoris": a.favoris,
+                 # Intérêt récent (mails reçus) : beaucoup de favoris ou contacts sans vente = le prix bloque
+                 "Favoris 30 j": signaux.get(str(a.set), {}).get("favoris", 0),
+                 "Contacts LBC 30 j": signaux.get(str(a.set), {}).get("contacts_lbc", 0),
+                 "Âge du stock (j)": int(s.age),
                  "Lot remboursé": "oui" if s.rembourse else "non", "Lien": a.url}
         (gardes if raison else baisses).append({**ligne, "Pourquoi on garde": raison} if raison else ligne)
         # Au plancher et pas bougée depuis 30 jours : on supprime et on reposte au prix de départ (annonce « neuve »)
