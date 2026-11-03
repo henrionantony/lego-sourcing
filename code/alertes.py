@@ -313,6 +313,19 @@ def details(s: str, prix: float, ref, tresor=None, en_stock: int = 0, part_out=N
             note["score"] = min(100, round(note["score"] * regles.BONUS_GAMME_PHARE))
             note["lettre"] = "A" if note["score"] >= 60 else "B" if note["score"] >= 35 else "C"
             lignes.append(f"⭐ Ta gamme phare ({part:.0%} de tes ventes sur 12 mois) : offre large, ventes en lot plus faciles")
+        # Prudence (03/11) : « excellente affaire » seulement si elle l'est vraiment.
+        # Marge juste au-dessus du minimum, ou prix qui revient souvent en promo → B au mieux.
+        freins = []
+        if meilleur[0] / prix < MARGE_PRUDENCE:
+            freins.append(f"marge juste au-dessus du minimum ({meilleur[0] / prix:+.0%} net)")
+        n_rec = deals_recurrents(s, prix)
+        if n_rec >= 3:
+            freins.append(f"ce prix est déjà passé {n_rec} fois ces 4 derniers mois")
+        if freins:
+            note["score"] = min(note["score"], 59 if len(freins) == 1 else 45)
+            note["lettre"] = "A" if note["score"] >= 60 else "B" if note["score"] >= 35 else "C"
+            note["freins"] = freins
+            lignes.append("⚠ " + " ; ".join(freins))
         note.update(gain=round(meilleur[0], 2), pct=round(meilleur[0] / prix, 3), an=round(meilleur[1], 3),
                     jours=meilleur[2], garde=meilleur[3].startswith("Si tu gardes"))
     if meilleur:
@@ -326,6 +339,8 @@ def details(s: str, prix: float, ref, tresor=None, en_stock: int = 0, part_out=N
             q = min(q, cap)  # place limitée pour stocker longtemps
         if opportunite:  # pas de plafond de place, mais pas plus que ce que le marché absorbe
             q = min(q, MAX_OPPORTUNITE.get(dm if dm == dm else None, 4))
+        if note is not None and note.get("freins"):
+            q = min(q, 1)  # pas d'urgence : une boîte pour tester, le prix reviendra
         plafond = q
         if en_stock:
             q = max(0, q - en_stock)  # le stock déjà détenu compte dans l'exposition au set
@@ -480,6 +495,25 @@ def black_friday(jour: dt.date) -> dt.date:
     return d + dt.timedelta(days=(4 - d.weekday()) % 7 + 21)
 
 
+# Marge nette sous laquelle un deal ne peut pas être noté A (le minimum est MARGE_NETTE_MIN).
+MARGE_PRUDENCE = 0.20
+
+
+def deals_recurrents(s, prix: float, jours: int = 120) -> int:
+    """Nombre de semaines, sur les `jours` derniers jours (avant aujourd'hui), où ce set est passé
+    en deal à ce prix ou à moins de 10 % au-dessus : un prix qui revient n'est pas une urgence."""
+    try:
+        import historique_prix as hp
+        auj = dt.date.today()
+        debut = (auj - dt.timedelta(days=jours)).isoformat()
+        sem = {(d[:4], dt.date.fromisoformat(d[:10]).isocalendar()[1])
+               for _id, d, p, t in hp.historique().get(str(s), [])
+               if debut <= d[:10] < auj.isoformat() and p <= prix * 1.10 and not hp.DOUTEUX.search(t or "")}
+        return len(sem)
+    except Exception:
+        return 0
+
+
 def histo(s, d, r) -> str | None:
     """Le prix situé dans l'historique Dealabs du set (plus bas vu, prix habituel) ;
     une erreur ici ne bloque jamais l'alerte."""
@@ -541,6 +575,9 @@ def message_court(tete: str, titre: str, prix: float, nt: dict, det: list, treso
     if bits:
         t = ", ".join(bits)
         avis.append(t[0].upper() + t[1:])
+    if nt.get("freins"):
+        t = " et ".join(nt["freins"])
+        avis.append("⚠ " + t[0].upper() + t[1:] + " : pas besoin de se presser")
     dv = nt.get("dv") or 0
     avis.append(f"Tu en as déjà vendu {dv}" if dv else "Tu n'as jamais vendu ce set")
     if nt.get("ebay_bas"):

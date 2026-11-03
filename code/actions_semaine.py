@@ -8,6 +8,7 @@ Lit l'export des annonces Vinted (extension), la base et le référentiel.
 
 Usage : python3 actions_semaine.py [export_vinted.csv] [--essai]
 """
+import verif_prix
 import datetime as dt
 import json
 import math
@@ -144,6 +145,16 @@ def construire(export: Path):
             n5 = c5 if c5 >= plancher else 5 * math.ceil(plancher / 5)
             if n5 < a.prix:
                 nouveau, raison = n5, None
+        # Dernier contrôle avec TOUTES les règles (verif_prix) : prix décidé, ventes passées, eBay
+        if not raison:
+            v = verif_prix.verifier(a.set, nouveau)
+            if v["raisons"] and str(v["raisons"][0]).startswith("prix décidé"):
+                if v["prix"] < a.prix:
+                    nouveau = v["prix"]
+                else:
+                    raison = v["raisons"][0]
+            elif v["action"] == "vendre" and v["prix"] and v["prix"] > nouveau + 2:
+                raison = "contrôle : " + ", ".join(v["raisons"])
         ligne = {"Annonce": a.titre, "Set": a.set, "Prix actuel": a.prix, "Nouveau prix": nouveau,
                  "Plancher": round(plancher, 2), "Favoris": a.favoris, "Âge du stock (j)": int(s.age),
                  "Lot remboursé": "oui" if s.rembourse else "non", "Lien": a.url}
