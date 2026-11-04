@@ -582,7 +582,8 @@ def message_court(tete: str, titre: str, prix: float, nt: dict, det: list, treso
     best = next((c for c in calc if round(c[3], 2) == nt.get("gain")), None)
     if best:
         g = best[3]
-        lignes.append(f"{pastille(g)} {'+' if g > 0 else ''}{euros(g)} net par boîte · {best[1] / prix - 1:+.0%} brut · en {duree(best[2])}")
+        lignes.append(f"{pastille(g)} {'+' if g > 0 else ''}{euros(g)} net par boîte · {best[1] / prix - 1:+.0%} brut · en {duree(best[2])}"
+                      + (" (estimation non confirmée)" if nt.get("sans_cote") else ""))
     # L'avis, comme on le dirait : la stratégie, ce qui rassure, ce qui retient
     avis = []
     rapide = next((c for c in calc if c[0].startswith("Revente rapide")), None)
@@ -766,7 +767,14 @@ def main(essai: bool):
                 det = details(s, d["prix"], ref, tresor, stock.get(s, 0), part_out, nt, engage)
                 if nt.get("assez"):
                     v_dec, tete = "à regarder", "🟡 À regarder (déjà assez en stock)"
-                if nt.get("lettre"):
+                # 04/11 : sans cote BrickEconomy, l'estimation vient de la moyenne générale et peut
+                # être très gonflée (77057 annoncé +150 %) : jamais « achète » ni « va vite » sur ça
+                sans_cote = any(f.startswith("pas de cote BrickEconomy") for f in nt.get("freins") or [])
+                if sans_cote and v_dec == "achète":
+                    v_dec, tete = "à regarder", "🟡 À vérifier (pas encore de cote BrickEconomy)"
+                    journal[-1]["verdict"] = v_dec
+                nt["sans_cote"] = sans_cote
+                if nt.get("lettre") and not sans_cote:
                     tete += " · " + NOTE_MOTS[nt["lettre"]]
                     if nt["lettre"] == "A" and v_dec == "achète":
                         tete = "🚨 GROSSE AFFAIRE · " + tete
@@ -790,7 +798,8 @@ def main(essai: bool):
                 pos = len(corps)
                 corps.append(v_raison)
             if rare:
-                corps[0] = f"⚡ RARE, set retiré à {d['prix'] / float(r.prix_public.iloc[0]) - 1:.0%} · va vite · " + corps[0]
+                corps[0] = (f"⚡ Set retiré à {d['prix'] / float(r.prix_public.iloc[0]) - 1:.0%} · " if nt.get("sans_cote")
+                            else f"⚡ RARE, set retiré à {d['prix'] / float(r.prix_public.iloc[0]) - 1:.0%} · va vite · ") + corps[0]
             corps.append(f"Deal à {d['temperature']:.0f}° en ce moment · {d['lien']}")
             # Lien direct vers la page du marchand (redirection Dealabs), pour acheter vite
             corps.insert(pos, f"🛒 Acheter : https://www.dealabs.com/visit/threadmain/{d['id']}")
