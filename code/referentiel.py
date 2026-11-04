@@ -33,6 +33,7 @@ CACHE = DATA / "cache"
 ANNEES_BRICKSET = range(2010, dt.date.today().year + 2)
 BE_QUOTA_JOUR = 100
 BE_RESERVE_FIGURINES = 60  # appels gardés chaque jour pour les cotes de figurines (décidé le 19/10)
+BE_RESERVE_ALERTES = 10    # appels gardés pour vérifier la cote d'un set qui arrive en deal (verif_be.py, 04/11)
 # Conversion approximative des prix publics quand le prix allemand manque.
 EUR_PAR_GBP, EUR_PAR_USD = 1.17, 0.93
 # Gamme retenue seulement si au moins ce nombre de ventes pour l'apprendre.
@@ -146,16 +147,18 @@ class BrickEconomy:
         self.jour = dt.date.today().isoformat()
         self.appels = q.get("appels", 0) if q.get("jour") == self.jour else 0
 
-    def restant(self, figurines: bool = False) -> int:
-        """Appels encore permis aujourd'hui : les sets laissent la réserve aux figurines."""
-        plafond = BE_QUOTA_JOUR if figurines else BE_QUOTA_JOUR - BE_RESERVE_FIGURINES
+    def restant(self, figurines: bool = False, alerte: bool = False) -> int:
+        """Appels encore permis aujourd'hui : les sets laissent la réserve aux figurines,
+        et tous laissent la réserve des alertes (vérification d'un deal du jour)."""
+        plafond = (BE_QUOTA_JOUR if alerte else BE_QUOTA_JOUR - BE_RESERVE_ALERTES if figurines
+                   else BE_QUOTA_JOUR - BE_RESERVE_ALERTES - BE_RESERVE_FIGURINES)
         return max(0, plafond - self.appels) if self.cle else 0
 
-    def valeur(self, set_num: str, max_age_jours: int = 7) -> dict | None:
+    def valeur(self, set_num: str, max_age_jours: int = 7, alerte: bool = False) -> dict | None:
         c = self.cache.get(set_num)
         if c and (dt.date.today() - dt.date.fromisoformat(c["date"])).days <= max_age_jours:
             return c
-        if self.restant() <= 0:
+        if self.restant(alerte=alerte) <= 0:
             return c
         try:
             brut = json.loads(_get(self.URL.format(set_num) + "?currency=EUR",
