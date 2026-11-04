@@ -279,15 +279,18 @@ DATE_APPORT = "2026-11-03"  # débloqué le 03/11 : les meilleurs prix des ensei
 
 
 def caisse_utilisable(tresor: dict, garde: bool, opportunite: bool) -> float:
-    """Cash qu'un achat peut engager sans entamer la réserve. Un achat à garder
-    n'utilise jamais l'apport à rendre et laisse au moins la moitié du capital."""
+    """Cash qu'un achat peut engager sans entamer la réserve. Avant DATE_APPORT, un
+    achat à garder n'utilise pas l'apport à rendre et laisse au moins la moitié du
+    capital propre. Depuis DATE_APPORT (Black Friday hors LEGO.com, 04/11), l'apport
+    sert à tous les achats, à garder compris, avec la même réserve."""
     capital = tresor.get("capital") or tresor["solde"]
-    if garde:
+    apport_ouvert = dt.date.today() >= dt.date.fromisoformat(DATE_APPORT)
+    if garde and not apport_ouvert:
         propre = tresor.get("capital_propre") or capital
         return max(0.0, tresor["solde"] - tresor.get("a_rendre", 0) - SEUIL_GARDE * propre)
     # L'apport à rendre est gardé pour le Black Friday : avant DATE_APPORT, seule
     # une vraie opportunité peut y toucher.
-    bloque = 0.0 if opportunite or dt.date.today() >= dt.date.fromisoformat(DATE_APPORT) else tresor.get("a_rendre", 0)
+    bloque = 0.0 if opportunite or apport_ouvert else tresor.get("a_rendre", 0)
     return max(0.0, tresor["solde"] - bloque - (RESERVE_OPPORTUNITE if opportunite else RESERVE) * (capital - bloque))
 
 
