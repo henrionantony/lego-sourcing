@@ -327,9 +327,18 @@ def details(s: str, prix: float, ref, tresor=None, en_stock: int = 0, part_out=N
         n_rec = deals_recurrents(s, prix)
         if n_rec >= 3:
             freins.append(f"ce prix est déjà passé {n_rec} fois ces 4 derniers mois")
+        # 04/11 (Mario & Yoshi 71438) : déjà vu nettement moins cher dans l'année,
+        # ou estimation sans cote BrickEconomy pour la confirmer → la conclusion le dit
+        bas = plus_bas_an(s, prix)
+        if bas:
+            freins.append(f"il est déjà passé à {bas[0]:.0f} € ({MOIS[int(bas[1][5:7]) - 1]} {bas[1][:4]})")
+        if not (bf == bf and bf) and str(x.get("fiabilite")) == "global":
+            freins.append("pas de cote BrickEconomy pour confirmer, estimation tirée de ta moyenne générale")
         if freins:
             note["score"] = min(note["score"], 59 if len(freins) == 1 else 45)
-            if any(f.startswith("la cote BrickEconomy") for f in freins):
+            if any(f.startswith("la cote BrickEconomy") for f in freins) or (
+                    any(f.startswith("il est déjà passé à") for f in freins)
+                    and any(f.startswith("pas de cote BrickEconomy") for f in freins)):
                 note["score"] = min(note["score"], 30)   # le marché ne paie pas ce prix : pas un bon coup
                 note["mauvais"] = True
             note["lettre"] = "A" if note["score"] >= 60 else "B" if note["score"] >= 35 else "C"
@@ -522,6 +531,23 @@ def deals_recurrents(s, prix: float, jours: int = 120) -> int:
         return len(sem)
     except Exception:
         return 0
+
+
+MOIS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."]
+
+
+def plus_bas_an(s, prix: float, jours: int = 365, seuil: float = 0.90):
+    """(prix, date) du plus bas deal de l'année passée s'il est à 90 % de ce prix ou moins."""
+    try:
+        import historique_prix as hp
+        auj = dt.date.today()
+        debut = (auj - dt.timedelta(days=jours)).isoformat()
+        vus = [(p, d[:10]) for _id, d, p, t in hp.historique().get(str(s), [])
+               if debut <= d[:10] < auj.isoformat() and p and not hp.DOUTEUX.search(t or "")]
+        bas = min(vus) if vus else None
+        return bas if bas and bas[0] <= prix * seuil else None
+    except Exception:
+        return None
 
 
 def histo(s, d, r) -> str | None:
