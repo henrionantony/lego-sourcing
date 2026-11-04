@@ -321,7 +321,7 @@ def details(s: str, prix: float, ref, tresor=None, en_stock: int = 0, part_out=N
         # Cote BrickEconomy ramenée au marché français (03/11) : la conclusion, pas le chiffre
         bf, bt = x.get("be_fr"), x.get("be_tendance")
         if bf == bf and bf and bf / prix < regles.MARGE_BRUTE_PLANCHER:
-            freins.append(f"la cote BrickEconomy ne laisse que {bf / prix - 1:+.0%} brut, sous ton plancher")
+            freins.append(f"la cote BrickEconomy ne laisse que {bf / prix - 1:+.1%} brut, sous ton plancher".replace(".", ","))
         if bt == bt and bt is not None and bt <= BAISSE_COTE:
             freins.append(f"sa cote baisse ({bt:.0%} sur 6 mois)")
         n_rec = deals_recurrents(s, prix)
@@ -774,6 +774,10 @@ def main(essai: bool):
                     v_dec, tete = "à regarder", "🟡 À vérifier (pas encore de cote BrickEconomy)"
                     journal[-1]["verdict"] = v_dec
                 nt["sans_cote"] = sans_cote
+                # 04/11 (77037) : bonne affaire mais tréso bloquée → pas de « GROSSE AFFAIRE · ACHÈTE »
+                if v_dec == "achète" and not nt.get("quantite") and any(l.startswith("⛔ Tréso") for l in det):
+                    v_dec, tete = "à regarder", "🟡 Bon prix, mais pas de cash libre (tréso)"
+                    journal[-1]["verdict"] = v_dec
                 if nt.get("lettre") and not sans_cote:
                     tete += " · " + NOTE_MOTS[nt["lettre"]]
                     if nt["lettre"] == "A" and v_dec == "achète":
