@@ -484,6 +484,30 @@ def vendue_et_reste(s: str, v: dict) -> bool:
     return stock >= (1 if saisie else 2)
 
 
+def retirer(faites: dict, essai: bool) -> int:
+    """Retire d'eBay (annonce retirée, offre gardée) : les sets encore moins chers chez LEGO ou
+    exclus à la main (ebay/a_retirer), et ce qui est déjà vendu ailleurs (ebay_ventes)."""
+    import ebay_ventes
+    vendues = ebay_ventes.a_retirer(faites)
+    retirees = 0
+    for s in list(dict.fromkeys(list(base.doc("ebay/a_retirer") or []) + list(vendues))):
+        v = faites.get(s)
+        if v and v.get("listing") and not v.get("retire") and not essai:
+            try:
+                appel("POST", f"/sell/inventory/v1/offer/{v['offre']}/withdraw")
+                v.update(retire=True, retire_le=dt.date.today().isoformat(), par="vendu ailleurs" if s in vendues else "regle")
+                retirees += 1
+                if s in vendues:
+                    JOURNAL.append(f"{s} retiré : {vendues[s]}")
+            except Erreur as e:
+                if s in vendues and ("ENDED" in str(e) or "25002" in str(e) or "not published" in str(e).lower()):
+                    v.update(retire=True, retire_le=dt.date.today().isoformat(), par="vendeur")
+                JOURNAL.append(f"retrait {s} : {e}")
+    if vendues and not essai:
+        ebay_ventes.noter(vendues)
+    return retirees
+
+
 def main():
     global TOK
     essai = "--essai" in sys.argv
@@ -523,17 +547,13 @@ def main():
             v.setdefault("anciennes", []).append(v.pop("listing"))
         for k in ("retire", "retire_le", "par"):
             v.pop(k, None)
-    # Sets à retirer (encore moins chers chez LEGO, ou exclus à la main) : annonce retirée, offre gardée
-    retirees = 0
-    for s in base.doc("ebay/a_retirer") or []:
-        v = faites.get(s)
-        if v and v.get("listing") and not v.get("retire") and not essai:
-            try:
-                appel("POST", f"/sell/inventory/v1/offer/{v['offre']}/withdraw")
-                v.update(retire=True, retire_le=dt.date.today().isoformat(), par="regle")
-                retirees += 1
-            except Erreur as e:
-                JOURNAL.append(f"retrait {s} : {e}")
+    retirees = retirer(faites, essai)
+    if "--retraits" in sys.argv:
+        # Passage rapide demandé après une vente ailleurs : seulement les retraits
+        base.doc_ecrire("ebay/annonces", faites)
+        base.doc_ecrire("journal/ebay", {"le": dt.datetime.now().isoformat(timespec="minutes"), "lignes": JOURNAL})
+        print(f"{retirees} annonces retirées")
+        return
     a_faire = {s: v for s, v in a_faire.items() if not (faites.get(s) or {}).get("retire")}
     # Annonces créées par l'outil (SKU LHQ-<set>) mais absentes de ebay/annonces : reprises en main,
     # sinon elles passent pour « faites à la main » et gardent leurs anciens prix et quantités
