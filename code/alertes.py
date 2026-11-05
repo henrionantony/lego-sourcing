@@ -646,6 +646,20 @@ def message_court(tete: str, titre: str, prix: float, nt: dict, det: list, treso
 NOTE_MOTS = {"A": "⭐⭐⭐ Excellente affaire", "B": "⭐⭐ Bonne affaire", "C": "⭐ Affaire correcte"}
 
 
+FENETRES_BF = [("2026-11-20", "2026-11-23"), ("2026-11-26", "2026-12-01")]
+
+
+def alerte_bf(titre: str, jour: dt.date | None = None) -> bool:
+    """Deal Dealabs qui annonce les offres Black Friday / Insiders de LEGO.com, pendant les
+    nuits à surveiller (05/11 : alerte qui sonne, la mise en ligne peut tomber à 1 h ou 3 h)."""
+    jour = (jour or dt.date.today()).isoformat()
+    if not any(a <= jour <= b for a, b in FENETRES_BF):
+        return False
+    t = titre.lower()
+    chez_lego = "(lego)" in t or "lego.com" in t or "boutique lego" in t or "insiders" in t
+    return chez_lego and bool(re.search(r"black\s*friday|insiders|cyber\s*monday|week-?end", t))
+
+
 def main(essai: bool):
     global MUET
     MUET = github_surveille()
@@ -674,6 +688,10 @@ def main(essai: bool):
         if d["id"] in vus:
             continue
         vus.add(d["id"])
+        if alerte_bf(d["titre"]) and (not premier or essai):
+            # 05/11 : nuit du Black Friday / Insiders Weekend, l'heure de mise en ligne est inconnue
+            telegram("🚨 BLACK FRIDAY LEGO.COM : les offres semblent en ligne !\n" + d["titre"]
+                     + f"\n🛒 https://www.dealabs.com/visit/threadmain/{d['id']}\n{d['lien']}", True, essai)
         promo = detecter(d["titre"])
         if promo:
             # Promo Lego.com (points doublés, set offert) : toujours signalée, avec les sets rentables.
