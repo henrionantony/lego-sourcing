@@ -58,6 +58,7 @@ details.ia summary{font-weight:700;cursor:pointer}
 <label class="shoot" id="shoot"><input type="file" id="f" accept="image/*" hidden>
   📷 Photo a minifigure<small>One figure per photo, close up, plain background if you can</small></label>
 <button type="button" class="btn" id="cam-on" style="width:100%;margin-top:8px;padding:14px;font-weight:600">🎥 Live camera: scan one after another</button>
+<form class="man" id="man-fixe"><input type="text" name="c" placeholder="No photo? Type the ref, e.g. njo1047" autocapitalize="off" autocorrect="off" aria-label="Minifigure reference"><button class="btn">Add</button></form>
 <div class="cam" id="cam" hidden><div class="vf"><video id="cam-v" playsinline muted autoplay></video><div class="cadre"></div></div>
   <div class="row"><button type="button" class="btn gros" id="cam-go">📸 Capture</button><button type="button" class="btn" id="cam-off">Close</button></div></div>
 <p class="msg" id="msg" hidden></p>
@@ -228,6 +229,11 @@ function camOff(){
   $("#cam-v").srcObject = null; $("#cam").hidden = true; $("#cam-on").hidden = false;
 }
 $("#cam-on").addEventListener("click", camOn);
+$("#man-fixe").addEventListener("submit", (e) => {
+  e.preventDefault(); const v = e.target.c.value.trim().toLowerCase();
+  if (!/^[a-z]{2,5}\d{2,5}[a-z]?$/.test(v)) { msg("A minifigure reference looks like sw0607 or njo0938.", false); return; }
+  courant = null; ajouter(v, "", ""); e.target.c.value = "";
+});
 $("#cam-off").addEventListener("click", camOff);
 $("#cam-go").addEventListener("click", async () => {
   const v = $("#cam-v"); if (!flux || !v.videoWidth) return;
