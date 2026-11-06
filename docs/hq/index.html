@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="207cc2943b"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="651862e50f"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -628,7 +628,8 @@ dialog.confirmer::backdrop{background:rgba(0,0,0,.45)} dialog.confirmer p{margin
     <div class="row scan-in" id="cam-ligne" hidden><button class="btn" id="cam-on" type="button">🎥 Live camera</button></div>
     <form id="scan-m" class="scan-m"><input id="scan-s" inputmode="numeric" placeholder="or type a set number" aria-label="Set number"><button class="btn">Add</button></form>
     <details class="figbox" id="figbox"><summary>🧍 Minifigures</summary>
-      <p class="sub">Recognize them in <a href="https://henrionantony.github.io/lego-sourcing/" target="_blank" rel="noopener">LEGO Scan</a> (instant), tap <b>Copy list</b>, then paste it here.</p>
+      <p class="sub">Recognize them in <a href="https://henrionantony.github.io/lego-sourcing/" target="_blank" rel="noopener">LEGO Scan</a> (instant), then come back here: your scanned list is picked up automatically.</p>
+      <button type="button" class="btn yes" id="fig-scan" hidden></button>
       <div class="fsrc" id="fsrc"><b>📦 From which purchase?</b>
         <div class="fsrc-l"><div class="seg" role="group" aria-label="ID type"><button type="button" data-fk="a" aria-pressed="true">ID Achat</button><button type="button" data-fk="l" aria-pressed="false">Lot ID</button></div>
         <input id="fsrc-n" inputmode="numeric" autocomplete="off" placeholder="e.g. 285" aria-label="Purchase ID"></div>
@@ -1462,6 +1463,25 @@ $("#fig-m").addEventListener("submit", (e) => {
   $("#fig-t").value = ""; sauverScan(); rendreScan();
   msgScan(`✓ ${lus.length} minifigure${lus.length > 1 ? "s" : ""} added`, true);
 });
+// 06/11 (le vendeur) : LEGO Scan et LEGO HQ sont sur le même site (GitHub Pages) : la liste
+// scannée est lue directement, sans copier-coller. Importée une fois, elle est vidée dans LEGO Scan.
+function listeScan(){ try { const l = JSON.parse(localStorage.getItem("liste") || "[]"); return Array.isArray(l) ? l.filter((x) => x && x.code) : []; } catch (e) { return []; } }
+function rendreFigScan(){
+  const l = listeScan(), n = l.reduce((a, x) => a + (x.n || 1), 0), b = $("#fig-scan");
+  if (!b) return;
+  b.hidden = !n; b.textContent = `⬇ Add the ${n} minifigure${n > 1 ? "s" : ""} scanned in LEGO Scan`;
+  if (n) $("#figbox").open = true;
+}
+$("#fig-scan").addEventListener("click", () => {
+  const l = listeScan(); if (!l.length) return rendreFigScan();
+  $("#fig-t").value = l.slice().reverse().map((x) => x.code + (x.n > 1 ? " ×" + x.n : "") + (x.nom ? " · " + x.nom : "")).join("\n");
+  $("#fig-m").requestSubmit();
+  try { localStorage.setItem("liste", "[]"); } catch (e) {}
+  rendreFigScan();
+});
+window.addEventListener("focus", rendreFigScan);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) rendreFigScan(); });
+rendreFigScan();
 $("#scan-m").addEventListener("submit", (e) => {
   e.preventDefault(); const s = $("#scan-s").value.trim().split("-")[0];
   if (!/^\d{3,7}$/.test(s)){ msgScan("Type a set number, for example 75379.", false); return; }
