@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="07aeab0424"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="beed391a55"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -1068,6 +1068,11 @@ function sauverScan(){ try { localStorage.setItem("scan", JSON.stringify(SC)); }
 const nbScans = () => Object.values(SC.scans).reduce((a, n) => a + n, 0) + Object.values(SC.figs || {}).reduce((a, x) => a + x.n, 0);
 // Minifigs collées depuis LEGO Scan : SC.figs[code] = {n, nom}. Comptées dans « comptes/f<code> ».
 const figsL = () => Object.entries(SC.figs || {});
+// 06/11 (le vendeur) : au scan, dire si on a déjà des photos d'annonce de cette minifig (figs_photos.py).
+const FIGPHOTOS = __FIGPHOTOS__;
+function cleFig(c){ const m = String(c || "").toLowerCase().replace(/[^a-z0-9]/g, "").match(/^([a-z]+?)(o?)0*(\d+)([a-z]?)$/); if (!m) return String(c || "").toLowerCase(); let p = m[1] + m[2]; if (p === "nj") p = "njo"; return p + (+m[3]) + m[4]; }
+function photoFig(c){ const e = FIGPHOTOS[cleFig(c)]; if (!e || !e[0]) return `<em class="ec-ko">📷 To photograph${e && e[1] ? " (listed before, photos not saved)" : ""}</em>`;
+  return `<em class="ec-ok">✓ Photos already saved, no need to shoot · ${e[0]} listing${e[0] > 1 ? "s" : ""}, latest ${/vendu/i.test(e[2]) ? "sold" : /masqu/i.test(e[2]) ? "hidden" : "live"}</em>`; }
 // Achat d'origine des minifigs collées (le vendeur 31/10 : rangées par ID Achat / Lot ID).
 // FIGART[article] = [achat, libellé, quantité, catégorie]. SC.figSrc = {k: "a"|"l", n, art}
 const FIGART = __FIGART__;
@@ -1290,7 +1295,7 @@ function resInventaire(){
   const l = Object.entries(SC.scans), fl = figsL();
   if (!l.length && !fl.length) return `<p class="empty">Scan the boxes on a shelf. Counts are added to the Stock tab when you save.</p>`;
   return `<div class="scan-cmd">${fl.map(([c, x]) => { const avant = (counts["f" + c] || {}).n || 0;
-      return `<div class="scan-l">${vignetteFig(c)}<span><b>${x.n} ×</b> ${esc(x.nom || "Minifigure")} · ${esc(c)}<small>Counted: <b>${avant} → ${avant + x.n}</b></small></span>${moinsFig(c)}</div>`; }).join("")}${l.map(([s, n]) => { const it = lignesCompte(s), q = enBase(s) ?? it.reduce((a, x) => a + (x.q || 1), 0), c = it.reduce((a, x) => a + ((counts[x.id] || {}).n || 0), 0);
+      return `<div class="scan-l">${vignetteFig(c)}<span><b>${x.n} ×</b> ${esc(x.nom || "Minifigure")} · ${esc(c)}<small>Counted: <b>${avant} → ${avant + x.n}</b>${photoFig(c)}</small></span>${moinsFig(c)}</div>`; }).join("")}${l.map(([s, n]) => { const it = lignesCompte(s), q = enBase(s) ?? it.reduce((a, x) => a + (x.q || 1), 0), c = it.reduce((a, x) => a + ((counts[x.id] || {}).n || 0), 0);
       const apres = c + n, ecart = apres - q;
       return `<div class="scan-l${it.length ? "" : " hors"}">${vignetteSet(s)}<span><b>${n} ×</b> ${esc(nomSet(s))} · ${esc(s)}<small>${it.length ? `In database: <b>${q}</b> · Counted: <b>${c} → ${apres}</b>`
         + `<em class="${ecart ? "ec-ko" : "ec-ok"}">${ecart === 0 ? "✓ matches the database" : ecart > 0 ? `⚠ ${ecart} more than the database` : `${-ecart} still to find`}</em>` : "⚠ Database says 0 in stock (purchase not recorded, or all marked sold). Kept on a side list; your purchases are not changed"}</small>${it.length && EXEMP[s] ? blocStrat(s) : ""}</span>${moins(s)}</div>`; }).join("")}</div>
