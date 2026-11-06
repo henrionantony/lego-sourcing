@@ -37,6 +37,11 @@ h2{font-size:16px;margin:24px 0 8px;display:flex;justify-content:space-between;a
 .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .empty{color:var(--sub);font-size:14px;padding:10px}
 .qui{font-size:13px;color:var(--sub);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin:0 0 10px}
+.cam{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding:6px 0 8px;margin:0 0 6px}
+.cam .vf{position:relative;border-radius:14px;overflow:hidden;background:#000;width:fit-content;max-width:100%;margin:0 auto}
+.cam video{display:block;max-width:100%;max-height:46vh;width:auto;height:auto}
+.cam .cadre{position:absolute;left:25%;top:12%;width:50%;height:60%;border:2px dashed rgba(255,255,255,.85);border-radius:10px;pointer-events:none}
+.cam .row{margin-top:8px}.cam .gros{flex:1;background:var(--acc);color:#1b1b1b;border-color:var(--acc);font-weight:700;font-size:18px;padding:14px}
 .qui b{color:var(--ink)}.qui .ok{color:var(--ok)}.qui .ko{color:var(--ko)}
 details.ia{margin-top:24px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
 details.ia summary{font-weight:700;cursor:pointer}
@@ -52,6 +57,9 @@ details.ia summary{font-weight:700;cursor:pointer}
 
 <label class="shoot" id="shoot"><input type="file" id="f" accept="image/*" hidden>
   📷 Photo a minifigure<small>One figure per photo, close up, plain background if you can</small></label>
+<button type="button" class="btn" id="cam-on" style="width:100%;margin-top:8px;padding:14px;font-weight:600">🎥 Live camera: scan one after another</button>
+<div class="cam" id="cam" hidden><div class="vf"><video id="cam-v" playsinline muted autoplay></video><div class="cadre"></div></div>
+  <div class="row"><button type="button" class="btn gros" id="cam-go">📸 Capture</button><button type="button" class="btn" id="cam-off">Close</button></div></div>
 <p class="msg" id="msg" hidden></p>
 <div id="res"></div>
 
@@ -206,6 +214,29 @@ async function lancerPhoto(file){
   catch (err) { msg("No answer from the recognition service. Check your connection and try again.", false); }
   finally { $("#shoot").classList.remove("busy"); }
 }
+// ---------- Caméra en direct (06/11) : la caméra reste ouverte, on capture figurine après figurine ----------
+let flux = null;
+async function camOn(){
+  try {
+    flux = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1920 } }, audio: false });
+  } catch (e) { msg("The camera is not available here. Allow camera access for this page, or use 📷 Photo instead.", false); return; }
+  const v = $("#cam-v"); v.srcObject = flux; try { await v.play(); } catch (e) {}
+  $("#cam").hidden = false; $("#cam-on").hidden = true; msg("Put the minifigure inside the dashed frame, then tap Capture.");
+}
+function camOff(){
+  if (flux) flux.getTracks().forEach((t) => t.stop()); flux = null;
+  $("#cam-v").srcObject = null; $("#cam").hidden = true; $("#cam-on").hidden = false;
+}
+$("#cam-on").addEventListener("click", camOn);
+$("#cam-off").addEventListener("click", camOff);
+$("#cam-go").addEventListener("click", async () => {
+  const v = $("#cam-v"); if (!flux || !v.videoWidth) return;
+  const c = document.createElement("canvas"); c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext("2d").drawImage(v, 0, 0);
+  const b = await new Promise((ok) => c.toBlob(ok, "image/jpeg", .9));
+  if (b) { $("#cam-go").classList.add("busy"); try { await lancerPhoto(b); } finally { $("#cam-go").classList.remove("busy"); } }
+});
+document.addEventListener("visibilitychange", () => { if (document.hidden && flux) camOff(); });
 $("#f").addEventListener("change", (e) => {
   const file = e.target.files && e.target.files[0]; e.target.value = ""; if (file) lancerPhoto(file);
 });
