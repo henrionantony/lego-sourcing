@@ -792,11 +792,16 @@ def main(essai: bool):
                     v_dec, tete = "à regarder", "🟡 À vérifier (pas encore de cote BrickEconomy)"
                     journal[-1]["verdict"] = v_dec
                 nt["sans_cote"] = sans_cote
+                # 06/11 (77076) : la cote BrickEconomy ne laisse pas la marge plancher → jamais
+                # « ACHÈTE » en tête avec « 👎 Pas un bon coup » dans le corps : un seul verdict
+                if nt.get("mauvais") and v_dec == "achète":
+                    v_dec, tete = "non", "🔴 Pas un bon coup (la cote BrickEconomy ne suit pas)"
+                    journal[-1]["verdict"] = v_dec
                 # 04/11 (77037) : bonne affaire mais tréso bloquée → pas de « GROSSE AFFAIRE · ACHÈTE »
                 if v_dec == "achète" and not nt.get("quantite") and any(l.startswith("⛔ Tréso") for l in det):
                     v_dec, tete = "à regarder", "🟡 Bon prix, mais pas de cash libre (tréso)"
                     journal[-1]["verdict"] = v_dec
-                if nt.get("lettre") and not sans_cote:
+                if nt.get("lettre") and not sans_cote and not nt.get("mauvais"):
                     tete += " · " + NOTE_MOTS[nt["lettre"]]
                     if nt["lettre"] == "A" and v_dec == "achète":
                         tete = "🚨 GROSSE AFFAIRE · " + tete
