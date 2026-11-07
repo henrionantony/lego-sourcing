@@ -85,6 +85,13 @@ def appel(methode: str, chemin: str, corps=None, ok_404=False, _relance=False):
             time.sleep(3)
             return appel(methode, chemin, corps, ok_404, True)
         raise Erreur(f"{methode} {chemin.split('?')[0]} → {e.code} {t[:600]}")
+    except (urllib.error.URLError, ConnectionError, TimeoutError) as e:
+        # Coupure réseau passagère (07/11 : « Connection reset by peer » a arrêté tout le passage)
+        if not _relance:
+            import time
+            time.sleep(5)
+            return appel(methode, chemin, corps, ok_404, True)
+        raise Erreur(f"{methode} {chemin.split('?')[0]} → réseau : {e}")
 
 
 def creer(chemin: str, corps: dict, champ: str) -> str:
