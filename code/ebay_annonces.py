@@ -330,6 +330,9 @@ def empreinte(v: dict) -> str:
 _IMG = {}
 
 
+_RAISON = {}  # hôte -> première raison d'échec (journal)
+
+
 def images_ok(urls: list) -> list:
     """Garde les photos qu'eBay pourra télécharger (réponse 200 et vraie image), 24 au plus."""
     out = []
@@ -338,9 +341,13 @@ def images_ok(urls: list) -> list:
             try:
                 req = urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0"})
                 with urllib.request.urlopen(req, timeout=20) as r:
-                    _IMG[u] = r.status == 200 and r.headers.get("Content-Type", "").startswith("image") and len(r.read()) > 2000
-            except Exception:
+                    ct, n = r.headers.get("Content-Type", ""), len(r.read())
+                    _IMG[u] = r.status == 200 and ct.startswith("image") and n > 2000
+                    if not _IMG[u]:
+                        _RAISON.setdefault(u.split("/")[2], f"{r.status} {ct} {n} o")
+            except Exception as e:
                 _IMG[u] = False
+                _RAISON.setdefault(u.split("/")[2], str(e)[:120])
         if _IMG[u] and u not in out:
             out.append(u)
     return out[:24]
@@ -404,7 +411,7 @@ def publier(s: str, v: dict, pol: dict, essai: bool, deja: dict | None = None) -
     cat, aspects = categorie(v)
     images = images_ok(v["images"])
     if not images:
-        raise Erreur("aucune photo téléchargeable")
+        raise Erreur("aucune photo téléchargeable (" + "; ".join(f"{h} : {r}" for h, r in _RAISON.items()) + ")")
     produit = {"title": v["titre"], "description": v["description"], "aspects": aspects, "imageUrls": images,
                "brand": "LEGO", "mpn": v.get("code") or s}
     if v.get("ean"):
