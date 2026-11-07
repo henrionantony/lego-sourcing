@@ -417,10 +417,8 @@ def publier(s: str, v: dict, pol: dict, essai: bool, deja: dict | None = None) -
     sku = f"LHQ-{s}"
     cat, aspects = categorie(v)
     images = images_ok(v["images"])
-    if not images and v.get("figurine") and all("img.bricklink.com" in u for u in v["images"]):
-        # BrickLink bloque le serveur GitHub (page anti-robot, 07/11) mais pas forcément eBay :
-        # on lui donne les liens, il dira lui-même s'il n'arrive pas à les télécharger
-        images = v["images"][:2]
+    # Règle (07/11) : jamais d'annonce sans photo vérifiée. Une photo que le serveur ne peut pas
+    # télécharger, eBay non plus : l'annonce partait sans image. On refuse et on le note au journal.
     if not images:
         raise Erreur("aucune photo téléchargeable (" + "; ".join(f"{h} : {r}" for h, r in _RAISON.items()) + ")")
     produit = {"title": v["titre"], "description": v["description"], "aspects": aspects, "imageUrls": images,
