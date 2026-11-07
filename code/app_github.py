@@ -43,7 +43,7 @@ def comptes():
 
 
 def main():
-    if base.docs("etat/") is None:
+    if base._appel("GET", "app_docs?select=chemin&limit=1") is None:
         print("table app_docs absente ou base injoignable : rien à faire")
         return
     ide = base.debut_execution("application")

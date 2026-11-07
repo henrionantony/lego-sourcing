@@ -127,8 +127,51 @@ def docs(prefixe: str):
     """Documents dont le chemin commence par le préfixe (ex. « actions/ ») ;
     None si la table n'existe pas encore."""
     import urllib.parse
-    return _appel("GET", "app_docs?select=chemin,data,maj&limit=10000&chemin=like."
-                  + urllib.parse.quote(prefixe + "*", safe="/*"))
+    filtre = "chemin=like." + urllib.parse.quote(prefixe + "*", safe="/*")
+    # 07/11 (quota) : on ne lit d'abord que chemin + date de mise à jour, et le contenu seulement
+    # des documents changés depuis la copie gardée sur le disque (même machine, passages suivants)
+    tetes = _appel("GET", "app_docs?select=chemin,maj&limit=10000&" + filtre)
+    if tetes is None:
+        return None
+    out, manquants = [], []
+    for t in tetes:
+        c = _cache_lire(t["chemin"])
+        if c and c.get("maj") == t["maj"]:
+            out.append({"chemin": t["chemin"], "data": c["data"], "maj": t["maj"]})
+        else:
+            manquants.append(t["chemin"])
+    for i in range(0, len(manquants), 40):
+        lot = manquants[i:i + 40]
+        liste = ",".join('"' + c.replace('"', '\\"') + '"' for c in lot)
+        r = _appel("GET", "app_docs?select=chemin,data,maj&limit=10000&chemin=in.(" + urllib.parse.quote(liste, safe=",") + ")")
+        if r is None:
+            return None
+        for x in r:
+            _cache_ecrire(x["chemin"], x)
+            out.append(x)
+    return out
+
+
+def _cache_fichier(chemin: str):
+    import hashlib
+    from pathlib import Path
+    return Path.home() / ".cache" / "lhq_docs" / (hashlib.sha256(chemin.encode()).hexdigest()[:24] + ".json")
+
+
+def _cache_lire(chemin: str):
+    try:
+        return json.loads(_cache_fichier(chemin).read_text())
+    except (OSError, ValueError):
+        return None
+
+
+def _cache_ecrire(chemin: str, x: dict):
+    try:
+        f = _cache_fichier(chemin)
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(json.dumps({"maj": x.get("maj"), "data": x.get("data")}, ensure_ascii=False))
+    except OSError:
+        pass
 
 
 def doc(chemin: str):
