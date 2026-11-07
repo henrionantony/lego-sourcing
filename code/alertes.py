@@ -666,6 +666,13 @@ def main(essai: bool):
     MUET = github_surveille()
     vus = set(json.loads(VUS.read_text())) if VUS.exists() else set()
     premier = not vus  # premier lancement : on note sans alerter sur l'existant
+    recents = deals_recents()
+    if vus and not essai and all(d["id"] in vus for d in recents):
+        # 07/11 : le quota gratuit de Supabase a été dépassé, surtout par ce passage toutes les
+        # 30 s. Rien de neuf sur Dealabs : on ne lit rien dans la base.
+        resume = "0 nouveaux deals : " + (" (envoyés par GitHub)" if MUET else "")
+        print(resume)
+        return resume
     # Deals déjà alertés ailleurs (GitHub ou cloud) : la base et la liste publiée
     # chiffrée évitent d'envoyer deux fois le même deal.
     graine = CACHE / "alertes_vus_graine.json"
@@ -685,7 +692,7 @@ def main(essai: bool):
     engage = base.engage_par_gamme()
     part_out = base.part_out_par_gamme()
     journal = []
-    for d in deals_recents():
+    for d in recents:
         if d["id"] in vus:
             continue
         vus.add(d["id"])

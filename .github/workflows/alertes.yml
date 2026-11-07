@@ -48,13 +48,13 @@ jobs:
         working-directory: code
         run: |
           # Application LEGO HQ (GitHub Pages) : recalculée dès qu'un deal arrive ou qu'un
-          # bouton est touché dans l'appli (vérifié toutes les 5 s), sinon toutes les 5 minutes.
+          # bouton est touché dans l'appli (vérifié toutes les 5 s), sinon toutes les 30 minutes (07/11 : quota de données Supabase).
           # Une erreur de l'application ne bloque jamais les alertes.
           appli() {
             [ -e /tmp/appli.encours ] && return
             touch /tmp/appli.encours
             ( timeout 240 python3 app_github.py > /tmp/appli.log 2>&1 || { echo "application en erreur (détail dans la base)"; python3 prive.py journal application < /tmp/appli.log; }; rm -f /tmp/appli.encours ) &
-            prochaine=$(( $(date +%s) + 300 ))
+            prochaine=$(( $(date +%s) + 1800 ))
           }
           fin=$(( $(date +%s) + 20700 ))
           prochaine=0
