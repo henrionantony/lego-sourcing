@@ -130,15 +130,15 @@ def photos_set(b: dict) -> list:
     return ([img] if img else []) + _imgs.get(sid, [])[:23]
 
 
-def images_fig(code: str) -> list:
+def images_fig(code: str, s: str | None = None) -> list:
     """Photos officielles BrickLink (07/11 : BrickLink renvoie une page anti-robot au serveur GitHub ;
     ebay_annonces laisse alors eBay les télécharger lui-même)."""
     # 07/11 23h : eBay non plus n'arrive pas à les télécharger (annonces sans photo) → image officielle
     # refaite et hébergée sur GitHub Pages (ebay_photos_figs.py), BrickLink seulement à défaut
     import ebay_photos_figs
-    u = ebay_photos_figs.url(code)
+    u = ebay_photos_figs.urls(code, s)
     if u:
-        return [u]
+        return u
     return [f"https://img.bricklink.com/ItemImage/MN/0/{code}.png", f"https://img.bricklink.com/ItemImage/ML/{code}.png"]
 
 
@@ -178,7 +178,7 @@ def fiche_figurine(f: dict, noms: dict) -> dict:
          "tout part dans le même envoi.</p>"
          "<p>Vendeur particulier passionné, plus de 500 avis positifs sur d'autres plateformes.</p>")
     return {"titre": t, "description": d, "prix": float(f["prix"]), "qte": int(f.get("qte") or 1), "port": dict(PORT_FIG),
-            "images": images_fig(code),
+            "images": images_fig(code, s),
             "gamme": gamme, "nom": nom, "code": code, "figurine": True, "set_source": s,
             "condition": "USED_EXCELLENT" if occ else "NEW"}
 
