@@ -131,21 +131,9 @@ def photos_set(b: dict) -> list:
 
 
 def images_fig(code: str) -> list:
-    """Photos officielles : BrickLink, puis Brickset en secours (07/11 : BrickLink renvoie une page
-    anti-robot au serveur GitHub). Les deux formes du code (njo0938 / njo938) ; ebay_annonces garde
-    celles qui se téléchargent vraiment."""
-    m = re.match(r"([a-z]+)(\d+)(.*)", code)
-    formes = [code]
-    if m and len(m.group(2)) < 4 and m.group(1) in ("njo", "sw", "sh", "cty"):
-        formes.append(m.group(1) + m.group(2).zfill(4) + m.group(3))
-    elif m and m.group(2).startswith("0"):
-        formes.append(m.group(1) + m.group(2).lstrip("0") + m.group(3))
-    out = []
-    for c in formes:
-        out += [f"https://img.bricklink.com/ItemImage/MN/0/{c}.png", f"https://img.bricklink.com/ItemImage/ML/{c}.png"]
-    for c in formes:
-        out += [f"https://images.brickset.com/minifigs/large/{c}.jpg", f"https://images.brickset.com/minifigs/{c}.jpg"]
-    return out
+    """Photos officielles BrickLink (07/11 : BrickLink renvoie une page anti-robot au serveur GitHub ;
+    ebay_annonces laisse alors eBay les télécharger lui-même)."""
+    return [f"https://img.bricklink.com/ItemImage/MN/0/{code}.png", f"https://img.bricklink.com/ItemImage/ML/{code}.png"]
 
 
 def fiche_figurine(f: dict, noms: dict) -> dict:
