@@ -10,6 +10,11 @@ import os
 import urllib.request
 
 
+# Octets reçus de la base par ce processus (07/11 : quota de 5 Go/mois dépassé) ; noté dans
+# executions.octets pour suivre la consommation de chaque tâche
+OCTETS = 0
+
+
 def _config():
     url, cle = os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_SERVICE_KEY")
     if not url or not cle:
@@ -32,6 +37,8 @@ def _appel(methode: str, chemin: str, corps=None, prefer: str = ""):
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
             txt = r.read()
+            global OCTETS
+            OCTETS += len(txt) + 500  # + en-têtes
             return json.loads(txt) if txt else []
     except Exception as e:  # base injoignable ou table absente : on n'arrête pas le script
         print(f"base : {methode} {chemin.split('?')[0]} impossible ({e})")
@@ -57,7 +64,7 @@ def debut_execution(tache: str):
 def fin_execution(id_exec, ok: bool, resume: str = "", erreur: str = ""):
     if id_exec:
         _appel("PATCH", f"executions?id=eq.{id_exec}",
-               {"fin": dt.datetime.now(dt.timezone.utc).isoformat(), "ok": ok, "resume": resume[:500], "erreur": erreur[:2000] or None})
+               {"fin": dt.datetime.now(dt.timezone.utc).isoformat(), "ok": ok, "resume": (resume[:480] + f" · base {OCTETS // 1024} Ko"), "erreur": erreur[:2000] or None})
 
 
 def stock_par_set() -> dict[str, int]:
@@ -177,7 +184,10 @@ def _stockage(methode: str, chemin: str, contenu: bytes | None = None, type_: st
     req = urllib.request.Request(racine + ("" if methode == "POST" else "authenticated/") + "app/" + chemin,
                                  data=contenu, headers=entetes, method=methode)
     with urllib.request.urlopen(req, timeout=60) as r:
-        return r.read()
+        b = r.read()
+        global OCTETS
+        OCTETS += len(b) + 500
+        return b
 
 
 def fichier_prive_lire(chemin: str) -> bytes:

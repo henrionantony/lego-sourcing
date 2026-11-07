@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="7a750275be"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="e3fee64a9a"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -712,7 +712,20 @@ dialog.confirmer::backdrop{background:rgba(0,0,0,.45)} dialog.confirmer p{margin
   // --- Base de l'application : même interface que celle de claude.ai (doc, collection, onSnapshot) ---
   const cache = new Map();          // chemin -> {maj, data}
   const ecoutes = new Set();        // {type: "doc"|"col", cle, cb, vu: Map(id -> maj)}
+  let signature = "";
   async function sonder() {
+    // 07/11 (quota Supabase) : d'abord une question minuscule (dernière date de mise à jour +
+    // nombre de documents) ; la liste complète n'est relue que si l'un des deux a changé
+    try {
+      const r = await fetch(CFG.u + "/rest/v1/app_docs?select=maj&chemin=not.like.static/*&chemin=not.like.fichiers/*&order=maj.desc&limit=1",
+        { headers: { apikey: CFG.k, Authorization: "Bearer " + await jeton(), Prefer: "count=exact" } });
+      if (r.status === 401) { ses = null; L("hq_ses", null); connexion(); }
+      if (r.ok) {
+        const t = await r.json(), sig = ((t[0] || {}).maj || "") + "|" + (r.headers.get("content-range") || "");
+        if (sig === signature) return;
+        signature = sig;
+      }
+    } catch (e) {}
     // La base renvoie au plus 1000 lignes par lecture : on lit la liste page par page
     const liste = [];
     for (let o = 0; ; o += 1000) {
@@ -822,19 +835,56 @@ dialog.confirmer::backdrop{background:rgba(0,0,0,.45)} dialog.confirmer p{margin
     })().catch((e) => { photos.delete(chemin); throw e; }));
     return photos.get(chemin);
   };
-  async function images(liste) {
+  // Cache du téléphone (IndexedDB) : données de l'appli et images ne sont retéléchargées
+  // que si elles ont changé (07/11 : 9 Mo par ouverture ont épuisé le quota de la base)
+  function idb() {
+    return new Promise((ok, ko) => {
+      try {
+        const q = indexedDB.open("hq", 1);
+        q.onupgradeneeded = () => q.result.createObjectStore("kv");
+        q.onsuccess = () => ok(q.result);
+        q.onerror = () => ko(q.error);
+      } catch (e) { ko(e); }
+    });
+  }
+  async function idbLire(k) {
+    try {
+      const d = await idb();
+      return await new Promise((ok) => { const r = d.transaction("kv").objectStore("kv").get(k); r.onsuccess = () => ok(r.result); r.onerror = () => ok(undefined); });
+    } catch (e) { return undefined; }
+  }
+  async function idbEcrire(k, v) {
+    try {
+      const d = await idb();
+      await new Promise((ok) => { const t = d.transaction("kv", "readwrite"); t.objectStore("kv").put(v, k); t.oncomplete = ok; t.onerror = ok; });
+    } catch (e) {}
+  }
+  async function images(liste, empreintes) {
     await Promise.all(liste.map(async (c) => {
       try {
+        const h = (empreintes || {})[c] || "", cle = "img:" + c;
+        const deja = h ? await idbLire(cle) : undefined;
+        if (deja && deja.h === h && deja.b) { urls.set(c, URL.createObjectURL(deja.b)); return; }
         const r = await fetch(CFG.u + "/storage/v1/object/authenticated/app/" + c, { headers: { apikey: CFG.k, Authorization: "Bearer " + await jeton() } });
-        if (r.ok) urls.set(c, URL.createObjectURL(await r.blob()));
+        if (!r.ok) return;
+        const b = await r.blob();
+        urls.set(c, URL.createObjectURL(b));
+        if (h) idbEcrire(cle, { h, b });
       } catch (e) {}
     }));
   }
 
   async function lancer() {
     await role();
-    const [st] = await rest("GET", "app_docs?select=data&chemin=eq.static/page");
-    if (!st) throw new Error("App data not published yet");
+    const [meta] = await rest("GET", "app_docs?select=maj&chemin=eq.static/page");
+    if (!meta) throw new Error("App data not published yet");
+    let st = await idbLire("static");
+    if (!st || st.maj !== meta.maj || !st.data) {
+      const [frais] = await rest("GET", "app_docs?select=data,maj&chemin=eq.static/page");
+      if (!frais) throw new Error("App data not published yet");
+      st = { maj: frais.maj, data: frais.data };
+      idbEcrire("static", st);
+    }
     // Nouvelle version publiée mais page en cache : on recharge une fois avec une adresse neuve
     const v = st.data.__PAGE__, ici = document.documentElement.dataset.v;
     if (v && ici && v !== ici) {
@@ -845,9 +895,9 @@ dialog.confirmer::backdrop{background:rgba(0,0,0,.45)} dialog.confirmer p{margin
         return;
       }
     }
-    await images(st.data.__IMAGES__ || []);
+    await images(st.data.__IMAGES__ || [], st.data.__IMGH__);
     let code = document.getElementById("hqcode").textContent;
-    for (const [k, v] of Object.entries(st.data)) if (k !== "__IMAGES__") code = code.split(k).join(JSON.stringify(v));
+    for (const [k, v] of Object.entries(st.data)) if (k !== "__IMAGES__" && k !== "__IMGH__") code = code.split(k).join(JSON.stringify(v));
     const s = document.createElement("script");
     s.textContent = code;
     document.body.append(s);
