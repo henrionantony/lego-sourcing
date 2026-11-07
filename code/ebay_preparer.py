@@ -136,9 +136,10 @@ def images_fig(code: str, s: str | None = None) -> list:
     # 07/11 23h : eBay non plus n'arrive pas à les télécharger (annonces sans photo) → image officielle
     # refaite et hébergée sur GitHub Pages (ebay_photos_figs.py), BrickLink seulement à défaut
     import ebay_photos_figs
+    # 07/11 : une seule photo (la figurine entière), pas de gros plan ni de boîte du set
     u = ebay_photos_figs.urls(code, s)
     if u:
-        return u
+        return u[:1]
     return [f"https://img.bricklink.com/ItemImage/MN/0/{code}.png", f"https://img.bricklink.com/ItemImage/ML/{code}.png"]
 
 
@@ -171,7 +172,7 @@ def fiche_figurine(f: dict, noms: dict) -> dict:
         corps = (f"<p><b>Neuve</b>, issue du set {s}{' ' + html.escape(sfr) if sfr else ''} acheté neuf et ouvert pour l'occasion : jamais jouée, "
                  "jamais exposée.</p><ul>"
                  f"<li>Référence BrickLink : {code}</li><li>Set d'origine : {s}</li>"
-                 "<li>Figurine complète telle qu'elle sort du set, avec ses accessoires d'origine.</li></ul>"
+                 "<li>Figurine complète telle qu'elle sort du set.</li></ul>"
                  "<p>Photo officielle de la figurine.</p>")
     d = (f"<h2>Minifigure LEGO {html.escape(gamme)} – {html.escape(nom)} ({code})</h2>" + corps +
          "<p>✉️ Envoi en lettre suivie, figurine protégée. Plusieurs figurines : <b>+1 € seulement par figurine en plus</b>, "
