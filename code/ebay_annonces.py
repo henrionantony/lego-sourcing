@@ -344,10 +344,10 @@ def images_ok(urls: list) -> list:
                     ct, n = r.headers.get("Content-Type", ""), len(r.read())
                     _IMG[u] = r.status == 200 and ct.startswith("image") and n > 2000
                     if not _IMG[u]:
-                        _RAISON.setdefault(u.split("/")[2], f"{r.status} {ct} {n} o")
+                        _RAISON[u.split("/")[2]] = f"{r.status} {ct} {n} o"
             except Exception as e:
                 _IMG[u] = False
-                _RAISON.setdefault(u.split("/")[2], str(e)[:120])
+                _RAISON[u.split("/")[2]] = str(e)[:120]
         if _IMG[u] and u not in out:
             out.append(u)
     return out[:24]
@@ -410,6 +410,8 @@ def publier(s: str, v: dict, pol: dict, essai: bool, deja: dict | None = None) -
     sku = f"LHQ-{s}"
     cat, aspects = categorie(v)
     images = images_ok(v["images"])
+    if v.get("figurine"):
+        images = images[:2]   # même figurine vue par deux sites : deux photos suffisent
     if not images:
         raise Erreur("aucune photo téléchargeable (" + "; ".join(f"{h} : {r}" for h, r in _RAISON.items()) + ")")
     produit = {"title": v["titre"], "description": v["description"], "aspects": aspects, "imageUrls": images,
