@@ -53,7 +53,13 @@ def figurines() -> tuple[dict, dict]:
     cotes = json.loads((CACHE / "brickeconomy_figurines.json").read_text())
     par_set = {k.split("-")[0]: (v.get("figurines") or {}).get("minifigs_quantities") or {}
                for k, v in be.items() if v.get("figurines")}
-    return par_set, {k.lower(): v.get("valeur_neuf") for k, v in cotes.items()}
+    from figs_sets import cle  # njo0822 = njo822 : une seule clé
+    return par_set, {cle(k): v.get("valeur_neuf") for k, v in cotes.items()}
+
+
+def cle_f(c):
+    from figs_sets import cle
+    return cle(c)
 
 
 def nouveautes(r, figs_set, cotes, stock) -> pd.DataFrame:
@@ -67,8 +73,8 @@ def nouveautes(r, figs_set, cotes, stock) -> pd.DataFrame:
     for _, x in n[n.nf >= 4].iterrows():
         s, prix = str(x.base), float(x.prix_public)
         figs = figs_set.get(s) or {}
-        connues = {c: q for c, q in figs.items() if cotes.get(c.lower())}
-        val = sum((cotes[c.lower()] + BONUS_FIG) * q for c, q in connues.items())
+        connues = {c: q for c, q in figs.items() if cotes.get(cle_f(c))}
+        val = sum((cotes[cle_f(c)] + BONUS_FIG) * q for c, q in connues.items())
         complet = bool(figs) and len(connues) == len(figs)
         po = val + BUILD_PIRE * prix if complet else None
         d = {"Set": s, "Nom": x["name"], "Gamme": x.theme_bs, "Sortie": x.sortie, "Exclu LEGO": "oui" if x.exclusif is True else "",
@@ -103,8 +109,8 @@ def main():
         revente = min(v for v in (modele, be2) if v) if (modele or be2) else None
         source = "modèle + BrickEconomy" if modele and be2 else "BrickEconomy" if be2 else "modèle seul (gamme)"
         figs = figs_set.get(s) or {}
-        connues = {c: q for c, q in figs.items() if cotes.get(c.lower())}
-        val_figs = sum((cotes[c.lower()] + BONUS_FIG) * q for c, q in connues.items())
+        connues = {c: q for c, q in figs.items() if cotes.get(cle_f(c))}
+        val_figs = sum((cotes[cle_f(c)] + BONUS_FIG) * q for c, q in connues.items())
         po = (val_figs + BUILD_PIRE * float(x.prix_public)) if figs and len(connues) == len(figs) else None
         d = {"Set": s, "Nom": x["name"], "Gamme": x.theme_bs, "Retrait": x.niveau_retrait,
              "Exclu LEGO": "oui" if x.exclusif is True else "", "Demande": x.demande,

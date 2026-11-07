@@ -191,7 +191,8 @@ def decoupe(x, prix: float) -> str | None:
         _FIGS["ratio"] = {g: r for g, (r, n) in cotes_figs.coefficient().items() if n >= 20}
     st = _FIGS["sets"].get(str(x.set_num)) or {}
     q = (st.get("figurines") or {}).get("minifigs_quantities") or {}
-    cotes = [((_FIGS["figs"].get(n) or {}).get("valeur_neuf"), k) for n, k in q.items()]
+    from figs_sets import cle as cle_fig  # njo0822 = njo822
+    cotes = [((_FIGS["figs"].get(cle_fig(n)) or {}).get("valeur_neuf"), k) for n, k in q.items()]
     if not q or not st.get("valeur_neuf") or any(not c for c, _ in cotes):
         return None
     figs = sum(c * k for c, k in cotes)

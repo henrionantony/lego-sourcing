@@ -195,13 +195,17 @@ class BrickEconomy:
         d'appels des figurines ; cache disque partagé avec alertes.py."""
         f = CACHE / "brickeconomy_figurines.json"
         figs = json.loads(f.read_text()) if f.exists() else {}
+        # Une seule clé par figurine : « njo0822 » et « njo822 » sont la même (BrickLink a ajouté un zéro sous 1000)
+        m = re.fullmatch(r"([a-z]+?)(o?)0*(\d+)([a-z]?)", re.sub(r"[^a-z0-9]", "", str(num).lower()))
+        appel = str(num).lower()  # code envoyé à BrickEconomy tel quel
+        num = (("njo" if m.group(1) + m.group(2) == "nj" else m.group(1) + m.group(2)) + str(int(m.group(3))) + m.group(4)) if m else appel
         c = figs.get(num)
         if c and (dt.date.today() - dt.date.fromisoformat(c["date"])).days <= max_age_jours:
             return c["valeur_neuf"]
         if self.restant(figurines=True) <= 0:
             return c and c["valeur_neuf"]
         try:
-            brut = json.loads(_get(f"https://www.brickeconomy.com/api/v1/minifig/{num}?currency=EUR",
+            brut = json.loads(_get(f"https://www.brickeconomy.com/api/v1/minifig/{appel}?currency=EUR",
                                    headers={"x-apikey": self.cle, "Accept": "application/json",
                                             "User-Agent": "lego-sourcing/0.1"}))
         except Exception as e:

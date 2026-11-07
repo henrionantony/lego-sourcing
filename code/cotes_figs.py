@@ -30,8 +30,10 @@ def codes_prioritaires(be: BrickEconomy) -> list[str]:
         demandees = [d["chemin"].split("/", 1)[1] for d in base.docs("cotes_demandes/")] + demandees
     except Exception:
         pass
+    from figs_sets import cle  # njo0822 = njo822
     vus, out = set(), []
     for c in demandees + stock + [c for c, _ in vendues.most_common()] + sets:
+        c = cle(c) if c else c
         if c and c not in vus:
             vus.add(c)
             out.append(c)
@@ -44,7 +46,8 @@ def coefficient() -> dict[str, tuple[float, int]]:
     figs = json.loads(FIGS.read_text()) if FIGS.exists() else {}
     s: dict[str, list] = {}
     for v in base.lire("ventes", "select=id_minifig,prix_vente,co_investisseur&id_minifig=not.is.null&limit=20000"):
-        c = figs.get(str(v["id_minifig"]).lower()) or {}
+        from figs_sets import cle
+        c = figs.get(cle(v["id_minifig"])) or {}
         if not c.get("valeur_neuf"):
             continue
         pv = float(v["prix_vente"]) * (2 if v.get("co_investisseur") else 1)

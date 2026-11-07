@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="548e26e86f"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="bf1baf5956"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -2324,8 +2324,15 @@ function blocNad(lib, txt, k, pre){
    Grille : cote ≤ 4 € -> 7 € ; < 15 € -> cote + 3 € (7 € mini) ; ≥ 15 € -> cote + 5 €, à l'euro. */
 const grilleFig = (c) => !c ? "" : c <= 4 ? 7 : c < 15 ? Math.max(7, Math.ceil(c + 3)) : Math.ceil(c + 5);
 let NFIG = null;  // {ref, nom, gamme, cote, prix, sets, set, inc}
+// Référence au format BrickLink actuel : njo, sw, sh et cty ont passé 1000, donc 4 chiffres (njo822 -> njo0822)
+const PAD4 = new Set(["njo", "sw", "sh", "cty"]);
+function formatFig(code){
+  const m = String(code || "").toLowerCase().trim().match(/^([a-z]+)0*(\d+)([a-z]?)$/);
+  if (!m) return String(code || "").toLowerCase().trim();
+  return m[1] + (PAD4.has(m[1]) ? m[2].padStart(4, "0") : m[2].padStart(3, "0")) + m[3];
+}
 function ouvrirFig(code){
-  const ref = code.toLowerCase().trim(), f = FIGN[cleFig(ref)];
+  const ref = formatFig(code), f = FIGN[cleFig(ref)];
   const sets = (f ? f[3] : []).filter((s) => CAT[s] || NOMSFR[s]);
   const liste = PRIXFIGS[cleFig(ref)];
   NFIG = { ref, connu: !!f, nom: f ? f[0] : "", gamme: f ? f[1] : "", cote: f ? f[2] : 0, liste, prix: liste || (f ? grilleFig(f[2]) : ""), sets, set: sets[0] || "", inc: false };

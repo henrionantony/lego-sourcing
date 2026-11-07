@@ -67,7 +67,11 @@ def signaux(jours: int = 30) -> dict[str, dict]:
             continue
         cle = "favoris" if x.get("vinted") == "favori" else "contacts_lbc" if x.get("lbc") == "contact" else None
         if cle:
-            s = r.setdefault(str(x["set"]), {"favoris": 0, "contacts_lbc": 0})
+            k = str(x["set"])
+            if not k.isdigit():  # référence de figurine : njo0822 = njo822
+                from figs_sets import cle as cle_fig
+                k = cle_fig(k)
+            s = r.setdefault(k, {"favoris": 0, "contacts_lbc": 0})
             s[cle] += 1
     return r
 
