@@ -204,19 +204,38 @@ class BrickEconomy:
             return c["valeur_neuf"]
         if self.restant(figurines=True) <= 0:
             return c and c["valeur_neuf"]
-        try:
-            brut = json.loads(_get(f"https://www.brickeconomy.com/api/v1/minifig/{appel}?currency=EUR",
-                                   headers={"x-apikey": self.cle, "Accept": "application/json",
-                                            "User-Agent": "lego-sourcing/0.1"}))
-        except Exception as e:
-            print(f"BrickEconomy figurine {num} : {e}", file=sys.stderr)
-            if "400" in str(e):  # code inconnu de BrickEconomy : on ne le redemande pas avant 30 jours
-                figs[num] = {"date": self.jour, "valeur_neuf": None, "inconnue": True}
-                f.write_text(json.dumps(figs))
+        # BrickEconomy n'a migré qu'une partie des références sous 1000 vers le format à zéro :
+        # on essaie le code reçu, puis l'autre forme (njo822 <-> njo0822) si le premier est inconnu.
+        essais = [appel]
+        if m and int(m.group(3)) < 1000:
+            pre = "njo" if m.group(1) + m.group(2) == "nj" else m.group(1) + m.group(2)
+            for autre in (pre + m.group(3).lstrip("0").zfill(4) + m.group(4), num):
+                if autre not in essais:
+                    essais.append(autre)
+        brut, refus = None, 0
+        for code in essais[:2]:
+            if self.restant(figurines=True) <= 0:
+                break
+            try:
+                brut = json.loads(_get(f"https://www.brickeconomy.com/api/v1/minifig/{code}?currency=EUR",
+                                       headers={"x-apikey": self.cle, "Accept": "application/json",
+                                                "User-Agent": "lego-sourcing/0.1"}))
+                break
+            except Exception as e:
+                print(f"BrickEconomy figurine {code} : {e}", file=sys.stderr)
+                if "400" not in str(e):
+                    return c and c["valeur_neuf"]
+                refus += 1
+            finally:
+                self.appels += 1
+                self.f_quota.write_text(json.dumps({"jour": self.jour, "appels": self.appels}))
+        if brut is None:
+            if refus < min(2, len(essais)):  # plus d'appels aujourd'hui : on réessaiera
+                return c and c["valeur_neuf"]
+            # inconnu sous les deux formes : on ne le redemande pas avant 30 jours
+            figs[num] = {"date": self.jour, "valeur_neuf": None, "inconnue": True}
+            f.write_text(json.dumps(figs))
             return c and c["valeur_neuf"]
-        finally:
-            self.appels += 1
-            self.f_quota.write_text(json.dumps({"jour": self.jour, "appels": self.appels}))
         d = brut.get("data", brut)
         figs[num] = {"date": self.jour, "valeur_neuf": d.get("current_value_new"), "nom": d.get("name"),
                      "gamme": d.get("theme"), "sets": d.get("sets") or []}
