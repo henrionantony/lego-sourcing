@@ -25,6 +25,11 @@ def codes_prioritaires(be: BrickEconomy) -> list[str]:
     # Figurines demandées en premier (étude part-out en cours) : data/figs_prioritaires.txt, une par ligne
     f = CACHE.parent / "figs_prioritaires.txt"
     demandees = f.read_text().split() if f.exists() else []
+    # Minifigs tapées dans New ad sans cote (db cotes_demandes/<code>) : en tout premier
+    try:
+        demandees = [d["chemin"].split("/", 1)[1] for d in base.docs("cotes_demandes/")] + demandees
+    except Exception:
+        pass
     vus, out = set(), []
     for c in demandees + stock + [c for c, _ in vendues.most_common()] + sets:
         if c and c not in vus:
