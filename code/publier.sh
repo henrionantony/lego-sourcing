@@ -12,6 +12,8 @@ mkdir -p "$DEPOT/code"
 cp "$ICI"/*.py "$ICI"/*.sh "$DEPOT/code/"
 # Page LEGO Scan (reconnaissance des minifigs), servie par GitHub Pages depuis docs/
 mkdir -p "$DEPOT/docs" && cp "$ICI/../scan/index.html" "$DEPOT/docs/index.html"
+# Photos officielles des figurines pour eBay (BrickLink bloque eBay depuis le 07/11)
+if [ -d "$ICI/../ebay/figs_img" ]; then mkdir -p "$DEPOT/docs/ebay/figs" && cp "$ICI/../ebay/figs_img/"*.jpg "$DEPOT/docs/ebay/figs/"; fi
 # Application LEGO HQ : code seul (connexion), les données restent dans Supabase
 (cd "$ICI" && python3 figart.py >/dev/null) || true
 (cd "$ICI" && python3 figs_photos.py >/dev/null) || true

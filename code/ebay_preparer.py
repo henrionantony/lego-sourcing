@@ -133,6 +133,12 @@ def photos_set(b: dict) -> list:
 def images_fig(code: str) -> list:
     """Photos officielles BrickLink (07/11 : BrickLink renvoie une page anti-robot au serveur GitHub ;
     ebay_annonces laisse alors eBay les télécharger lui-même)."""
+    # 07/11 23h : eBay non plus n'arrive pas à les télécharger (annonces sans photo) → image officielle
+    # refaite et hébergée sur GitHub Pages (ebay_photos_figs.py), BrickLink seulement à défaut
+    import ebay_photos_figs
+    u = ebay_photos_figs.url(code)
+    if u:
+        return [u]
     return [f"https://img.bricklink.com/ItemImage/MN/0/{code}.png", f"https://img.bricklink.com/ItemImage/ML/{code}.png"]
 
 
