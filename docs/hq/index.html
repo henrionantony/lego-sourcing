@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="a5e708005b"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="92c3c9cd37"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -712,7 +712,13 @@ dialog.confirmer::backdrop{background:rgba(0,0,0,.45)} dialog.confirmer p{margin
   const cache = new Map();          // chemin -> {maj, data}
   const ecoutes = new Set();        // {type: "doc"|"col", cle, cb, vu: Map(id -> maj)}
   async function sonder() {
-    const liste = await rest("GET", "app_docs?select=chemin,maj&chemin=not.like.static/*&chemin=not.like.fichiers/*&limit=20000");
+    // La base renvoie au plus 1000 lignes par lecture : on lit la liste page par page
+    const liste = [];
+    for (let o = 0; ; o += 1000) {
+      const p = await rest("GET", "app_docs?select=chemin,maj&chemin=not.like.static/*&chemin=not.like.fichiers/*&order=chemin&limit=1000&offset=" + o);
+      liste.push(...p);
+      if (p.length < 1000) break;
+    }
     const actuel = new Map(liste.map((x) => [x.chemin, x.maj]));
     const voulus = [...actuel].filter(([c, maj]) => [...ecoutes].some((e) => e.type === "doc" ? e.cle === c : c.startsWith(e.cle + "/")) && cache.get(c)?.maj !== maj).map(([c]) => c);
     for (let i = 0; i < voulus.length; i += 40) {
