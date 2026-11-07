@@ -103,11 +103,17 @@ def github_surveille() -> bool:
         return False
     try:
         from etat_app import github_runs
-        if not any(r["status"] == "in_progress" for r in github_runs() or []):
+        enc = [r for r in github_runs() or [] if r["status"] == "in_progress"]
+        if not enc:
             return False
         # GitHub tourne mais plante (ex. 21/10 : colonne manquante) : on envoie nous-mêmes
         dernieres = base.lire("executions", "select=ok&tache=eq.alertes&fin=not.is.null&order=id.desc&limit=3")
-        return not dernieres or any(e["ok"] for e in dernieres)
+        if dernieres:
+            return any(e["ok"] for e in dernieres)
+        # Base injoignable (07/11 : quota dépassé) : un passage GitHub sans la base s'arrête dans la
+        # première minute (fichiers privés). Il ne compte que s'il tourne depuis plus de 10 minutes.
+        debut = min(dt.datetime.fromisoformat(r["run_started_at"].replace("Z", "+00:00")) for r in enc)
+        return dt.datetime.now(dt.timezone.utc) - debut > dt.timedelta(minutes=10)
     except Exception:
         return False  # statut inconnu : mieux vaut un doublon qu'une alerte perdue
 
