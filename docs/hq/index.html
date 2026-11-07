@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="070e0a6372"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="4512c7307a"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -1099,6 +1099,18 @@ function figArt(){
 }
 const moinsFig = (c) => `<span class="pm"><button class="btn" data-fmoins="${esc(c)}" aria-label="Remove one ${esc(c)}">−</button><button class="btn" data-fplus="${esc(c)}" aria-label="Add one ${esc(c)}">+</button></span>`;
 const vignetteFig = (c) => `<span class="sv"><span class="ref">🧍</span></span>`;
+// Réception : les boîtes entrent tout de suite dans le stock du Scan (la base suit au passage suivant)
+function stockRecu(x){
+  for (const [s, c] of Object.entries((x && x.ex) || {})){
+    const e = EXEMP[s] = EXEMP[s] || { pp: null, c: [] };
+    for (const r of c) if (!e.c.some((y) => String(y[0]) === String(r[0]))) e.c.push(r);
+  }
+}
+// Colis marqués reçus mais pas encore repris par la base : on les garde dans le stock du Scan
+function recusEnAttente(){
+  const t = ETAT && ETAT.a_faire.find((x) => x.id === "livraisons");
+  for (const x of (t ? t.lignes : [])) if (actions[x.id] && actions[x.id].type === "recu") stockRecu(x);
+}
 function enCours(){
   const t = ETAT && ETAT.a_faire.find((x) => x.id === "livraisons");
   return t ? t.lignes.filter((x) => !actions[x.id] && x.sets) : [];
@@ -1374,6 +1386,7 @@ $("#scan-res").addEventListener("click", async (e) => {
     const x = enCours().find((y) => y.id === b.dataset.recu); if (!x) return;
     const { label, ...act } = x.action;
     if (!await envoyerAction(x.id, { ...act, tache: x.id })){ msgScan("This was not saved. Check your connection and try again.", false); return; }
+    stockRecu(x);
     for (const [s, q] of Object.entries(x.sets)){ SC.scans[s] = (SC.scans[s] || 0) - q; if (SC.scans[s] <= 0) delete SC.scans[s]; }
     if (SC.cmd === x.id) SC.cmd = null;
     sauverScan(); rendreScanVue(); rendreTodo(); msgScan(`✓ ${x.titre} marked received`, true); return;
@@ -1643,7 +1656,8 @@ $("#todo").addEventListener("click", async (e) => {
       if (r !== "ok") return;
     }
     const { label, ...act } = x.action;
-    actions[lid] = { ...act, tache: lid }; rendreTodo(); if (typeof rendreHist === "function") rendreHist();
+    actions[lid] = { ...act, tache: lid }; if (act.type === "recu") { stockRecu(x); if (vue === "scan") rendreScanVue(); }
+    rendreTodo(); if (typeof rendreHist === "function") rendreHist();
     try { await db.doc("actions/" + lid).set({ ...act, tache: lid, le: new Date().toISOString(), fait: false }); note(""); }
     catch (err) { delete actions[lid]; rendreTodo(); note("This was not saved. Check your connection and try again."); }
     return;
@@ -3495,7 +3509,7 @@ $("#po").addEventListener("click", async (e) => {
   if (!db){ note("Sign in to save your counts and see live data. Until then the app is read-only."); rendre(); rendreHome(); return; }
   rendreHome(); rendreDeals();
   db.doc("etat/principal").onSnapshot((snap) => {
-    ETAT = snap.exists ? snap.data() : null;
+    ETAT = snap.exists ? snap.data() : null; recusEnAttente();
     rendreAnnonces();
     $("#fresh").textContent = ETAT ? "Updated " + depuis(ETAT.maj) : "";
     rendreHome(); rendreTodo(); rendreDeals(); if (vue === "scan") rendreScanVue();
@@ -3504,7 +3518,7 @@ $("#po").addEventListener("click", async (e) => {
   db.doc("etat/historique").onSnapshot((snap) => {
     HIST = snap.exists ? snap.data() : null;
     // Quantités de la base rafraîchies à chaque passage (sinon : copie figée à la publication)
-    if (HIST && HIST.ex) { EXEMP = HIST.ex; EXEMP_LE = new Date(HIST.maj).toISOString(); }
+    if (HIST && HIST.ex) { EXEMP = HIST.ex; EXEMP_LE = new Date(HIST.maj).toISOString(); recusEnAttente(); }
     if (HIST && HIST.apub) APUB = HIST.apub;
     if (HIST && HIST.ventes) DERNIERE_VENTE = HIST.ventes.reduce((m, v) => v.d > m ? v.d : m, "");
     rendreHist(); rendrePlateformes(); if (vue === "scan") rendreScanVue();
@@ -3524,7 +3538,7 @@ $("#po").addEventListener("click", async (e) => {
       const d = ch.doc.data() || {};
       if (ch.type === "removed") delete actions[ch.doc.id]; else actions[ch.doc.id] = d;
     }
-    rendreTodo(); rendreDeals(); rendreHist(); rendrePo(); if (vue === "stock") rendre();
+    recusEnAttente(); rendreTodo(); rendreDeals(); rendreHist(); rendrePo(); if (vue === "stock") rendre();
   }, () => {});
   let premier = true;
   db.collection("comptes").onSnapshot((snap) => {

@@ -354,11 +354,27 @@ def prevenir_retards():
         print(f"Telegram retards : {e}")
 
 
+def _exemplaires(lignes: list[dict], achat: dict) -> dict:
+    """Lignes d'une commande en livraison → {set: [[article, coût unitaire, date, magasin, qté, "", "", lieu, stratégie]]}."""
+    out: dict[str, list] = {}
+    for l in lignes:
+        if not l.get("id_set") or str(l.get("categorie") or "").upper() != "SET":
+            continue
+        s = str(l["id_set"]).split("-")[0].removesuffix(".0")
+        q = max(1, int(float(l.get("quantite") or 1)))
+        part = float(l.get("quote_part") or 1) or 1
+        cout = 0.0 if l.get("offert") else float(l.get("prix_achat") or 0) / part / q
+        out.setdefault(s, []).append([l["id"], round(cout, 2), achat.get("date_achat") or "", achat.get("lieu") or "", q, "", "",
+                                      l.get("emplacement") or "", {"LOT/DETAILS": "P", "ENTIER": "E"}.get(str(l.get("strategie") or "").strip().upper(), "")])
+    return out
+
+
 def a_regulariser(obj: dict) -> list[dict]:
     out = []
     RETARDS.clear()
     # Commandes en cours de livraison : à confirmer à la réception
-    arts = base.lire("articles", "select=id,achat_id,id_set,designation,quantite,notes&notes=ilike.*livraison*&limit=1000")
+    arts = base.lire("articles", "select=id,achat_id,id_set,designation,quantite,notes,prix_achat,quote_part,offert,categorie,strategie,emplacement"
+                      "&notes=ilike.*livraison*&limit=1000")
     achats = {a["id"]: a for a in base.lire("achats", "select=*&cashback=gt.0&limit=10000")}
     for aid in {a["achat_id"] for a in arts} - set(achats):
         achats.update({x["id"]: x for x in base.lire("achats", f"select=*&id=eq.{aid}")})
@@ -403,6 +419,9 @@ def a_regulariser(obj: dict) -> list[dict]:
                      "articles": [f"{int(float(x['quantite'] or 1))} × {nom_set(x)}" for x in lignes],
                      # Pour le scan à la réception : quantités attendues par numéro de set
                      "sets": {k: v for k, v in _compter(lignes).items()},
+                     # Exemplaires que la réception ajoute au stock (même format que a_publier) : l'appli
+                     # les montre tout de suite au Scan, sans attendre le passage suivant
+                     "ex": _exemplaires(lignes, achats.get(aid, {})),
                      "action": {"type": "recu", "achat_id": aid, "label": "Received"}})
     # Colis prêts qu'aucun numéro ne relie à une commande : carte rouge à part, en tête
     if orph:
