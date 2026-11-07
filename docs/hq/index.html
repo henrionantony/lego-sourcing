@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="f9c8840ab1"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="070e0a6372"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -726,13 +726,14 @@ dialog.confirmer::backdrop{background:rgba(0,0,0,.45)} dialog.confirmer p{margin
   // Pas de mise à jour de l'écran pendant une saisie : on attend que le champ soit
   // quitté et 30 s sans frappe, pour ne jamais effacer ce qui est en cours.
   let frappe = 0;
-  document.addEventListener("input", (ev) => { if (ev.target.id !== "q" && !ev.target.closest("#hqlogin")) frappe = Date.now(); }, true);
+  document.addEventListener("input", (ev) => { if (ev.target.id !== "q" && !ev.target.closest("#hqlogin, #scan-m, #fig-m")) frappe = Date.now(); }, true);
   document.addEventListener("focusout", () => setTimeout(livrer, 31000), true);
   function occupe() {
     const a = document.activeElement;
-    if ((a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.id !== "q" && !a.closest("#hqlogin")) || Date.now() - frappe < 30000) return true;
+    // Champs de saisie du Scan (jamais redessinés) : ne bloquent pas les mises à jour
+    if ((a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.id !== "q" && !a.closest("#hqlogin, #scan-m, #fig-m")) || Date.now() - frappe < 30000) return true;
     // Formulaire commencé puis laissé ouvert : on garde l'écran tel quel
-    return [...document.querySelectorAll("form input, form textarea")].some((x) => x.offsetParent && x.id !== "q" && x.type !== "hidden"
+    return [...document.querySelectorAll("form input, form textarea")].some((x) => x.offsetParent && x.id !== "q" && x.type !== "hidden" && !x.closest("#scan-m, #fig-m")
       && (x.type === "checkbox" || x.type === "radio" ? x.checked !== x.defaultChecked : x.value !== x.defaultValue));
   }
   function livrer() {
