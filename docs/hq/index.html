@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="bf1baf5956"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="7a750275be"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -1959,6 +1959,9 @@ function rendreAnnonces(){
   for (const a of ANNONCES) { k[a.s]++; if (nouveauPrix(a)) k.baisse++; }
   for (const f in k) $("#a-" + f.replace(" ", "\\ ")) && ($("#a-" + f.replace(" ", "\\ ")).textContent = k[f]);
   const q = sansAccent($("#aq").value.trim());
+  // Code de minifig : njo822 trouve aussi njo0822 (et l'inverse)
+  const qf = /^[a-z]{2,5}\d{1,4}[a-z]?$/.test(q) ? cleFig(q) : "";
+  const aCode = (t) => qf && (t.toLowerCase().match(/\b[a-z]{2,5}\d{2,4}[a-z]?\b/g) || []).some((c) => cleFig(c) === qf);
   const g = $("#ag").value, lf = $("#al").value;
   const nl = { on: 0, off: 0 };
   for (const a of ANNONCES) if (afiltre === "all" || a.s === afiltre || (afiltre === "baisse" && nouveauPrix(a))) nl[surLbc(a) ? "on" : "off"]++;
@@ -1972,7 +1975,7 @@ function rendreAnnonces(){
   $("#ag").innerHTML = `<option value="">All themes</option>` + Object.entries(parGamme).sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]))
     .map(([n, k]) => `<option value="${esc(n)}">${esc(n)} (${k})</option>`).join("") + (g && !parGamme[g] ? `<option value="${esc(g)}">${esc(g)} (0)</option>` : "");
   $("#ag").value = g;
-  const l = ANNONCES.filter((a) => (afiltre === "all" || a.s === afiltre || (afiltre === "baisse" && nouveauPrix(a))) && (!g || a.g === g) && (!lf || (lf === "on") === surLbc(a)) && (!q || sansAccent(a.t).includes(q) || a.n.includes(q)));
+  const l = ANNONCES.filter((a) => (afiltre === "all" || a.s === afiltre || (afiltre === "baisse" && nouveauPrix(a))) && (!g || a.g === g) && (!lf || (lf === "on") === surLbc(a)) && (!q || sansAccent(a.t).includes(q) || a.n.includes(q) || aCode(a.t)));
   if (lf === "off") l.sort((x, y) => (y.pr || 0) - (x.pr || 0));
   const vus = l.slice(0, amax);
   $("#ads").innerHTML = vus.map((a) => `<article class="ad" data-id="${a.id}">
