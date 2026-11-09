@@ -812,6 +812,11 @@ def main(essai: bool):
                 det = details(s, d["prix"], ref, tresor, stock.get(s, 0), part_out, nt, engage)
                 if nt.get("assez"):
                     v_dec, tete = "à regarder", "🟡 À regarder (déjà assez en stock)"
+                    journal[-1]["verdict"] = v_dec  # 09/11 (10367) : l'appli affichait encore « achète »
+                # 09/11 : marge ≥ +100 % brut = souvent un set que les magasins n'écoulent pas → jamais « achète » d'office
+                if v_dec == "achète" and any(f.startswith("marge très haute") for f in nt.get("freins") or []):
+                    v_dec, tete = "à regarder", "🟡 Marge très haute, à vérifier"
+                    journal[-1]["verdict"] = v_dec
                 # 04/11 : sans cote BrickEconomy, l'estimation vient de la moyenne générale et peut
                 # être très gonflée (77057 annoncé +150 %) : jamais « achète » ni « va vite » sur ça
                 sans_cote = any(f.startswith("pas de cote BrickEconomy") for f in nt.get("freins") or [])
