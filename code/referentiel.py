@@ -52,6 +52,17 @@ def _get(url: str, data: dict | None = None, headers: dict | None = None) -> byt
         return r.read()
 
 
+def _momentum(m: dict | None) -> dict | None:
+    """Résumé du bloc « market_momentum » de BrickEconomy (sans appel en plus)."""
+    if not m:
+        return None
+    dem = next((b for b in m.get("boxes") or [] if b.get("key") == "demand"), {})
+    return {"lecture": m.get("reading"), "position": m.get("position"),
+            "haussier": (m.get("split_percent") or {}).get("bullish"),
+            "demande": dem.get("demand_level"), "demande_tendance": dem.get("trend"),
+            "demande_texte": dem.get("value"), "le": m.get("scored_date")}
+
+
 def numero_base(x) -> str:
     """'10312', '10312-1', 10312.0 → '10312'."""
     s = str(x).strip()
@@ -180,6 +191,10 @@ class BrickEconomy:
              "valeur_neuf": d.get("current_value_new"),
              "valeur_occasion": d.get("current_value_used"),
              "prevision_2ans": d.get("forecast_value_new_2_years"),
+             "prevision_5ans": d.get("forecast_value_new_5_years"),
+             # « Market momentum » BrickEconomy (nouveau, nov. 2026) : lecture,
+             # part haussière et niveau de demande 1-5 avec sa tendance.
+             "momentum": _momentum(d.get("market_momentum")),
              "retire": d.get("retired"),
              "retrait": d.get("retired_date"),
              "prix_public_eu": d.get("retail_price_eu"),
@@ -523,14 +538,22 @@ def construire(xlsx: str, rafraichir: bool = False) -> pd.DataFrame:
     ref["jours_retrait"] = age.where(ref.statut == "retiré")
     k_ret = [rapport_retrait(cr, gamme_par_theme.get(th), a) if st == "retiré" and a == a else None
              for st, th, a in zip(ref.statut, ref.theme_rb, age)]
+    # 09/11 (Donkey Kong 72051 : cote 189 € pour 169,99 € au catalogue) : tant que le set est vendu par
+    # LEGO, sa cote BrickEconomy n'est pas un prix de revente. Au-dessus du prix LEGO elle est ramenée
+    # au prix LEGO (et signalée « cote_suspecte »), la revente au catalogue reste plafonnée sous ce prix.
+    def _be_val(s, st, pp):
+        v = (be.cache.get(s) or {}).get("valeur_neuf")
+        return min(v, pp) if v and st == "en vente" and pp == pp and pp else v
     est = [estimer(pp, st, gamme_par_theme.get(th), coef,
-                   (be.cache.get(s) or {}).get("valeur_neuf"), ratios_be.get(st, ratio_be), vbl, ratio_bl, k_retrait=kr)
+                   _be_val(s, st, pp), ratios_be.get(st, ratio_be), vbl, ratio_bl, k_retrait=kr)
            for pp, st, th, s, vbl, kr in zip(ref.prix_public, ref.statut, ref.theme_rb, ref.set_num,
                                              ref.valeur_bl, k_ret)]
     # Cote BrickEconomy ramenée au marché français (tes ventes / cote, selon le statut) et sa tendance :
     # les alertes s'en servent comme garde-fou (03/11, Home One 75405 : estimation 64 € mais cote 53 € en baisse).
     ref["be_fr"], ref["be_tendance"] = zip(*[cote_be(be.cache.get(s), ratios_be.get(st, ratio_be))
                                              for s, st in zip(ref.set_num, ref.statut)])
+    ref["cote_suspecte"] = [bool(st == "en vente" and bf == bf and bf and pp == pp and pp and bf > pp)
+                            for st, bf, pp in zip(ref.statut, ref.be_fr, ref.prix_public)]
     (CACHE / "ratios_be.json").write_text(json.dumps({"global": ratio_be, **ratios_be}))
     # Prise de valeur attendue au pivot (2 ans après le retrait), pour les sets retirés ou à date de retrait connue
     ref["pv_pivot"] = [round(pp * rapport_retrait(cr, gamme_par_theme.get(th), PIVOT_JOURS), 2)

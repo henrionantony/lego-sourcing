@@ -294,6 +294,12 @@ def details(s: str, prix: float, ref, tresor=None, en_stock: int = 0, part_out=N
         ref_pv = est or float(x.prix_vente_estime)
         lignes.append(f"🛒 eBay.fr : dès {euros(eb['bas'])} port compris, médiane {euros(eb['med'])} ({eb['n']} annonce{'s' if eb['n'] > 1 else ''} neuve{'s' if eb['n'] > 1 else ''})"
                       + (" · ⚠ déjà moins cher que notre prix prévu" if eb["n"] >= 3 and eb["bas"] < ref_pv else ""))
+    # 09/11 : set encore au catalogue avec une cote BrickEconomy au-dessus du prix LEGO = cote de sortie,
+    # pas un prix de revente. La revente rapide reste plafonnée sous le prix LEGO.
+    bf0 = x.get("be_fr")
+    if x.statut == "en vente" and pp and bf0 == bf0 and bf0 and bf0 > pp:
+        lignes.append(f"⚠ Cote BrickEconomy {euros(bf0)} au-dessus du prix LEGO alors que le set est encore "
+                      f"au catalogue : cote suspecte, non retenue (revente avant retrait sous le prix LEGO)")
     ch = x.get("chaleur_dealabs")
     pop = ("gamme populaire sur Dealabs" if ch >= 150 else "gamme moyennement suivie" if ch >= 70
            else "gamme peu suivie sur Dealabs") if ch == ch and ch is not None else "popularité inconnue"
