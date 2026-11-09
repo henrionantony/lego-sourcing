@@ -347,6 +347,12 @@ def details(s: str, prix: float, ref, tresor=None, en_stock: int = 0, part_out=N
             freins.append(f"il est déjà passé à {bas[0]:.0f} € ({MOIS[int(bas[1][5:7]) - 1]} {bas[1][:4]})")
         if not (bf == bf and bf) and str(x.get("fiabilite")) == "global":
             freins.append("pas de cote BrickEconomy pour confirmer, estimation tirée de ta moyenne générale")
+        # 09/11 (jardin andalou 10359 à +217 %, 3 déjà en stock qui ne partent pas) : une marge énorme
+        # veut souvent dire que les magasins n'arrivent pas à le vendre. Méfiance, surtout si on en a déjà.
+        brut = max(pv for _, pv, *_ in calc) / prix - 1
+        if brut >= MARGE_SUSPECTE:
+            freins.append(f"marge très haute ({brut:+.0%} brut) : souvent un set que les magasins n'arrivent pas à vendre"
+                          + (f", et tu en as déjà {en_stock} en stock" if en_stock else ""))
         if freins:
             note["score"] = min(note["score"], 59 if len(freins) == 1 else 45)
             if any(f.startswith("la cote BrickEconomy") for f in freins) or (
@@ -528,6 +534,7 @@ def black_friday(jour: dt.date) -> dt.date:
 
 # Marge nette sous laquelle un deal ne peut pas être noté A (le minimum est MARGE_NETTE_MIN).
 MARGE_PRUDENCE = 0.20
+MARGE_SUSPECTE = 1.0   # +100 % brut ou plus : déstockage probable (09/11)
 BAISSE_COTE = -0.10   # cote BrickEconomy en baisse de 10 % ou plus sur 6 mois
 
 
