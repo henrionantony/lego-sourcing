@@ -20,7 +20,11 @@ RE_SET = r"(?<![\d,.])(\d{4,6})(?![\d,.€%]|\s?(?:€|pi[eè]ces|pcs))"
 
 
 def extraire_set(titre: str):
-    m = re.search(RE_SET, titre)
+    # On évite un nombre collé à une lettre (« F2004 », « RB20 ») : 10/11, la Ferrari
+    # 11375 était lue « 2004 » et le deal à 30,59 € n'a pas été évalué.
+    tous = list(re.finditer(RE_SET, titre))
+    bons = [m for m in tous if not (m.start() and titre[m.start() - 1].isalpha())]
+    m = (bons or tous or [None])[0]
     return m.group(1) if m else None
 
 
