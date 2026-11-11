@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="13d5312ee3"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="35716d9df5"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -888,10 +888,11 @@ dialog.confirmer::backdrop{background:rgba(0,0,0,.45)} dialog.confirmer p{margin
     // Nouvelle version publiée mais page en cache : on recharge une fois avec une adresse neuve
     const v = st.data.__PAGE__, ici = document.documentElement.dataset.v;
     if (v && ici && v !== ici) {
-      let deja = ""; try { deja = sessionStorage.getItem("hq_v") || ""; } catch (e) {}
-      if (deja !== v) {
-        try { sessionStorage.setItem("hq_v", v); } catch (e) {}
-        location.replace(location.pathname + "?v=" + v + location.hash);
+      // Jusqu'à 3 essais, adresse toujours neuve (le cache de GitHub Pages peut resservir l'ancienne page)
+      let n = 0; try { const [dv, dn] = (localStorage.getItem("hq_v") || "").split(":"); n = dv === v ? +dn || 0 : 0; } catch (e) {}
+      if (n < 3) {
+        try { localStorage.setItem("hq_v", v + ":" + (n + 1)); } catch (e) {}
+        setTimeout(() => location.replace(location.pathname + "?v=" + v + "&t=" + Date.now() + location.hash), n ? 4000 * n : 0);
         return;
       }
     }
