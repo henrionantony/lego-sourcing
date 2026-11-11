@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="e991ce106f"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="13d5312ee3"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -1051,22 +1051,25 @@ function anneesHome(o, cle){
   const court = (m) => new Date(2000, m - 1, 15).toLocaleDateString("en-GB", { month: "short" });
   const tot = {};
   const lignes = mois.map((m) => {
+    const vals = annees.map((y) => k(y, m) > cle ? null : (h[k(y, m)] || 0)), meilleur = Math.max(...vals.filter((x) => x != null));
     const cases = annees.map((y, i) => {
       const kk = k(y, m), v = h[kk], avant = i ? h[k(y - 1, m)] : null;
       if (kk > cle) return `<td class="num"></td>`;
       tot[y] = (tot[y] || 0) + (v || 0);
       const vert = i && (v || 0) > (avant || 0);
-      return `<td class="num"${vert ? ' style="color:var(--ok)"' : ""}>${eur(v || 0)}</td>`;
+      const etoile = meilleur > 0 && (v || 0) === meilleur ? "⭐ " : "";
+      return `<td class="num"${vert ? ' style="color:var(--ok)"' : ""}>${etoile}${eur(v || 0)}</td>`;
     }).join("");
     const en = k(fin, m) === cle;
     return `<tr${en ? ' style="font-weight:600"' : ""}><td>${court(m)}</td>${cases}<td class="num" style="color:var(--muted)">${cm[k(fin, m)] != null ? eur(cm[k(fin, m)]) : "–"}</td></tr>`;
   }).join("");
-  const totaux = annees.map((y, i) => `<td class="num"${i && tot[y] > (tot[y - 1] || 0) ? ' style="color:var(--ok)"' : ""}>${eur(tot[y] || 0)}</td>`).join("");
+  const maxTot = Math.max(...annees.map((y) => tot[y] || 0));
+  const totaux = annees.map((y, i) => `<td class="num"${i && tot[y] > (tot[y - 1] || 0) ? ' style="color:var(--ok)"' : ""}>${(tot[y] || 0) === maxTot && maxTot > 0 ? "⭐ " : ""}${eur(tot[y] || 0)}</td>`).join("");
   const tete = annees.map((y) => `<td class="num">${String(y).slice(2)}-${String(y + 1).slice(2)}</td>`).join("");
   return `<div style="overflow-x:auto"><table class="mtab" style="width:100%;border-collapse:collapse;margin-top:6px;font-size:12.5px;white-space:nowrap">
     <tr style="color:var(--muted)"><td></td>${tete}<td class="num">Target</td></tr>${lignes}
     <tr style="font-weight:600;border-top:1px solid var(--line)"><td>Total</td>${totaux}<td class="num" style="color:var(--muted)">${eur(o.cible_ca)}</td></tr></table></div>
-    <div class="sub">One column per business year (October to September). Green = better than the same month the year before. Totals of past years are full years; this year is so far.</div>`;
+    <div class="sub">One column per business year (October to September). Green = better than the same month the year before. ⭐ = best year for that month. Totals of past years are full years; this year is so far.</div>`;
 }
 // Vue jour par jour du mois en cours (choix gardé sur ce téléphone)
 let VUE_MOIS = "mois", VUE_MOIS_OUVERT = false;
