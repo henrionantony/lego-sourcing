@@ -194,11 +194,14 @@ def objectifs() -> dict:
         j = v["date_vente"][8:10]
         jours_avant[j] = round(jours_avant.get(j, 0) + float(v["prix_vente"] or 0), 2)
     # Tous les mois depuis le début de l'activité (lus par pages : la base rend 1000 lignes au plus)
-    histo, off = {}, 0
+    histo, jours_annees, off = {}, {}, 0
     while True:
         lot = base.lire("ventes", f"select=date_vente,prix_vente&date_vente=not.is.null&order=id&limit=1000&offset={off}")
         for v in lot:
             histo[v["date_vente"][:7]] = round(histo.get(v["date_vente"][:7], 0) + float(v["prix_vente"] or 0), 2)
+            if v["date_vente"][5:7] == cle[5:7]:   # ce mois-ci, chaque année : jour par jour
+                jj = jours_annees.setdefault(v["date_vente"][:4], {})
+                jj[v["date_vente"][8:10]] = round(jj.get(v["date_vente"][8:10], 0) + float(v["prix_vente"] or 0), 2)
         if len(lot) < 1000:
             break
         off += 1000
@@ -207,7 +210,7 @@ def objectifs() -> dict:
             "net_frais": round(ca * (1 - PRELEVEMENTS), 2), "net": round(net, 2), "net_estime": round(estime, 2),
             "prelev": round(prelev, 2), "couts": round(ca - prelev - net, 2), "ventes": len(annee), "derniere_vente": derniere,
             "mois": mois, "cible_mois": _OBJ.get("mois", {}), "an_passe": avant,
-            "jours": jours, "jours_an_passe": jours_avant, "historique": histo}
+            "jours": jours, "jours_an_passe": jours_avant, "historique": histo, "jours_annees": jours_annees}
 
 
 def encaisse(v: dict) -> float:
