@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="bb95bdef16"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="e991ce106f"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -1073,31 +1073,26 @@ let VUE_MOIS = "mois", VUE_MOIS_OUVERT = false;
 try { VUE_MOIS = localStorage.getItem("vuemois") || "mois"; } catch (e) {}
 function choisirVueMois(v){ VUE_MOIS = v; VUE_MOIS_OUVERT = true; try { localStorage.setItem("vuemois", v); } catch (e) {} rendreHome(); }
 function joursHome(o, c, cle, finMois, jour){
-  const ja = o.jours_annees || {}; ja[cle.slice(0, 4)] = { ...(ja[cle.slice(0, 4)] || {}), ...(o.jours || {}) };
-  const ans = Object.keys(ja).filter((y) => y <= cle.slice(0, 4)).sort(), cj = c / finMois;
+  const ja = o.jours_annees || {}, an = cle.slice(0, 4), avant = String(+an - 1);
+  const fait = { ...(ja[an] || {}), ...(o.jours || {}) }, ap = ja[avant] || o.jours_an_passe || {}, cj = c / finMois;
   const nomJ = (d) => new Date(`${cle}-${String(d).padStart(2, "0")}T12:00`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric" });
-  const cum = {}; let cumC = 0, lignes = "";
-  const vert = ' style="color:var(--ok)"';
+  const vert = "color:var(--ok)", rouge = "color:var(--gap)";
+  let cumF = 0, cumC = 0, cumA = 0, lignes = "";
   for (let d = 1; d <= finMois; d++){
-    const k = String(d).padStart(2, "0"); cumC += cj;
-    const cases = ans.map((y, i) => {
-      const actuel = y === cle.slice(0, 4);
-      if (actuel && d > jour) return `<td class="num"></td>`;
-      const v = (ja[y] || {})[k] || 0, prev = i ? ((ja[ans[i - 1]] || {})[k] || 0) : null;
-      cum[y] = (cum[y] || 0) + v;
-      const cprev = i ? cum[ans[i - 1]] : null;
-      return `<td class="num"><span${i && v > prev ? vert : ""}>${eur(v)}</span><br><small${i && cum[y] > cprev ? vert : ' style="color:var(--muted)"'}>${eur(cum[y])}</small></td>`;
-    }).join("");
-    lignes += `<tr${d === jour ? ' style="font-weight:600;background:var(--surface-2, rgba(127,127,127,.08))"' : ""}><td>${nomJ(d)}</td>${cases}<td class="num" style="color:var(--muted)">${eur(cumC)}</td></tr>`;
+    const k = String(d).padStart(2, "0"), v = fait[k] || 0, a = ap[k] || 0;
+    cumC += cj; cumA += a; const futur = d > jour; if (!futur) cumF += v;
+    lignes += `<tr${d === jour ? ' style="font-weight:600"' : ""}><td>${nomJ(d)}</td><td class="num">${eur(a)}</td><td class="num">${eur(cumA)}</td>
+      <td class="num" style="color:var(--muted)">${eur(cumC)}</td><td class="num"${!futur && v > a ? ` style="${vert}"` : ""}>${futur ? "" : eur(v)}</td>
+      <td class="num" style="${futur ? "" : cumF >= cumA ? vert : rouge}">${futur ? "" : eur(cumF)}</td></tr>`;
   }
-  // Cumul au jour J pour chaque année (ligne de synthèse)
-  const auJ = ans.map((y) => { let t = 0; for (const [d, v] of Object.entries(ja[y] || {})) if (+d <= jour) t += v; return t; });
-  const synth = ans.map((y, i) => `<td class="num"${i && auJ[i] > auJ[i - 1] ? vert : ""}>${eur(auJ[i])}</td>`).join("");
-  const tete = ans.map((y) => `<td class="num">${y}</td>`).join("");
-  return `<div style="overflow-x:auto"><table class="mtab" style="width:100%;border-collapse:collapse;margin-top:6px;font-size:12.5px;white-space:nowrap">
-    <tr style="color:var(--muted)"><td></td>${tete}<td class="num">Target so far</td></tr>
-    <tr style="font-weight:600;border-bottom:1px solid var(--line)"><td>Total 1 → ${jour}</td>${synth}<td class="num" style="color:var(--muted)">${eur(cj * jour)}</td></tr>${lignes}</table></div>
-    <div class="sub">Each cell: sales that day, and below the total since the 1st. Green = better than the year before at the same date. The target is spread evenly over the ${finMois} days.</div>`;
+  // Cumul du 1er au jour J pour chaque année
+  const ans = Object.keys(ja).filter((y) => y < an).sort().concat([an]);
+  const auJ = ans.map((y) => { let t = 0; for (const [d, v] of Object.entries(y === an ? fait : ja[y] || {})) if (+d <= jour) t += v; return t; });
+  const synth = ans.map((y, i) => `${y}: <b${i && auJ[i] > auJ[i - 1] ? ` style="${vert}"` : ""}>${eur(auJ[i])}</b>`).join(" · ");
+  return `<div class="sub" style="margin-top:8px">Total from the 1st to the ${jour} · ${synth}</div>
+    <div style="overflow-x:auto"><table class="mtab" style="width:100%;border-collapse:collapse;margin-top:6px;font-size:12.5px;white-space:nowrap">
+    <tr style="color:var(--muted)"><td></td><td class="num">Last year</td><td class="num">Last year so far</td><td class="num">Target so far</td><td class="num">Sold that day</td><td class="num">Total so far</td></tr>${lignes}</table></div>
+    <div class="sub">Total so far is green when ahead of last year at the same date, red when behind. Sold that day is green when it beats the same day last year.</div>`;
 }
 function rendreHome(){
   if (!ETAT){ $("#home").innerHTML = `<p class="empty">${db ? "Waiting for the first update…" : "Sign in to see your dashboard."}</p>`; return; }
