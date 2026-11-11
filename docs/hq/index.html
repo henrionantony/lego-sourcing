@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="e3fee64a9a"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="138f93e7c6"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -1031,10 +1031,33 @@ function moisHome(o){
     <div class="panel">${c ? `<div class="lbl">Revenue this month</div><div class="big">${eur(f)} <small>/ ${eur(c)}</small></div>
       <div class="bar"><i style="width:${Math.min(100, c ? 100 * f / c : 0)}%"></i></div>
       <div class="sub">${etatM} · ${a != null ? `same month last year: ${eur(a)}${f > a ? " (beaten ✓)" : ` (${eur(Math.round(a - f))} to beat it)`}` : ""}${reste > 0 ? ` · ${eur(Math.round(reste))} to go in ${jours} day${jours > 1 ? "s" : ""}` : ""}</div>` : ""}
-      <details style="margin-top:10px"><summary class="lbl" style="cursor:pointer">Month by month</summary>
-        <div style="overflow-x:auto"><table class="mtab" style="width:100%;border-collapse:collapse;margin-top:6px;font-size:13px">
+      <details style="margin-top:10px"${VUE_MOIS_OUVERT ? " open" : ""} ontoggle="VUE_MOIS_OUVERT = this.open"><summary class="lbl" style="cursor:pointer">${VUE_MOIS === "jours" ? "Day by day" : "Month by month"}</summary>
+        <div class="seg" role="group" aria-label="View" style="margin-top:6px">
+          <button type="button" aria-pressed="${VUE_MOIS !== "jours"}" onclick="choisirVueMois('mois')">Month by month</button>
+          <button type="button" aria-pressed="${VUE_MOIS === "jours"}" onclick="choisirVueMois('jours')">Day by day</button></div>
+        ${VUE_MOIS === "jours" ? joursHome(o, c, cle, finMois, jour) : `<div style="overflow-x:auto"><table class="mtab" style="width:100%;border-collapse:collapse;margin-top:6px;font-size:13px">
           <tr style="color:var(--muted)"><td></td><td class="num">Last year</td><td class="num">Target</td><td class="num">Done</td></tr>${lignes}</table></div>
-        <div class="sub">Targets follow the shape of your past years and add up to the ${eur(o.cible_ca)} goal.</div></details></div>`;
+        <div class="sub">Targets follow the shape of your past years and add up to the ${eur(o.cible_ca)} goal.</div>`}</details></div>`;
+}
+// Vue jour par jour du mois en cours (choix gardé sur ce téléphone)
+let VUE_MOIS = "mois", VUE_MOIS_OUVERT = false;
+try { VUE_MOIS = localStorage.getItem("vuemois") || "mois"; } catch (e) {}
+function choisirVueMois(v){ VUE_MOIS = v; VUE_MOIS_OUVERT = true; try { localStorage.setItem("vuemois", v); } catch (e) {} rendreHome(); }
+function joursHome(o, c, cle, finMois, jour){
+  const fait = o.jours || {}, ap = o.jours_an_passe || {}, cj = c / finMois;
+  const nomJ = (d) => new Date(`${cle}-${String(d).padStart(2, "0")}T12:00`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric" });
+  let cumF = 0, cumC = 0, cumA = 0, lignes = "";
+  for (let d = 1; d <= finMois; d++){
+    const k = String(d).padStart(2, "0"), v = fait[k] || 0, a = ap[k];
+    cumC += cj; cumA += a || 0; if (d <= jour) cumF += v;
+    const passe = d < jour, en = d === jour, futur = d > jour;
+    const coul = futur ? "" : cumF >= cumC ? "color:var(--ok)" : (passe ? "color:var(--gap)" : "");
+    lignes += `<tr${en ? ' style="font-weight:600"' : ""}><td>${nomJ(d)}</td><td class="num">${a != null ? eur(Math.round(a)) : "–"}</td>
+      <td class="num">${eur(Math.round(cumC))}</td><td class="num">${futur ? "" : eur(Math.round(v))}</td><td class="num" style="${coul}">${futur ? "" : eur(Math.round(cumF))}</td></tr>`;
+  }
+  return `<div style="overflow-x:auto"><table class="mtab" style="width:100%;border-collapse:collapse;margin-top:6px;font-size:13px">
+    <tr style="color:var(--muted)"><td></td><td class="num">Last year</td><td class="num">Target so far</td><td class="num">Done</td><td class="num">Total so far</td></tr>${lignes}</table></div>
+    <div class="sub">Same day last year: ${eur(Math.round(cumA))} for the whole month. The target is spread evenly over the ${finMois} days; green when your total is ahead of it.</div>`;
 }
 function rendreHome(){
   if (!ETAT){ $("#home").innerHTML = `<p class="empty">${db ? "Waiting for the first update…" : "Sign in to see your dashboard."}</p>`; return; }

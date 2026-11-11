@@ -181,11 +181,24 @@ def objectifs() -> dict:
     for v in base.lire("ventes", f"select=date_vente,prix_vente&date_vente=gte.{debut_avant}&date_vente=lt.{DEBUT_ANNEE}&limit=10000"):
         k = f"{int(v['date_vente'][:4]) + 1}{v['date_vente'][4:7]}"   # rangé sous le mois de cette année
         avant[k] = round(avant.get(k, 0) + float(v["prix_vente"] or 0), 2)
+    # Jour par jour sur le mois en cours, et les mêmes jours du même mois l'an dernier
+    cle = maintenant().strftime("%Y-%m")
+    jours, jours_avant = {}, {}
+    for v in annee:
+        if v["date_vente"][:7] == cle:
+            j = v["date_vente"][8:10]
+            jours[j] = round(jours.get(j, 0) + float(v["prix_vente"] or 0), 2)
+    a, m = int(cle[:4]) - 1, int(cle[5:7])
+    fin = f"{a + 1}-01-01" if m == 12 else f"{a}-{m + 1:02d}-01"
+    for v in base.lire("ventes", f"select=date_vente,prix_vente&date_vente=gte.{a}-{m:02d}-01&date_vente=lt.{fin}&limit=1000"):
+        j = v["date_vente"][8:10]
+        jours_avant[j] = round(jours_avant.get(j, 0) + float(v["prix_vente"] or 0), 2)
     prelev = sum(float(v["prix_vente"] or 0) - encaisse(v) for v in annee)
     return {"debut": DEBUT_ANNEE.isoformat(), "ca": round(ca, 2), "cible_ca": CIBLE_CA, "cible_net": CIBLE_NET,
             "net_frais": round(ca * (1 - PRELEVEMENTS), 2), "net": round(net, 2), "net_estime": round(estime, 2),
             "prelev": round(prelev, 2), "couts": round(ca - prelev - net, 2), "ventes": len(annee), "derniere_vente": derniere,
-            "mois": mois, "cible_mois": _OBJ.get("mois", {}), "an_passe": avant}
+            "mois": mois, "cible_mois": _OBJ.get("mois", {}), "an_passe": avant,
+            "jours": jours, "jours_an_passe": jours_avant}
 
 
 def encaisse(v: dict) -> float:
