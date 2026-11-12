@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="35716d9df5"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="91c45ccf43"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -2450,7 +2450,11 @@ function ouvrirFig(code){
   const ref = formatFig(code), f = FIGN[cleFig(ref)];
   const sets = (f ? f[3] : []).filter((s) => CAT[s] || NOMSFR[s]);
   const liste = PRIXFIGS[cleFig(ref)];
-  NFIG = { ref, connu: !!f, nom: f ? f[0] : "", gamme: f ? f[1] : "", cote: f ? f[2] : 0, liste, prix: liste || (f ? grilleFig(f[2]) : ""), sets, set: sets[0] || "", inc: false };
+  // Année de sortie = la plus ancienne année des sets de la figurine (catalogue)
+  const ans = (f ? f[3] : []).map((s) => CAT[s] ? CAT[s][2] : 0).filter((x) => x > 0);
+  const annee = ans.length ? Math.min(...ans) : 0;
+  NFIG = { ref, connu: !!f, nom: f ? f[0] : "", gamme: f ? f[1] : "", cote: f ? f[2] : 0, liste, prix: liste || (f ? grilleFig(f[2]) : ""), sets, set: sets[0] || "", inc: false,
+    annee, vieux: annee > 0 && new Date().getFullYear() - annee >= 10 };
   NAD = null; rendreFig();
 }
 function nomSetFr(s){ return (NOMSFR[s] && NOMSFR[s].nom) || (CAT[s] ? CAT[s][0] : ""); }
@@ -2462,6 +2466,7 @@ function figVinted(o){
     (o.set ? `ℹ️ Cette figurine vient du set ${o.set} - ${nomSetFr(o.set)}.\n\n` : "") +
     `🔎 Détails de la figurine :\n- N° : ${o.ref}\n- Nom figurine : ${o.nom}\n- Gamme : LEGO ${g} - Minifigure\n\n⚠️ Important (à lire attentivement) :\n- Le support n'est pas vendu avec la figurine` +
     (o.inc ? "\n- Figurine incomplète : voir les photos" : "") +
+    (o.vieux ? `\n- Figurine de plus de 10 ans${o.annee ? ` (sortie en ${o.annee})` : ""} : très bien conservée pour son âge, de petites traces de manipulation ou d'usure peuvent être présentes` : "") +
     `\n\nℹ️ La figurine est vendue avec les accessoires que vous voyez en photo.\n\n🎁 Parfait pour compléter un set, une collection/offrir.\n\n✅ Etat : 👌👌👌👌👌👌👌\n\n📦 Envoi soigné.\n\n${[...new Set(tags)].join(" ")}`;
   return { t, d };
 }
@@ -2481,6 +2486,7 @@ function rendreFig(){
       <p class="sub nad-src">${esc(prixTxt)}</p>
       <label>Comes from the set<select id="nf-s">${o.sets.map((s) => `<option value="${esc(s)}"${s === o.set ? " selected" : ""}>${esc(s)} - ${esc(nomSetFr(s))}</option>`).join("")}<option value=""${o.set ? "" : " selected"}>Don't mention a set</option></select></label>
       <label class="chk"><input type="checkbox" id="nf-i"${o.inc ? " checked" : ""}> Incomplete (missing accessory or part)</label>
+      <label class="chk"><input type="checkbox" id="nf-v"${o.vieux ? " checked" : ""}> 10+ years old${o.annee ? " (released " + o.annee + ")" : ""}: adds a line about its age</label>
     </div>
     ${blocNad("Vinted title", v.t, "vt")}${blocNad("Vinted text", v.d, "vd", true)}
     ${blocNad("Leboncoin title", lb.t, "lt")}${blocNad("Leboncoin text", lb.d, "ld", true)}
@@ -2528,6 +2534,7 @@ $("#nad").addEventListener("change", (e) => {
   if (NFIG){
     if (e.target.id === "nf-s") NFIG.set = e.target.value;
     else if (e.target.id === "nf-i") NFIG.inc = e.target.checked;
+    else if (e.target.id === "nf-v") NFIG.vieux = e.target.checked;
     else return;
     return majTextesFig();
   }
