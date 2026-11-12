@@ -4,6 +4,7 @@ Sans SUPABASE_URL / SUPABASE_SERVICE_KEY (par exemple sur GitHub sans ces
 secrets), ou si une table n'existe pas encore, tout devient sans effet : les
 scripts tournent comme avant.
 """
+import re
 import datetime as dt
 import json
 import os
@@ -92,14 +93,23 @@ def engage_par_gamme(jours: int = 90) -> dict[str, float]:
 def tresorerie():
     """Trésorerie disponible (somme des mouvements de la table « tresorerie »)
     et montant des apports encore à rendre ; None si la table est vide ou absente."""
-    lignes = lire("tresorerie", "select=montant,type&limit=100000")
+    lignes = lire("tresorerie", "select=montant,type,libelle&limit=100000")
     if not lignes:
         return None
     solde = sum(float(l["montant"]) for l in lignes)
     a_rendre = sum(float(l["montant"]) for l in lignes if l["type"] in ("apport", "remboursement"))
     capital = sum(float(l["montant"]) for l in lignes if l["type"] in ("départ", "apport"))
     propre = sum(float(l["montant"]) for l in lignes if l["type"] == "départ")
-    return {"solde": solde, "a_rendre": max(a_rendre, 0.0), "capital": capital, "capital_propre": propre}
+    # Parts des associés encaissées avec les ventes faites ensemble (type « associe »,
+    # libellé « À rendre à X : … », un remboursement « Rendu à X : … » en négatif)
+    dus: dict[str, float] = {}
+    for l in lignes:
+        if l["type"] == "associe":
+            m = re.match(r"\s*(?:À rendre|Rendu) à ([^:]+?)\s*:", str(l.get("libelle") or ""))
+            nom = m.group(1) if m else "?"
+            dus[nom] = round(dus.get(nom, 0.0) + float(l["montant"]), 2)
+    return {"solde": solde, "a_rendre": max(a_rendre, 0.0), "capital": capital, "capital_propre": propre,
+            "dus": {k: v for k, v in dus.items() if abs(v) >= 0.01}}
 
 
 def part_out_par_gamme() -> dict[str, tuple[int, int]]:

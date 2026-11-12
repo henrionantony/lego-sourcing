@@ -13,6 +13,7 @@ import base
 import etat_app
 import figs_sets
 import inventaire
+import parts_associes
 
 
 def gestes() -> str:
@@ -50,6 +51,10 @@ def main():
     try:
         resume = gestes()
         comptes()
+        try:
+            parts_associes.main()
+        except Exception as e:  # la part à rendre sera ajoutée au passage suivant
+            print("parts associés :", type(e).__name__)
         try:
             figs_sets.main()
         except Exception as e:  # la liste Part-out attendra le passage suivant
