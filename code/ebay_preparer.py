@@ -31,6 +31,7 @@ import regles
 
 ICI = Path(__file__).resolve().parent
 APP = ICI.parent / "stock" / "app"
+INACCESSIBLES = {"GH", "PE"}  # lieux.json : boîtes gardées chez des proches
 
 
 def brickset() -> dict:
@@ -204,8 +205,10 @@ def main():
     # sans co-investisseur et reçue : jamais de boîte découpée ou partagée sur eBay
     bons = set()
     co = {a["id"] for a in base.lire("articles", "select=id&co_investisseur=not.is.null&limit=5000") or []}
-    for a in base.lire("stock", "select=id,id_set,strategie,details_etat,livre,categorie"
+    for a in base.lire("stock", "select=id,id_set,strategie,details_etat,livre,categorie,emplacement"
                        "&reste=gt.0&categorie=eq.SET&livre=eq.true&limit=5000") or []:
+        if str(a.get("emplacement") or "") in INACCESSIBLES:
+            continue  # chez un proche : impossible à expédier rapidement
         if (a.get("strategie") or "ENTIER") == "ENTIER" and a["id"] not in co \
                 and str(a.get("details_etat") or "").upper().startswith("SCELL"):
             bons.add(str(a["id_set"]))
