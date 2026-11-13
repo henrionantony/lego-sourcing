@@ -93,10 +93,28 @@ def engage_par_gamme(jours: int = 90) -> dict[str, float]:
 def tresorerie():
     """Trésorerie disponible (somme des mouvements de la table « tresorerie »)
     et montant des apports encore à rendre ; None si la table est vide ou absente."""
-    lignes = lire("tresorerie", "select=montant,type,libelle&limit=100000")
+    lignes = lire("tresorerie", "select=montant,type,libelle,le,vente_id&limit=100000")
     if not lignes:
         return None
     solde = sum(float(l["montant"]) for l in lignes)
+    # Les ventes entrent nettes des 21 % de prélèvements, mais l'argent reste sur les
+    # comptes jusqu'à l'échéance URSSAF / impôts : on le compte dans le cash, et
+    # « impots » dit combien garder ; un paiement (type urssaf ou impots) le fait sortir.
+    from regles import PRELEVEMENTS
+    k = PRELEVEMENTS / (1 - PRELEVEMENTS)
+    ids = [str(l["vente_id"]) for l in lignes if l["type"] == "vente" and l.get("vente_id")]
+    frais = {}
+    for i in range(0, len(ids), 200):
+        for v in lire("ventes", f"select=id,frais_envoi&frais_envoi=not.is.null&id=in.({','.join(ids[i:i + 200])})") or []:
+            frais[str(v["id"])] = float(v["frais_envoi"] or 0)
+    preleve = sum((float(l["montant"]) + frais.get(str(l.get("vente_id")), 0.0)) * k
+                  for l in lignes if l["type"] == "vente")
+    paye = -sum(float(l["montant"]) for l in lignes if l["type"] in ("urssaf", "impots") and str(l.get("le") or "") > "2026-10-31")
+    solde = round(solde + preleve, 2)
+    import datetime as _dt
+    auj = _dt.date.today()
+    echeance = min(d for d in (_dt.date(a, m, j) for a in (auj.year, auj.year + 1)
+                               for m, j in ((1, 31), (4, 30), (7, 31), (10, 31))) if d >= auj)
     a_rendre = sum(float(l["montant"]) for l in lignes if l["type"] in ("apport", "remboursement"))
     capital = sum(float(l["montant"]) for l in lignes if l["type"] in ("départ", "apport"))
     propre = sum(float(l["montant"]) for l in lignes if l["type"] == "départ")
@@ -108,7 +126,7 @@ def tresorerie():
             m = re.match(r"\s*(?:À rendre|Rendu) à ([^:]+?)\s*:", str(l.get("libelle") or ""))
             nom = m.group(1) if m else "?"
             dus[nom] = round(dus.get(nom, 0.0) + float(l["montant"]), 2)
-    return {"solde": solde, "a_rendre": max(a_rendre, 0.0), "capital": capital, "capital_propre": propre,
+    return {"solde": solde, "impots": round(max(preleve - paye, 0.0), 2), "impots_le": echeance.isoformat(), "a_rendre": max(a_rendre, 0.0), "capital": capital, "capital_propre": propre,
             "dus": {k: v for k, v in dus.items() if abs(v) >= 0.01}}
 
 
