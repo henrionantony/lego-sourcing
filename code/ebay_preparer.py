@@ -26,6 +26,7 @@ import urllib.parse
 from pathlib import Path
 
 import base
+import ebay_ventes
 import port
 import regles
 
@@ -295,10 +296,14 @@ def main():
         out[s]["ordre"] = 1000 + r
     # Figurines validées (liste ordonnée « figurines » des réglages) : avant les sets, dans l'ordre choisi
     figs = {}
+    restants = ebay_ventes.stock_figs()
     for i, f in enumerate(reglages.get("figurines", [])):
         k = f"fig-{f['code']}"
         if k not in retirees and not f.get("vendue"):
             figs[k] = {**fiche_figurine(f, noms), "ordre": i}
+            n = restants.get(ebay_ventes.cle(f["code"]))
+            if n and n[1] > 0:   # jamais plus d'exemplaires en ligne qu'il n'en reste (ventes ailleurs)
+                figs[k]["qte"] = min(figs[k]["qte"], n[1])
     out = {**figs, **out}
     base.doc_ecrire("ebay/a_retirer", sorted(chez_lego + reglages.get("exclus", [])))
     if not base.doc_ecrire("ebay/a_publier", out):
