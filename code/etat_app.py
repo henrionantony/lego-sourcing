@@ -780,7 +780,7 @@ def historique(n_achats: int = 120, n_ventes: int = 250) -> dict:
     hv = []
     for v in ventes:
         x = sets.get(v.get("article_id"))
-        if v.get("produit") == "SET" and x:
+        if v.get("produit") == "SET" and x and x.get("id_set"):   # un lot d'achat (sans n° de set) : nom de la vente
             nom = nom_set(x)
         else:
             nom = str(v.get("nom_article") or "?").removeprefix("LEGO ").capitalize()
