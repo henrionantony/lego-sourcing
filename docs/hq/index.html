@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="7fb2bbeb63"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="4890ce2af5"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -2656,8 +2656,9 @@ function famille(x){
   return a.g === "Minifigures" || RX_FIG.test(a.t || x.titre || "") ? "figs" : "sets";
 }
 // Nouveau = figurine de part-out, ou set reçu acheté depuis moins de NOUVEAU_JOURS (le vieux stock jamais publié passe après le bloc)
-const NOUVEAU_JOURS = 30, MISSION_V = 5, MISSION_LBC = 10;  // MISSION_V : changer la règle refait la mission du jour
-const estNouveau = (x) => x.m === "figs" || (x.m === "achats" && (x.d || "") >= plusJours(jourLocal(), -NOUVEAU_JOURS));
+const NOUVEAU_JOURS = 30, MISSION_V = 6, MISSION_LBC = 10;  // MISSION_V : changer la règle refait la mission du jour
+// 13/11 : « achats » ne couvre que l'après-dernière vente ; un set reçu il y a moins de 30 jours reste nouveau même après une vente
+const estNouveau = (x) => x.m === "figs" || (["achats", "ancien"].includes(x.m) && (x.d || "") >= plusJours(jourLocal(), -NOUVEAU_JOURS));
 // le vendeur 24/10 : tant que son stock n'est pas remis à jour, pas de sets d'occasion ni de City Stuntz dans les missions
 const SANS_OCCASION = true, EXCLUS = /stuntz/i;
 // le vendeur 13/11 : figurines en pause, les missions du soir ne proposent que des sets
@@ -2814,7 +2815,7 @@ function listeActions(){
     if (!pfaits["new-" + s]) L.push({ k: "new-" + s, type: "publier", pf: "Vinted", a, it, titre: a.t, prix: a.p, q, d, v, m: attend ? "attente" : d >= DERNIERE_VENTE ? "achats" : "ancien", choix: sansChoix,
       pourquoi: attend ? `${q > 1 ? q + " in stock" : "In stock"}, bought ${d || "?"}. Still sold by LEGO: selling now would not reach your floor.` : `${q > 1 ? q + " in stock" : "In stock"}, bought ${d || "?"}, ${surLbc ? "on Leboncoin only. Post it on Vinted too." : "listed nowhere. Post it on Vinted first."}${a.vendue ? " Same title, text and photos as the copy you sold: save the photos below." : ""}` });
     if (!pfaits["new-" + s] && !surLbc && !attend) L.push({ k: "lbcnew-" + s, type: "lbc", pf: "Leboncoin", a, it, titre: a.t, prix: a.p, q, v: 0, m: "lbcneuf", pourquoi: "Same evening: post it on Leboncoin too." });
-    else if (!surLbc) L.push({ k: "lbcnew-" + s, type: "lbc", pf: "Leboncoin", a, it, titre: a.t, prix: a.p, q, v, m: "lbc", pourquoi: "Posted on Vinted. Now the Leboncoin copy." });
+    else if (!surLbc && !attend) L.push({ k: "lbcnew-" + s, type: "lbc", pf: "Leboncoin", a, it, titre: a.t, prix: a.p, q, v, m: "lbc", pourquoi: "Posted on Vinted. Now the Leboncoin copy." });
   }
   // Figurines rattachées à un set découpé, pas encore vendues et publiées nulle part
   for (const x of (PO && PO.sets) || []){
