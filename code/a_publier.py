@@ -93,6 +93,10 @@ def main():
                     lbc_en_ligne[n] = min(float(a["p"]), lbc_en_ligne.get(n, 1e9))
     except Exception:
         pass
+    try:
+        forces = json.loads((APP / "prix_forces.json").read_text())
+    except (OSError, ValueError):
+        forces = {}
     out = {}
     for s, c in couts.items():
         r = ref.get(s, {})
@@ -109,6 +113,9 @@ def main():
         e = ebay_vivantes.get(s)
         if e and not pa["plafonne"] and not douteux and float(e) > (prix or 0):
             prix = float(max(5 * math.floor(float(e) / 5), prix or 0))
+        # Prix décidé par toi (stock/app/prix_forces.json) : il passe avant le calcul, jamais sous le mini
+        if s in forces and forces[s].get("prix"):
+            prix = float(max(forces[s]["prix"], pa["mini"] or 0))
         # Pour choisir « poster maintenant » ou « garder » : revente rapide, revente après retraite, date de retraite
         conseil = {"be": (be.get(s + "-1") or {}).get("date") if (be.get(s + "-1") or {}).get("valeur_neuf") else None,
                    "src": r.get("fiabilite") or "",
