@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="c9bb01597c"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="4d0706da1f"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -2048,12 +2048,12 @@ const boiteNeuve = (a) => ETAT_NEUF.test(a.d) || scelleBase(a);
    (+40 % brut sur l'achat), sinon vers le haut. Sous 10 €, à l'euro. */
 function rond5(p, plancher){
   p = +p || 0; if (!p) return p;
-  if (p < 10) return Math.round(p);
+  if (p < 30) return Math.round(p);   // petits prix à l'euro (13/11 : 23 € garde de la place pour négocier)
   const bas = 5 * Math.floor(p / 5 + 1e-9);
   return bas >= (+plancher || 0) ? bas : 5 * Math.ceil(p / 5 - 1e-9);
 }
 // Prix Leboncoin d'un set scellé : le prix de référence (eBay croisé, a_publier) s'il est plus haut que l'annonce Vinted
-const prixLbc = (a) => { const r = APUB[a.n]; return rond5(r && boiteNeuve(a) && (+r.prix || 0) > (+a.p || 0) ? r.prix : a.p, r?.plancher); };
+const prixLbc = (a) => { const r = APUB[a.n]; return rond5(r && boiteNeuve(a) && (+r.prix || 0) > (+a.p || 0) ? r.prix : a.p, r?.mini ?? r?.plancher); };
 const lbcTitre = (a) => boiteNeuve(a) && !/neuf\s*(&|et)\s*scell/i.test(a.t) ? a.t + " - Neuf & Scellé" : a.t;
 function lbc(a){
   const lignes = a.d.split("\n");
@@ -2757,6 +2757,8 @@ let PO = null;              // etat/decoupe : sets à découper, leurs figurines
 // Pas le bon moment de vendre : encore vendu par LEGO et la revente rapide ne passe pas ton floor
 function pasLeMoment(s){
   const P = APUB[s] || {};
+  // 13/11 : a_publier dit lui-même quand l'annonce sous le prix LEGO ne passe pas le mini (+40 % sur le coût)
+  if ("mini" in P) return !!P.garder && !P.douteux && dateGarde(P.retrait || "") > new Date().toISOString().slice(0, 10);
   return P.st === "en vente" && !P.douteux && P.rapide > 0 && P.cout > 0 && P.rapide < P.cout * PLANCHER && dateGarde(P.retrait || "") > new Date().toISOString().slice(0, 10);
 }
 function listeActions(){
@@ -2865,7 +2867,7 @@ function listeActions(){
   rang.lbcneuf = 99;
   for (const x of L) if (x.type !== "retirer" && x.prix && !x.fig){
     const n = (x.a && x.a.n) || (x.it && x.it.s);
-    const r = rond5(x.prix, APUB[n]?.plancher);
+    const r = rond5(x.prix, APUB[n]?.mini ?? APUB[n]?.plancher);
     // une baisse reste une baisse : jamais au-dessus du prix actuel
     x.prix = x.type === "baisse" && x.avant && r >= x.avant ? 5 * Math.floor((x.avant - 1) / 5) : r;
   }
@@ -2933,9 +2935,10 @@ function detailPrix(P){
   const mois = (d) => new Date(d).toLocaleDateString("en-GB", { month: "short", year: "numeric" });
   const calc = P.douteux ? `Check: the cost in the database (${eur(P.cout)}) looks like a whole lot, not this set alone. Price = estimate.`
     : !P.estime ? (P.cout ? `No estimate: price = your floor.` : `Free gift: usual resale value.`)
+    : P.mini && P.st === "en vente" && P.pp ? `Still sold by LEGO: listed at about 88 % of the LEGO price (${eur(P.pp)}), so buyers have room to make an offer${P.garder ? `. That stays under your minimum: keep it until retirement` : ""}.`
     : `Estimate ${eur(P.estime)} (same as Telegram) + 15 % room for offers${P.plafonne ? `, capped so price + Vinted fees + postage stays under the LEGO price (${eur(P.pp)})` : P.prix <= P.plancher + 5 && P.estime * 1.15 < P.plancher ? `, raised to your floor` : ""}.`;
   const v = P.vendus && P.vendus.length ? `<div class="sub">Your past sales: ${P.vendus.slice().reverse().map((x) => `<b>${eur(x[1])}</b> (${mois(x[0])}, ${esc(x[2])})`).join(" · ")}</div>` : `<div class="sub">Never sold this set yet.</div>`;
-  const c = P.cout != null ? `<div class="sub pf-petit">Bought at ${P.cout ? eur(P.cout) : "0 € (free gift)"}${P.plancher ? ` · floor ${eur(P.plancher)}` : ""}</div>` : "";
+  const c = P.cout != null ? `<div class="sub pf-petit">Bought at ${P.cout ? eur(P.cout) : "0 € (free gift)"}${P.mini ? ` · <b>never accept under ${eur(P.mini)}</b> (+40 %)` : P.plancher ? ` · floor ${eur(P.plancher)}` : ""}</div>` : "";
   return `<div class="sub">${calc}</div>${v}${c}`;
 }
 // Prix en ligne par plateforme vs prix conseillé (le vendeur 03/11) : rouge si plus de 5 € sous le prix conseillé

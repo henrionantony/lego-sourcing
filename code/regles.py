@@ -119,6 +119,8 @@ PORT_ACHETEUR_KG = [(1, 4.0), (2, 5.5), (5, 7.5), (10, 10.0)]
 # Encore en vente chez LEGO : l'acheteur doit payer au moins 10 % de moins que chez LEGO
 # (port compris), sinon il achète neuf là-bas (promos, points Insiders).
 REMISE_CATALOGUE = 0.90
+# Prix d'annonce maximum d'un set au catalogue = prix LEGO × ça (13/11 : marge de négo, toujours sous le prix LEGO).
+ANNONCE_CATALOGUE = 0.88
 
 
 def port_acheteur(set_num=None) -> float:
@@ -193,11 +195,33 @@ def prix_annonce(estime: float, cout: float, prix_public=None, au_catalogue: boo
     depart = estime * PRIX_DEPART
     prix = max(depart, plancher, PRIX_MIN, GWP_DEFAUT if cout == 0 and not estime else 0)
     prix = arr(prix) if prix else None
-    cap = plafond_catalogue(prix_public, set_num) if au_catalogue else None
+    # Mini de négociation : coût × MARGE_BRUTE_PLANCHER, jamais relâché par le reste de l'achat
+    # (13/11 : on vise le meilleur net par vente).
+    mini = float(math.ceil(cout * MARGE_BRUTE_PLANCHER)) if cout else None
+    if mini and prix and prix < mini:
+        prix = arr(mini)
+    cap = plafond_annonce(prix_public) if au_catalogue else None
     plafonne = bool(prix and cap and prix > cap)
+    if cap and prix and cap >= (mini or 0):
+        prix = cap          # au catalogue : on vise le haut de la fourchette, la négo descend vers le mini
+    garder = False
     if plafonne:
-        prix = max(cap, float(math.ceil(plancher)))
-    return {"prix": prix, "depart": round(depart, 2), "plancher": round(plancher, 2), "cap": cap, "plafonne": plafonne}
+        # Encore au catalogue : annonce sous le prix LEGO avec de la place pour négocier ;
+        # si même là on passe sous le mini, on garde le set jusqu'à son retrait.
+        garder = bool(mini and cap < mini)
+        prix = max(cap, mini or 0)
+    return {"prix": prix, "depart": round(depart, 2), "plancher": round(plancher, 2), "mini": mini,
+            "cap": cap, "plafonne": plafonne, "garder": garder}
+
+
+def plafond_annonce(prix_public) -> float | None:
+    """Prix d'annonce maximum d'un set encore au catalogue : prix LEGO × ANNONCE_CATALOGUE,
+    au 5 € du dessous dès 30 € (prix ronds), à l'euro en dessous. L'écart avec le mini sert à négocier."""
+    import math
+    if not prix_public or prix_public != prix_public:
+        return None
+    p = float(prix_public) * ANNONCE_CATALOGUE
+    return float(math.floor(p / 5) * 5) if p >= 30 else float(math.floor(p))
 
 
 # Trésorerie disponible quand la base ne la donne pas (table « tresorerie »).

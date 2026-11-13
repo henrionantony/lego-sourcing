@@ -118,7 +118,7 @@ def main():
                    "pivot": float(r.get("pv_pivot") or 0) or None, "pivot_le": r.get("pivot_le") or ""}
         out[s] = {"prix": prix, "ebay": regles.prix_ebay(prix) if prix else None, "estime": round(estime, 2) or None, **conseil,
                   "cout": round(cout, 2), "plancher": pa["plancher"], "pp": float(r.get("prix_public") or 0) or None,
-                  "plafonne": pa["plafonne"], "vendus": vendus.get(s, [])[-5:], "etat": c[0][1], **({"douteux": True} if douteux else {}),
+                  "plafonne": pa["plafonne"], "mini": pa["mini"], **({"garder": True} if pa["garder"] else {}), "vendus": vendus.get(s, [])[-5:], "etat": c[0][1], **({"douteux": True} if douteux else {}),
                   "pf": {k: v for k, v in (("eb", ebay_vivantes.get(s)), ("vi", vinted_en_ligne.get(s)), ("lb", lbc_en_ligne.get(s))) if v}}
     SORTIE.write_text(json.dumps(out, ensure_ascii=False))
     pp = lambda s: float(ref.get(s, {}).get("prix_public") or 0) or None
