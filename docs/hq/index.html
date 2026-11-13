@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="4d0706da1f"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="7fb2bbeb63"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -954,7 +954,9 @@ dialog.confirmer::backdrop{background:rgba(0,0,0,.45)} dialog.confirmer p{margin
 const EAN = __EAN__;
 const BUILD = __BUILD__;  // date de construction de la page : les quantités de ITEMS datent de là  // code-barres (EAN-13, UPC complété d'un 0) -> numéro de set Brickset
 const ITEMS = __ITEMS__;
-const ANNONCES = __ANNONCES__;  // annonces Vinted en ligne ou masquées, texte Vinted
+const ANNONCES = __ANNONCES__;
+// 13/11 (le vendeur) : dernière annonce vendue par set, pour reposter un autre exemplaire avec ses photos et son texte
+const VENDUES = __VENDUES__;  // annonces Vinted en ligne ou masquées, texte Vinted
 const PLANCHES = __PLANCHES__;
 const LBC = __LBC__;
 const ANN_DATE = __ANNDATE__;  // date de l'export Vinted affiché
@@ -2589,6 +2591,8 @@ function annonceNeuve(it){
   const tags = ["#lego", "#" + sansAccent(gamme).replace(/[^a-z0-9]/g, ""), "#" + it.s, "#legocollection"].filter((x) => x.length > 1);
   const t = `LEGO ${gamme} - Set ${casseTitre(nom)} - ${it.s}`;
   const d = `🔔 Vends set LEGO ${it.s} - ${nom} de la gamme LEGO ${gamme}.\n\nℹ️ Prix ferme\n\n🎁 Parfait pour compléter une collection/offrir.\n\n✅ Etat : ${etat}\n\n📦 Envoi soigné\n\n${tags.join(" ")}`;
+  const v = VENDUES[it.s];
+  if (v) return { id: v.id, t: v.t, d: v.d, n: it.s, p: APUB[it.s]?.prix || null, ph: v.ph || [], pu: v.pu, u: "", s: "nouveau", vendue: true };
   return { id: "n" + it.s, t, d, n: it.s, p: APUB[it.s]?.prix || null, ph: [], u: "", s: "nouveau" };
 }
 function annonceFig(x, f){
@@ -2652,12 +2656,15 @@ function famille(x){
   return a.g === "Minifigures" || RX_FIG.test(a.t || x.titre || "") ? "figs" : "sets";
 }
 // Nouveau = figurine de part-out, ou set reçu acheté depuis moins de NOUVEAU_JOURS (le vieux stock jamais publié passe après le bloc)
-const NOUVEAU_JOURS = 30, MISSION_V = 4, MISSION_LBC = 10;  // MISSION_V : changer la règle refait la mission du jour
+const NOUVEAU_JOURS = 30, MISSION_V = 5, MISSION_LBC = 10;  // MISSION_V : changer la règle refait la mission du jour
 const estNouveau = (x) => x.m === "figs" || (x.m === "achats" && (x.d || "") >= plusJours(jourLocal(), -NOUVEAU_JOURS));
 // le vendeur 24/10 : tant que son stock n'est pas remis à jour, pas de sets d'occasion ni de City Stuntz dans les missions
 const SANS_OCCASION = true, EXCLUS = /stuntz/i;
+// le vendeur 13/11 : figurines en pause, les missions du soir ne proposent que des sets
+const FIGS_PAUSE = true;
 function horsMission(x){
   if (EXCLUS.test(x.titre || x.a?.t || "")) return true;
+  if (FIGS_PAUSE && famille(x) === "figs") return true;
   if (!SANS_OCCASION || famille(x) !== "sets") return false;
   if (x.k.startsWith("new-") || x.k.startsWith("lbcnew-")) { const e = APUB[x.it?.s]?.etat || ""; return !!e && !/SCELL/i.test(e); }
   if (!x.a || boiteNeuve(x.a)) return false;
@@ -2805,7 +2812,7 @@ function listeActions(){
     const v = (APUB[s]?.prix || APUB[s]?.estime || e.pp || 0) * q;
     const sansChoix = copies.filter((c) => !c[5]).map((c) => c[0]);
     if (!pfaits["new-" + s]) L.push({ k: "new-" + s, type: "publier", pf: "Vinted", a, it, titre: a.t, prix: a.p, q, d, v, m: attend ? "attente" : d >= DERNIERE_VENTE ? "achats" : "ancien", choix: sansChoix,
-      pourquoi: attend ? `${q > 1 ? q + " in stock" : "In stock"}, bought ${d || "?"}. Still sold by LEGO: selling now would not reach your floor.` : `${q > 1 ? q + " in stock" : "In stock"}, bought ${d || "?"}, ${surLbc ? "on Leboncoin only. Post it on Vinted too." : "listed nowhere. Post it on Vinted first."}` });
+      pourquoi: attend ? `${q > 1 ? q + " in stock" : "In stock"}, bought ${d || "?"}. Still sold by LEGO: selling now would not reach your floor.` : `${q > 1 ? q + " in stock" : "In stock"}, bought ${d || "?"}, ${surLbc ? "on Leboncoin only. Post it on Vinted too." : "listed nowhere. Post it on Vinted first."}${a.vendue ? " Same title, text and photos as the copy you sold: save the photos below." : ""}` });
     if (!pfaits["new-" + s] && !surLbc && !attend) L.push({ k: "lbcnew-" + s, type: "lbc", pf: "Leboncoin", a, it, titre: a.t, prix: a.p, q, v: 0, m: "lbcneuf", pourquoi: "Same evening: post it on Leboncoin too." });
     else if (!surLbc) L.push({ k: "lbcnew-" + s, type: "lbc", pf: "Leboncoin", a, it, titre: a.t, prix: a.p, q, v, m: "lbc", pourquoi: "Posted on Vinted. Now the Leboncoin copy." });
   }
