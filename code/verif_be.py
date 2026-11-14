@@ -59,12 +59,13 @@ def main(essai: bool):
             continue
         ref.loc[i, ["be_fr", "be_tendance"]] = [bf, bt]
         freins = []
-        if bf / prix < regles.MARGE_BRUTE_PLANCHER:
+        pl = regles.plancher(lego_com="lego" in str(d.get("lien") or "").lower() and "(lego" in str(d.get("titre") or "").lower())
+        if bf / prix < pl:
             freins.append(f"la cote BrickEconomy ne laisse que {bf / prix - 1:+.0%} brut, sous ton plancher")
         if bt is not None and bt <= alertes.BAISSE_COTE:
             freins.append(f"sa cote baisse ({bt:.0%} sur 6 mois)")
         print(f"{s} à {prix} € : cote France {bf} €, tendance {bt} → {freins or 'ok'}")
-        if freins and bf / prix < regles.MARGE_BRUTE_PLANCHER:
+        if freins and bf / prix < pl:
             texte = (f"👎 Correction : {d['titre']} à {alertes.euros(prix)}\n"
                      f"Finalement pas un bon coup : {' ; '.join(freins)}.\n{d.get('lien') or ''}")
             alertes.telegram(texte, sonne=False, essai=essai)

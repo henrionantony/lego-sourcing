@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="3201306046"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="59370479aa"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -1129,7 +1129,8 @@ function rendreHome(){
     <div class="panel">${t ? `<div class="lbl">Cash available</div><div class="big">${eur(t.solde)}</div>
       <div class="sub">${t.a_rendre > 0 ? `Includes ${eur(t.a_rendre)} to pay back to yourself · ` : ""}20 % kept aside, 10 % for a real opportunity</div>
       ${Object.entries(t.dus || {}).map(([k, v]) => `<div class="sub">Includes ${eur(v)} owed to ${esc(k)} (their share of shared sales, to give back by 30 Sep 2027)</div>`).join("")}
-      ${t.impots > 0 ? `<div class="sub">Includes ${eur(t.impots)} to keep for URSSAF and taxes (next payment ${new Date(t.impots_le).toLocaleDateString("en-GB", { day: "numeric", month: "short" })})</div>` : ""}`
+      ${t.urssaf > 0 ? `<div class="sub">Includes ${eur(t.urssaf)} to pay URSSAF on ${new Date(t.impots_le).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</div>` : ""}
+      ${t.impots > 0 ? `<div class="sub">Includes ${eur(t.impots)} for income tax (paid next year)</div>` : ""}`
       : `<div class="lbl">Not set up yet</div><div class="sub">Alerts can't check your cash until the starting balance is in the database.</div>`}</div>
     <h2 class="sec">Automations</h2><div class="panel">${autos}</div>`;
 }

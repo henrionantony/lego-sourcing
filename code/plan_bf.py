@@ -23,7 +23,7 @@ from referentiel import CACHE, DATA, charger
 ICI = Path(__file__).resolve().parent
 LEGO = ICI.parent
 SORTIE = LEGO / "black-friday"
-PLANCHER = regles.MARGE_BRUTE_PLANCHER - 1   # marge brute mini par transaction (réglage privé)
+PLANCHER = regles.plancher(lego_com=True, x=2) - 1   # marge brute mini par transaction, abaissée par les points ×2 (14/11)
 REMISES = [0, 0.20, 0.30]
 PTS_PAR_EURO = 7.5 * 2    # points Insiders doublés au Black Friday
 EURO_PAR_PT = 5 / 750

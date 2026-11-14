@@ -233,7 +233,7 @@ MARGE_BRUTE_PLANCHER = 1.30       # prix plancher d'annonce tant que le lot n'es
 # Points Insiders : 750 points = 5 € de bon. Une boîte payée en points doit rapporter
 # au moins FACTEUR_POINTS fois la valeur des points dépensés (vraie valeur dans le fichier privé).
 POINTS_PAR_EURO = 150.0
-FACTEUR_POINTS = 2.0
+FACTEUR_POINTS = 1.4   # 14/11 : 100 € de points doivent rapporter 140 €, comme de l’argent
 PRIX_DEPART = 1.15                # prix de départ d'une nouvelle annonce = estimation × ça, puis −5 % / 30 j jusqu'au plancher
 TELEGRAM_CHAT_ID = None           # destinataire des alertes (privé)
 # Part de la trésorerie qu'un deal peut engager : PART_MAX_DEAL pour un deal
@@ -316,6 +316,30 @@ def caisse_utilisable(tresor: dict, garde: bool, opportunite: bool) -> float:
     # une vraie opportunité peut y toucher.
     bloque = 0.0 if opportunite or apport_ouvert else tresor.get("a_rendre", 0)
     return max(0.0, tresor["solde"] - bloque - (RESERVE_OPPORTUNITE if opportunite else RESERVE) * (capital - bloque))
+
+
+# Points Insiders sur LEGO.com (14/11) : on ne les déduit jamais du prix d'achat, mais
+# quand ils sont multipliés (×2, ×4), un set un peu sous le plancher reste intéressant.
+# 7,5 points par euro, 750 points = 5 € : 5 % du prix en points normaux. On compte
+# 40 % des points EN PLUS du normal (prudence : il faut les dépenser ensuite).
+POINTS_PART_PRIX = 7.5 * 5 / 750
+POINTS_PART_COMPTEE = 0.4
+# Périodes de points multipliés connues (du, au, multiplicateur), à tenir à jour
+POINTS_X = [("2026-11-21", "2026-11-22", 2)]
+
+
+def points_x(jour=None) -> int:
+    j = str(jour or dt.date.today())[:10]
+    return max([x for du, au, x in POINTS_X if du <= j <= au] or [1])
+
+
+def plancher(lego_com: bool = False, jour=None, x: int | None = None) -> float:
+    """Marge brute plancher (prix de vente / prix d'achat), abaissée sur LEGO.com
+    quand les points Insiders sont multipliés : ×2 → ~+37 %, ×4 → ~+32 %."""
+    if not lego_com:
+        return MARGE_BRUTE_PLANCHER
+    x = x or points_x(jour)
+    return MARGE_BRUTE_PLANCHER * (1 - POINTS_PART_COMPTEE * POINTS_PART_PRIX * (x - 1))
 
 
 def _charger_parametres():

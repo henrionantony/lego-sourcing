@@ -101,6 +101,7 @@ def tresorerie():
     # comptes jusqu'à l'échéance URSSAF / impôts : on le compte dans le cash, et
     # « impots » dit combien garder ; un paiement (type urssaf ou impots) le fait sortir.
     from regles import PRELEVEMENTS
+    TAUX_URSSAF = 0.125
     k = PRELEVEMENTS / (1 - PRELEVEMENTS)
     ids = [str(l["vente_id"]) for l in lignes if l["type"] == "vente" and l.get("vente_id")]
     frais = {}
@@ -109,7 +110,11 @@ def tresorerie():
             frais[str(v["id"])] = float(v["frais_envoi"] or 0)
     preleve = sum((float(l["montant"]) + frais.get(str(l.get("vente_id")), 0.0)) * k
                   for l in lignes if l["type"] == "vente")
-    paye = -sum(float(l["montant"]) for l in lignes if l["type"] in ("urssaf", "impots") and str(l.get("le") or "") > "2026-10-31")
+    # Part URSSAF : taux micro-entreprise vente de biens (12,5 % constaté),
+    # le reste des 21 % est l'impôt sur le revenu, payé l'année suivante.
+    urssaf = preleve * TAUX_URSSAF / PRELEVEMENTS
+    paye_u = -sum(float(l["montant"]) for l in lignes if l["type"] == "urssaf" and str(l.get("le") or "") > "2026-10-31")
+    paye_i = -sum(float(l["montant"]) for l in lignes if l["type"] == "impots" and str(l.get("le") or "") > "2026-10-31")
     solde = round(solde + preleve, 2)
     import datetime as _dt
     auj = _dt.date.today()
@@ -126,7 +131,7 @@ def tresorerie():
             m = re.match(r"\s*(?:À rendre|Rendu) à ([^:]+?)\s*:", str(l.get("libelle") or ""))
             nom = m.group(1) if m else "?"
             dus[nom] = round(dus.get(nom, 0.0) + float(l["montant"]), 2)
-    return {"solde": solde, "impots": round(max(preleve - paye, 0.0), 2), "impots_le": echeance.isoformat(), "a_rendre": max(a_rendre, 0.0), "capital": capital, "capital_propre": propre,
+    return {"solde": solde, "urssaf": round(max(urssaf - paye_u, 0.0), 2), "impots": round(max(preleve - urssaf - paye_i, 0.0), 2), "impots_le": echeance.isoformat(), "a_rendre": max(a_rendre, 0.0), "capital": capital, "capital_propre": propre,
             "dus": {k: v for k, v in dus.items() if abs(v) >= 0.01}}
 
 
