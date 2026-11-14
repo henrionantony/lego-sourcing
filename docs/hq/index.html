@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="696203224c"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="6b0dd0df3a"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -594,8 +594,8 @@ dialog.confirmer::backdrop{background:rgba(0,0,0,.45)} dialog.confirmer p{margin
 <section class="view" id="v-new" hidden>
   <form class="sale nad-f" id="nad-f" autocomplete="off">
     <h2 class="scan-titre">Write a new ad</h2>
-    <p class="sub" style="margin:0">Type a set number or a minifig code: you get the Vinted and Leboncoin texts, written like your own ads, with the French set name and your price grid.</p>
-    <div class="nad-l"><input name="set" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Set or minifig, e.g. 75379 or njo778" aria-label="Set number or minifig code" enterkeyhint="go" required><button class="btn yes" type="submit">Write it</button></div>
+    <p class="sub" style="margin:0">Type a set number, several set numbers for a lot, or a minifig code: you get the Vinted and Leboncoin texts, written like your own ads, with the French set name and your price grid.</p>
+    <div class="nad-l"><input name="set" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Set, lot or minifig: 75379 · 40703 40704 · njo778" aria-label="Set number or minifig code" enterkeyhint="go" required><button class="btn yes" type="submit">Write it</button></div>
   </form>
   <div id="nad" aria-live="polite"></div>
 </section>
@@ -2335,6 +2335,7 @@ $("#ads").addEventListener("click", (e) => {
    cherché sur lego.com/fr-fr au passage suivant. */
 const nomsLive = {};
 let NAD = null;   // {s, fr, frSaisi, gamme, etat, prix}
+let NLOT = null;  // lot de sets : {sets: [{s, fr, en, gamme, prix, mini}], prix, somme, mini}
 const NAD_ETATS = [
   ["neuf", "Sealed (never opened)"], ["abime", "Sealed, box damaged"],
   ["occ-boite", "Used, complete, with box"], ["occ-sans", "Used, complete, no box"],
@@ -2396,6 +2397,7 @@ async function demanderNom(s){
   try { await db.doc("noms_fr/" + s).set({ demande: true, le: new Date().toISOString() }); } catch (e) { delete nomsLive[s]; }
 }
 function ouvrirNad(s){
+  NLOT = null;
   const i = infoSet(s);
   NAD = { ...i, frSaisi: false, etat: APUB[s]?.etat && !/SCELL/i.test(APUB[s].etat) ? "occ-boite" : "neuf",
     prix: APUB[s]?.prix || i.prix || "", stock: !!APUB[s] };
@@ -2454,6 +2456,7 @@ function formatFig(code){
   return m[1] + (PAD4.has(m[1]) ? m[2].padStart(4, "0") : m[2].padStart(3, "0")) + m[3];
 }
 function ouvrirFig(code){
+  NLOT = null;
   const ref = formatFig(code), f = FIGN[cleFig(ref)];
   const sets = (f ? f[3] : []).filter((s) => CAT[s] || NOMSFR[s]);
   const liste = PRIXFIGS[cleFig(ref)];
@@ -2510,9 +2513,59 @@ function majTextesFig(){
   const b = el.querySelectorAll(".adf .adv");
   ["vt", "vd", "lt", "ld"].forEach((k, i) => { if (b[i]) b[i].textContent = el._txt[k]; });
 }
+/* ---------- New ad pour un lot de sets (le vendeur 14/11) : plusieurs numéros -> une annonce « Lot Sets … » ----------
+   Prix proposé : somme des prix de ta liste moins 10 %, arrondi à 5 € en dessous, jamais sous la somme des minimums (+40 %). */
+function ouvrirLot(nums){
+  NAD = null; NFIG = null;
+  const sets = nums.map((s) => { const i = infoSet(s); return { ...i, prix: +(APUB[s]?.prix || i.prix || 0), mini: +(APUB[s]?.mini || 0) }; });
+  sets.filter((x) => x.connu && !x.fr).forEach((x) => demanderNom(x.s));
+  const somme = sets.reduce((a, x) => a + x.prix, 0), mini = sets.reduce((a, x) => a + x.mini, 0);
+  const prop = Math.max(Math.floor(somme * 0.9 / 5) * 5, Math.ceil(mini / 5) * 5);
+  NLOT = { sets, somme, mini, prix: prop || "" };
+  rendreLot();
+}
+function gammeLot(){
+  const g = NLOT.sets.map((x) => (x.gamme || "").replace(/^LEGO\s+/i, "").split("/")[0].trim()).filter(Boolean);
+  return g.length && g.every((x) => x === g[0]) ? g[0] : "";
+}
+function titreLot(){
+  const g = gammeLot();
+  return `LEGO ${g ? g + " - " : ""}Lot Sets ${listeEt(NLOT.sets.map((x) => x.s))}`;
+}
+function texteLot(){
+  const g = gammeLot();
+  const noms = NLOT.sets.map((x) => `- ${casseTitre(x.fr || x.en || "Set")} (${x.s})`);
+  const L = [`🔔 Vends un lot de ${NLOT.sets.length} sets LEGO${g ? " " + g : ""} :\n${noms.join("\n")}`,
+    "✅ Etat : Jamais ouvert (boîtes neuves)", "💰 Moins cher que les sets achetés séparément.",
+    "🎁 Parfait pour compléter une collection/offrir.", "📦 Envoi soigné"];
+  const tags = ["lego", g ? colle(g) : "", "lot", "legocollection", ...NLOT.sets.map((x) => colle(x.fr || x.en || ""))];
+  L.push([...new Set(tags.filter((t) => t && t.length <= 30))].slice(0, 8).map((t) => "#" + t).join(" "));
+  return L.join("\n\n");
+}
+function rendreLot(){
+  const o = NLOT, el = $("#nad");
+  const v = { t: titreLot(), d: texteLot() };
+  const lb = { t: lbcTitre(v), d: lbc(v) };
+  el.innerHTML = `<article class="nad">
+    <div class="nad-id"><b>Lot of ${o.sets.length} sets</b></div>
+    <ul class="tls">${o.sets.map((x) => `<li class="tl"><div class="tlh"><span><b>${esc(x.s)}</b> ${esc(x.fr || x.en || (x.connu ? "" : "unknown set number"))}</span><span class="sub">${x.prix ? eur(x.prix) : "no price"}${x.mini ? " · min " + eur(x.mini) : ""}</span></div></li>`).join("")}</ul>
+    <div class="sale"><label>Lot price (€)<input id="nl-p" type="number" inputmode="decimal" min="0" step="1" value="${esc(o.prix)}"></label>
+      <p class="sub nad-src">Separately: ${eur(o.somme)}. Proposed: 10 % less, rounded down to 5 €${o.mini ? `, never under ${eur(o.mini)} (your +40 % floor for the ${o.sets.length} sets)` : ""}.</p></div>
+    ${blocNad("Vinted title", v.t, "vt")}${blocNad("Vinted text", v.d, "vd", true)}
+    ${blocNad("Leboncoin title", lb.t, "lt")}${blocNad("Leboncoin text", lb.d, "ld", true)}
+    <div class="adbtns"><button class="btn" type="button" data-n="prix">Copy price</button>
+      <a class="btn" href="https://www.vinted.fr/items/new" target="_blank" rel="noopener">Open Vinted ↗</a>
+      <a class="btn" href="https://www.leboncoin.fr/deposer-une-annonce" target="_blank" rel="noopener">Open Leboncoin ↗</a></div>
+    <p class="sub">Use the photos of the single-set listings. When one set of the lot sells, take the lot listing down.</p>
+  </article>`;
+  el._txt = { vt: v.t, vd: v.d, lt: lb.t, ld: lb.d };
+}
 $("#nad-f").addEventListener("submit", (e) => {
   e.preventDefault();
   const brut = e.target.set.value.trim();
+  NLOT = null;
+  const plusieurs = [...new Set(brut.match(/\b\d{4,7}\b/g) || [])];
+  if (plusieurs.length > 1){ e.target.set.blur(); ouvrirLot(plusieurs); return; }
   if (/^[a-z]{2,5}\d{2,4}[a-z]?$/i.test(brut)){ e.target.set.blur(); ouvrirFig(brut); return; }
   NFIG = null;
   const s = (brut.match(/\d{3,7}/) || [""])[0];
@@ -2521,6 +2574,10 @@ $("#nad-f").addEventListener("submit", (e) => {
   ouvrirNad(s);
 });
 $("#nad").addEventListener("input", (e) => {
+  if (NLOT){
+    if (e.target.id === "nl-p"){ NLOT.prix = e.target.value; }
+    return;
+  }
   if (NFIG){
     const id = e.target.id;
     if (id === "nf-n") NFIG.nom = e.target.value.trim();
@@ -2557,8 +2614,9 @@ function majTextesNad(){
   ["vt", "vd", "lt", "ld"].forEach((k, i) => { if (b[i]) b[i].textContent = el._txt[k]; });
 }
 $("#nad").addEventListener("click", async (e) => {
-  const b = e.target.closest("[data-n]"); if (!b || (!NAD && !NFIG)) return;
+  const b = e.target.closest("[data-n]"); if (!b || (!NAD && !NFIG && !NLOT)) return;
   const k = b.dataset.n;
+  if (NLOT){ if (k === "prix") return copier(String(NLOT.prix || "").replace(".", ","), b); return copier($("#nad")._txt[k], b); }
   if (NFIG){ if (k === "prix") return copier(String(NFIG.prix || "").replace(".", ","), b); return copier($("#nad")._txt[k], b); }
   if (k === "prix") return copier(String(NAD.prix || "").replace(".", ","), b);
   if (k === "nom"){
