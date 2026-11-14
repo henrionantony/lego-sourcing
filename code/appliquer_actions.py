@@ -191,6 +191,13 @@ def enregistrer_achat(a, id_set, designation, prix_unite, lieu, note, categorie=
 
 def vire(a):
     """Cagnotte reversée du compte perso vers le compte pro."""
+    # Déjà reversée en entier (bouton rejoué) : ne rien compter deux fois
+    deja = sum(float(m["montant"] or 0) for m in base.lire(
+        "tresorerie", f"select=montant&libelle=like.Cagnotte*&achat_id=eq.{int(a['achat_id'])}&limit=1000"))
+    du = sum(float(x["cagnotte"] or 0) for x in base.lire(
+        "articles", f"select=cagnotte&cagnotte=gt.0&achat_id=eq.{int(a['achat_id'])}&limit=1000"))
+    if du and deja >= du - 0.01:
+        return
     caisse(a.get("le", dt.date.today().isoformat()), float(a["montant"]), REVERSEE + f" (commande {int(a['achat_id'])})",
            achat_id=int(a["achat_id"]))
 
@@ -606,8 +613,20 @@ def vitrine_rembourse(a):
             return
 
 
+def du_perso_regle(a):
+    """Le compte LEGO a remboursé le perso (déjà compté dans la trésorerie)."""
+    import dus_perso
+    dus_perso.regler(a["du"], a.get("le"))
+
+
+def solde_virements(a):
+    """Un seul virement net solde toutes les lignes de la carte « Money to move »."""
+    for l in a.get("lignes") or []:
+        GESTES[l["type"]]({**l, "le": a.get("le")})
+
+
 URSSAF = Path(__file__).resolve().parent.parent / "stock" / "urssaf.json"
-GESTES = {"perte": perte, "stock_trouve": noter_scan, "expedition": noter_scan, "colis_lien": colis_lien, "recu": recu, "cashback_recu": cashback_recu, "cashback_confirme": cashback_confirme, "achete": achete, "achat_libre": achat_libre, "vente": vente, "vente_lot": vente_lot, "vire": vire, "corrige": corrige, "supprime": supprime, "figs_lier": figs_lier, "figs_ajouter": figs_ajouter, "horizon": horizon, "urssaf_paye": urssaf_paye, "vitrine": vitrine, "vitrine_rembourse": vitrine_rembourse, "emplacement": emplacement, "strategie": strategie}
+GESTES = {"perte": perte, "stock_trouve": noter_scan, "expedition": noter_scan, "colis_lien": colis_lien, "recu": recu, "cashback_recu": cashback_recu, "cashback_confirme": cashback_confirme, "achete": achete, "achat_libre": achat_libre, "vente": vente, "vente_lot": vente_lot, "vire": vire, "corrige": corrige, "supprime": supprime, "figs_lier": figs_lier, "figs_ajouter": figs_ajouter, "horizon": horizon, "urssaf_paye": urssaf_paye, "vitrine": vitrine, "vitrine_rembourse": vitrine_rembourse, "du_perso_regle": du_perso_regle, "solde_virements": solde_virements, "emplacement": emplacement, "strategie": strategie}
 
 
 def appliquer(liste: list[dict]) -> dict:

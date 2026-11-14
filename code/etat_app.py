@@ -17,6 +17,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import base
+import dus_perso
 import mails
 from regles import PRELEVEMENTS
 
@@ -331,6 +332,50 @@ def virements_dus() -> dict[int, list]:
     return dus
 
 
+def compenser_virements(out: list) -> None:
+    """Une seule carte « Money to move » dans les deux sens : ce que le perso doit au
+    compte LEGO (cagnottes, vitrines) moins ce que le compte LEGO doit au perso
+    (dus_perso), pour ne faire qu'un virement du montant net."""
+    try:
+        dus = dus_perso.ouverts()
+    except Exception:
+        dus = []
+    vir = next((c for c in out if c["id"] == "virements"), None)
+    if not dus and not vir:
+        return
+    if not vir:
+        vir = {"id": "virements", "type": "transfert", "lignes": []}
+        out.append(vir)
+    vers_pro = round(sum(float(l["action"].get("montant") or 0) for l in vir["lignes"]), 2)
+    for l in vir["lignes"]:
+        l["sous"] = "personal → LEGO account" + (f" · {l['sous']}" if l.get("sous") else "")
+    for d in sorted(dus, key=lambda x: str(x.get("d")), reverse=True):
+        vir["lignes"].append({"id": d["id"], "d": d.get("d"), "titre": f"{eur(d['montant'])} · {d['titre']}",
+                              "sous": "LEGO account → personal" + (f" · {d['sous']}" if d.get("sous") else ""),
+                              "action": {"type": "du_perso_regle", "du": d["id"], "montant": d["montant"], "label": "Transferred"}})
+    vers_perso = round(sum(float(d["montant"]) for d in dus), 2)
+    net = round(vers_pro - vers_perso, 2)
+    if net > 0:
+        vir["titre"] = f"Move {eur(net)} from your personal account to the LEGO account"
+    elif net < 0:
+        vir["titre"] = f"Move {eur(-net)} from the LEGO account to your personal account"
+    else:
+        vir["titre"] = "Your two accounts are even: nothing to move"
+    if vers_pro and vers_perso:
+        vir["detail"] = (f"Your personal account owes the LEGO account {eur(vers_pro)}, and the LEGO account owes "
+                         f"your personal account {eur(vers_perso)}. One transfer of {eur(abs(net))} settles everything.")
+        # Un seul bouton pour tout solder : les lignes ne servent plus qu'au détail
+        vir["action"] = {"type": "solde_virements", "montant": net, "label": f"Done: {eur(abs(net))} moved" if net else "Mark as settled",
+                         "lignes": [{k: v for k, v in l["action"].items() if k != "label"} | {"id": l["id"]} for l in vir["lignes"]]}
+        for l in vir["lignes"]:
+            l.pop("action", None)
+        # Nouvel id si les lignes changent : un ancien « Done » ne masque pas la nouvelle carte
+        vir["id"] = "virements-" + "-".join(sorted(str(l["id"]) for l in vir["lignes"]))[:120]
+    elif vers_perso:
+        vir["detail"] = ("The LEGO account owes your personal account this money (already counted in the cash). "
+                         "Tap Transferred for each line once the money is moved.")
+
+
 # Commandes sans nouvelles depuis trop longtemps (remplie par a_regulariser, envoyée sur Telegram par main)
 RETARDS: list[dict] = []
 # Jours sans nouvelles avant d'alerter, selon la dernière étape connue
@@ -557,6 +602,7 @@ def a_regulariser(obj: dict) -> list[dict]:
         out.remove(vit)
     elif vit:
         vit["id"] = "virements"
+    compenser_virements(out)
     u = urssaf()
     if u:
         out.insert(0, u)   # au premier plan

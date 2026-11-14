@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="59370479aa"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="696203224c"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -1160,7 +1160,7 @@ function rendreTodo(){
     const a = actions[t.id];
     if (t.lignes){
       const li = t.lignes.filter((x) => !(actions[x.id] && actions[x.id].fait));
-      if (!li.length) return "";
+      if (!li.length || (t.action && a && a.fait)) return "";
       const ligne = (x) => { const ax = actions[x.id];
         return `<li class="tl${x.pret ? " pret" : ""}" data-lid="${esc(x.id)}"><div class="tlh"><span>${x.pret ? `<span class="pill warn">📦 Pick up</span> ` : ""}<b>${esc(x.titre)}</b>${x.sous ? ` <span class="sub">· ${esc(x.sous)}</span>` : ""}</span>
           ${x.action ? (ax ? `<span class="sent">✓ Noted</span>` : `<button class="btn yes" data-a="lig" ${db ? "" : "disabled"}>${esc(x.action.label)}</button>`) : ""}</div>
@@ -1176,7 +1176,9 @@ function rendreTodo(){
       const vus = li.slice(0, 3), reste = li.slice(3);
       return `<article class="task ${t.type}" data-id="${t.id}"><div class="kind">${GENRE[t.type] || ""}</div><h3>${esc(t.titre)}</h3>
         <div class="sub">${esc(t.detail || "")}</div><ul class="tls">${vus.map(ligne).join("")}</ul>
-        ${reste.length ? `<details class="more"><summary>${reste.length} more</summary><ul class="tls">${reste.map(ligne).join("")}</ul></details>` : ""}</article>`;
+        ${reste.length ? `<details class="more"><summary>${reste.length} more</summary><ul class="tls">${reste.map(ligne).join("")}</ul></details>` : ""}
+        ${t.action ? `<div class="row">${a ? `<span class="sent">✓ Noted. The database is updated within the hour.</span>`
+          : `<button class="btn yes" data-a="act" ${db ? "" : "disabled"}>${esc(t.action.label)}</button>`}</div>` : ""}</article>`;
     }
     return `<article class="task ${t.type}${t.calme ? " calme" : ""}" data-id="${t.id}"><div class="kind">${GENRE[t.type] || ""}</div><h3>${esc(t.titre)}</h3>
       <div class="sub">${esc(t.detail || "")}</div>${t.articles ? `<ul>${t.articles.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
