@@ -229,7 +229,7 @@ def gain_net(ventes: list) -> tuple[float, float]:
     import csv
     from regles import MARGE_BRUTE_PLANCHER as M
     ids = sorted({int(v["article_id"]) for v in ventes if v.get("article_id")})
-    arts = {a["id"]: a for a in base.lire("articles", "select=id,id_set,prix_achat,quantite,offert&id=in.("
+    arts = {a["id"]: a for a in base.lire("articles", "select=id,id_set,prix_achat,quantite,offert,achat_plaisir&id=in.("
                                           + ",".join(map(str, ids)) + ")&limit=10000")} if ids else {}
     with open(ICI.parent / "data" / "referentiel.csv", newline="") as f:
         pp = {r["base"]: float(r["prix_public"]) for r in csv.DictReader(f) if r.get("prix_public")}
@@ -238,6 +238,8 @@ def gain_net(ventes: list) -> tuple[float, float]:
     for v in sorted(ventes, key=lambda v: v["date_vente"]):
         prix = float(v["prix_vente"] or 0)
         a = arts.get(v.get("article_id"))
+        if a and a.get("achat_plaisir") and prix == 0:
+            continue   # set perso offert (sorti du stock à 0 €) : hors calcul, régularisation plus tard (14/11)
         if not a:
             cout = prix / M
             estime += encaisse(v) - cout
