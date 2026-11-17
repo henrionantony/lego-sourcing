@@ -45,6 +45,17 @@ def gamme(titre: str) -> str:
     return g
 
 
+def numeros(titre: str) -> list[str]:
+    nums = re.findall(r"(?<!\w)(?<!\d[.,])(\d{4,7})(?:-\d)?(?!\w|[.,]\d)", titre)
+    nums = [x for x in nums if not 1949 <= int(x) <= 2030] or nums   # « … - 1999 » = l'année, pas le set
+    return [] if re.search(r"-\s*Figurine\b", titre) else nums
+
+
+def numero(titre: str) -> str:
+    n = numeros(titre)
+    return n[-1] if n else ""
+
+
 def construire() -> list[dict]:
     v = pd.read_csv(dernier("**/vinted_annonces_*.csv"), sep=";", dtype={"id": str}).fillna("")
     v = v[v.statut.isin(["en ligne", "masqué"])]
@@ -59,13 +70,34 @@ def construire() -> list[dict]:
     out = []
     for _, r in v.iterrows():
         desc = str(r.get("description") or "").strip() or textes.get(r.id) or texte_type(r.titre)
-        num = re.search(r"\b(\d{4,7})\b\s*$", r.titre)
+        # Numéro du set n'importe où dans le titre (« LEGO Ninjago 71834 – … », « … - 21037 - Rare ») : le dernier
+        # nombre de 4 à 7 chiffres collé à aucune lettre ; jamais pour une figurine seule. Un lot garde tous ses numéros (ns)
+        nums = numeros(r.titre)
+        num = nums[-1] if nums else None
         out.append({"id": r.id, "t": r.titre, "p": float(r.prix or 0), "s": r.statut, "u": r.url,
-                    "n": num.group(1) if num else "", "d": desc, "g": gamme(r.titre),
+                    "n": num or "", **({"ns": sorted(set(nums))} if len(set(nums)) > 1 else {}), "d": desc, "g": gamme(r.titre),
                     "type": not (str(r.get("description") or "").strip() or r.id in textes),
                     "ph": [p for p in str(r.get("photos") or "").split() if p],
                     "f": int(float(r.get("favoris") or 0))})
     prioriser(out)
+    return out
+
+
+def vendues() -> dict:
+    """Dernière annonce vendue de chaque set (une seule boîte, pas un lot) : quand il en reste
+    d'autres exemplaires, l'application la propose à reposter avec son titre, son texte et ses photos."""
+    v = pd.read_csv(dernier("**/vinted_annonces_*.csv"), sep=";", dtype={"id": str}).fillna("")
+    out = {}
+    for _, r in v[v.statut == "vendu"].iterrows():
+        nums = set(numeros(r.titre))
+        if len(nums) != 1 or re.search(r"\blot\b|figurine|minifig", r.titre, re.I):
+            continue
+        n = nums.pop()
+        if n in out and int(out[n]["id"]) > int(r.id):
+            continue
+        out[n] = {"id": r.id, "t": r.titre, "p": float(r.prix or 0), "s": "vendu", "u": r.url, "n": n,
+                  "d": str(r.get("description") or "").strip() or texte_type(r.titre), "g": gamme(r.titre),
+                  "ph": [p for p in str(r.get("photos") or "").split() if p]}
     return out
 
 
@@ -91,5 +123,7 @@ if __name__ == "__main__":
     a = construire()
     f = STOCK / "app" / "annonces.json"
     f.write_text(json.dumps(a, ensure_ascii=False))
+    vd = vendues()
+    (STOCK / "app" / "annonces_vendues.json").write_text(json.dumps(vd, ensure_ascii=False))
     print(f"{len(a)} annonces, {sum(not x['type'] for x in a)} avec ta description, "
           f"{sum(bool(x['ph']) for x in a)} avec photos → {f}")

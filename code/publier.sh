@@ -12,9 +12,29 @@ mkdir -p "$DEPOT/code"
 cp "$ICI"/*.py "$ICI"/*.sh "$DEPOT/code/"
 # Page LEGO Scan (reconnaissance des minifigs), servie par GitHub Pages depuis docs/
 mkdir -p "$DEPOT/docs" && cp "$ICI/../scan/index.html" "$DEPOT/docs/index.html"
+# Photos officielles des figurines pour eBay (BrickLink bloque eBay depuis le 07/11)
+if [ -d "$ICI/../ebay/figs_img" ]; then mkdir -p "$DEPOT/docs/ebay/figs" && cp "$ICI/../ebay/figs_img/"*.jpg "$DEPOT/docs/ebay/figs/"; fi
 # Application LEGO HQ : code seul (connexion), les données restent dans Supabase
+(cd "$ICI" && python3 figart.py >/dev/null) || true
+(cd "$ICI" && python3 figs_photos.py >/dev/null) || true
 python3 "$ICI/../app-source/build_pages.py" >/dev/null
 mkdir -p "$DEPOT/docs/hq" && cp "$ICI/../app-source/pages/page.html" "$DEPOT/docs/hq/index.html"
+# Données de l'appli (stock, annonces, photos…) : dans la base privée, envoyées seulement si elles ont changé
+(cd "$ICI" && python3 - "$ICI/../app-source/pages" <<'P3'
+import hashlib, json, sys
+from pathlib import Path
+import base
+d = Path(sys.argv[1])
+brut = (d / "static_page.json").read_bytes()
+h = hashlib.sha256(brut).hexdigest()
+f = d / "static_envoye.sha"
+if not f.exists() or f.read_text() != h:
+    if not base.doc_ecrire("static/page", json.loads(brut)):
+        sys.exit("envoi des données de l'appli refusé")
+    f.write_text(h)
+    print("données de l'appli envoyées")
+P3
+)
 # Table des prix (sous-ensemble utile aux alertes) et réglages : envoyés dans
 # l'espace privé de Supabase, jamais dans le dépôt public (même chiffrés).
 TMP=$(mktemp -d)
@@ -27,6 +47,7 @@ P2
 touch -r "$ICI/../data/referentiel.csv" "$TMP/prix.csv"
 (cd "$ICI" && python3 prive.py envoyer "$TMP/prix.csv" "$ICI/../data/parametres.json")
 rm -rf "$TMP"
+(cd "$ICI" && python3 lbc_mails.py index >/dev/null)
 git -C "$DEPOT" rm -q --ignore-unmatch data/prix.csv.enc data/parametres.json.enc data/vus.json.enc
 cd "$DEPOT"
 # Garde-fou (rien de confidentiel dans le dépôt public) :

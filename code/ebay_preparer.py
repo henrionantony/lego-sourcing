@@ -1,0 +1,362 @@
+"""Prépare les annonces eBay des derniers sets reçus (stock sûr) dans la base privée.
+
+Pour chaque set : titre (80 caractères max), description, prix eBay (regles.prix_ebay du prix
+d'annonce), quantité reçue, port France / UE + Suisse / Royaume-Uni (port.py), photo produit
+officielle, EAN, gamme, pièces, année. Écrit le document « ebay/a_publier » ; ebay_annonces.py
+(GitHub) les publie et note l'annonce dans « ebay/annonces ».
+
+Rien ne part sans l'accord du vendeur : chaque jour, les nouveaux sets proposés et les changements de
+prix des annonces en ligne vont dans « ebay/propositions » (liste à valider ensemble). Seuls les sets
+validés (« valides » de ebay/reglages) entrent dans « ebay/a_publier » ; une annonce en ligne garde son
+prix tant que le nouveau n'est pas validé.
+
+Usage : python3 ebay_preparer.py                       prépare la file et la liste du jour
+        python3 ebay_preparer.py valider <set> …       valide des sets (nouvelle annonce ou nouveau prix)
+        python3 ebay_preparer.py liste                 affiche la liste du jour
+"""
+import glob
+import gzip
+import html
+import json
+import math
+import re
+import sys
+from datetime import date
+import urllib.parse
+from pathlib import Path
+
+import base
+import ebay_ventes
+import port
+import regles
+
+ICI = Path(__file__).resolve().parent
+APP = ICI.parent / "stock" / "app"
+INACCESSIBLES = {"GH", "PE"}  # lieux.json : boîtes gardées chez des proches
+
+
+def brickset() -> dict:
+    out = {}
+    for f in glob.glob(str(ICI.parent / "data" / "cache" / "brickset_*.json.gz")):
+        for s in json.load(gzip.open(f)):
+            out[str(s.get("number"))] = s
+    return out
+
+
+def derniers_recus() -> dict[str, int]:
+    """Quantité par set des articles neufs scellés reçus et pas encore mis en vente.
+    Sans les sets gardés pour le part-out (stratégie LOT/DETAILS, ou figurine / build déjà vendu à part) :
+    la photo officielle montre le set entier, ce serait trompeur."""
+    q = {}
+    entames = {v["article_id"] for v in base.lire("ventes", "select=article_id&produit=in.(FIGURINE,SET%20PART)"
+                                                   "&article_id=not.is.null&limit=20000")}
+    for a in base.lire("articles", "select=id,id_set,quantite,co_investisseur,strategie&categorie=eq.SET&livre=eq.true"
+                                   "&statut=eq." + urllib.parse.quote("à traiter") + "&details_etat=eq.SCELLE&limit=1000"):
+        if "LOT" in str(a.get("strategie") or "") or a["id"] in entames:
+            continue
+        if a.get("id_set") and not a.get("co_investisseur"):
+            s = str(a["id_set"])
+            q[s] = q.get(s, 0) + int(a.get("quantite") or 1)
+    return q
+
+
+def en_ligne_vinted() -> dict[str, int]:
+    """Sets neufs scellés en stock qui ont une annonce Vinted en ligne : stock tenu à jour, donc sûr.
+    Un exemplaire chacun (le reste du stock n'est pas toujours recompté)."""
+    try:
+        annonces = json.loads((APP / "annonces.json").read_text())
+    except (OSError, ValueError):
+        return {}
+    vus = {a.get("n") for a in annonces if a.get("s") == "en ligne" and a.get("n")
+           and not re.search(r"complet|occasion|\blot\b|monté|sans boite|sans boîte", a.get("t", ""), re.I)}
+    entames = {v["article_id"] for v in base.lire("ventes", "select=article_id&produit=in.(FIGURINE,SET%20PART)"
+                                                   "&article_id=not.is.null&limit=20000")}
+    associes = {a["id"] for a in base.lire("articles", "select=id&co_investisseur=not.is.null&limit=10000")}
+    q = {}
+    for a in base.lire("stock", "select=id,id_set,strategie,details_etat,reste&categorie=eq.SET&reste=gt.0&limit=10000"):
+        s = str(a.get("id_set") or "").split("-")[0].removesuffix(".0")
+        if (s in vus and a["id"] not in associes and "LOT" not in str(a.get("strategie") or "")
+                and a["id"] not in entames and str(a.get("details_etat") or "").upper().startswith("SCELL")):
+            q[s] = 1
+    return q
+
+
+def description(s, en, fr, b, note="") -> str:
+    nom = f"{fr} ({en})" if fr and fr.lower() != en.lower() else en
+    pieces, annee, gamme = b.get("pieces"), b.get("year"), b.get("theme")
+    lignes = [f"<h2>LEGO {html.escape(gamme or '')} {s} – {html.escape(nom)}</h2>",
+              "<p><b>Neuf, boîte scellée</b> (jamais ouverte).</p>" + (f"<p>{'' if note.startswith('⚠️') else '⚠️ '}{html.escape(note)}</p>" if note else "") + "<ul>",
+              f"<li>Numéro du set : {s}</li>"]
+    if gamme: lignes.append(f"<li>Gamme : {html.escape(gamme)}</li>")
+    if pieces and str(pieces) != "0": lignes.append(f"<li>Pièces : {pieces}</li>")
+    if annee: lignes.append(f"<li>Année : {annee}</li>")
+    # Boîte avec défauts (note) : ne pas promettre une boîte en bon état sous la photo officielle
+    lignes += ["</ul><p>Photo officielle du produit : " + ("la boîte de cet exemplaire a les défauts indiqués plus haut.</p>" if note
+               else "le set envoyé est neuf et scellé, boîte en bon état.</p>"),
+               "<p>📦 Envoi soigné en carton avec calage, en Colissimo suivi depuis la France.</p>",
+               "<p>🇪🇺 Envoi aussi vers plusieurs pays d'Europe et le Royaume-Uni (voir les options de livraison).</p>",
+               "<p>Vendeur particulier passionné, plus de 500 avis positifs sur d'autres plateformes.</p>"]
+    return "".join(lignes)
+
+
+NOUVELLES_PAR_JOUR = 5
+CACHE_IMG = ICI.parent / "data" / "cache" / "brickset_images.json"
+PORT_FIG = {"fr": 4.0, "ue": None, "uk": None, "kg": 0.1, "lettre": True, "add": 1.0, "groupe": 1}   # lettre suivie 100 g, +1 € par figurine en plus
+PORT_SET_EN_PLUS = 4.0   # même annonce, chaque set en plus : +4 €
+_imgs = None
+
+
+def photos_set(b: dict) -> list:
+    """Photo officielle du set puis toutes les photos officielles en plus (Brickset), 24 au plus.
+    Jamais les photos des annonces Vinted : sur eBay, on doit avoir l'air d'un autre vendeur."""
+    global _imgs
+    if _imgs is None:
+        try:
+            _imgs = json.loads(CACHE_IMG.read_text())
+        except (OSError, ValueError):
+            _imgs = {}
+    sid = str(b.get("setID") or "")
+    if sid and sid not in _imgs and int(b.get("additionalImageCount") or 0):
+        import os
+        import urllib.request
+        try:
+            u = "https://brickset.com/api/v3.asmx/getAdditionalImages?" + urllib.parse.urlencode(
+                {"apiKey": os.environ["BRICKSET_API_KEY"], "setID": sid})
+            r = json.load(urllib.request.urlopen(u, timeout=30))
+            if r.get("status") == "success":
+                _imgs[sid] = [i["imageURL"] for i in r.get("additionalImages", []) if i.get("imageURL")]
+                CACHE_IMG.write_text(json.dumps(_imgs))
+        except Exception:
+            pass
+    img = (b.get("image") or {}).get("imageURL")
+    return ([img] if img else []) + _imgs.get(sid, [])[:23]
+
+
+def images_fig(code: str, s: str | None = None) -> list:
+    """Photos officielles BrickLink (07/11 : BrickLink renvoie une page anti-robot au serveur GitHub ;
+    ebay_annonces laisse alors eBay les télécharger lui-même)."""
+    # 07/11 23h : eBay non plus n'arrive pas à les télécharger (annonces sans photo) → image officielle
+    # refaite et hébergée sur GitHub Pages (ebay_photos_figs.py), BrickLink seulement à défaut
+    import ebay_photos_figs
+    # 07/11 : une seule photo (la figurine entière), pas de gros plan ni de boîte du set
+    u = ebay_photos_figs.urls(code, s)
+    if u:
+        return u[:1]
+    return [f"https://img.bricklink.com/ItemImage/MN/0/{code}.png", f"https://img.bricklink.com/ItemImage/ML/{code}.png"]
+
+
+def fiche_figurine(f: dict, noms: dict) -> dict:
+    """Annonce d'une figurine : photos officielles BrickLink (jamais les siennes).
+    etat « occasion » = figurine en vrac déjà sortie (complète, très bon état), sinon neuve du part-out."""
+    code, nom, s = f["code"], f["nom"], str(f.get("set") or "")
+    occ = f.get("etat") == "occasion"
+    sfr = (noms.get(s) or {}).get("nom") or "" if s else ""
+    gamme = f.get("gamme") or ""
+    fin = "Complète" if occ else "Neuve"
+    for t in ([f"LEGO {gamme} Minifigure {nom} {code} - {fin}", f"LEGO Minifigure {nom} {code} - {fin}"] if occ or not s else
+              [f"LEGO {gamme} Minifigure {nom} {code} - {s} - Neuve", f"LEGO Minifigure {nom} {code} - {s} - Neuve"]) + \
+             [f"LEGO Minifig {nom} {code} - {fin}"]:
+        if len(t.replace("  ", " ")) <= 80:
+            break
+    t = t.replace("  ", " ")[:80]
+    if occ:
+        corps = ("<p><b>Occasion, très bon état</b> : figurine complète, authentique LEGO.</p><ul>"
+                 f"<li>Référence BrickLink : {code}</li>"
+                 + (f"<li>Accessoires : {html.escape(f['accessoires'])}</li>" if f.get("accessoires") else "")
+                 + (f"<li>À noter : {html.escape(f['defauts'])}</li>" if f.get("defauts") else "")
+                 + "</ul><p>Photo officielle de la figurine.</p>")
+    elif not s:   # neuve hors set (magazine, sachet, lot de figurines neuves)
+        corps = ("<p><b>Neuve</b> : jamais jouée, jamais exposée, authentique LEGO.</p><ul>"
+                 f"<li>Référence BrickLink : {code}</li>"
+                 + (f"<li>Accessoires : {html.escape(f['accessoires'])}</li>" if f.get("accessoires") else "")
+                 + "</ul><p>Photo officielle de la figurine.</p>")
+    else:
+        corps = (f"<p><b>Neuve</b>, issue du set {s}{' ' + html.escape(sfr) if sfr else ''} acheté neuf et ouvert pour l'occasion : jamais jouée, "
+                 "jamais exposée.</p><ul>"
+                 f"<li>Référence BrickLink : {code}</li><li>Set d'origine : {s}</li>"
+                 "<li>Figurine complète telle qu'elle sort du set.</li></ul>"
+                 "<p>Photo officielle de la figurine.</p>")
+    d = (f"<h2>Minifigure LEGO {html.escape(gamme)} – {html.escape(nom)} ({code})</h2>" + corps +
+         "<p>✉️ Envoi en lettre suivie, figurine protégée. Plusieurs figurines : <b>+1 € seulement par figurine en plus</b>, "
+         "tout part dans le même envoi.</p>"
+         "<p>Vendeur particulier passionné, plus de 500 avis positifs sur d'autres plateformes.</p>")
+    return {"titre": t, "description": d, "prix": float(f["prix"]), "qte": int(f.get("qte") or 1), "port": dict(PORT_FIG),
+            "images": images_fig(code, s),
+            "gamme": gamme, "nom": nom, "code": code, "figurine": True, "set_source": s,
+            "condition": "USED_EXCELLENT" if occ else "NEW"}
+
+
+def main():
+    ap = json.loads((APP / "a_publier.json").read_text())
+    noms = json.loads((APP / "noms_fr.json").read_text())
+    bs = brickset()
+    # Stock sûr : derniers colis reçus, plus les sets en stock qui ont une annonce Vinted en ligne
+    voulus = en_ligne_vinted()
+    for s, q in derniers_recus().items():
+        voulus[s] = max(q, voulus.get(s, 0))
+    reglages = base.doc("ebay/reglages") or {}
+    # Sets dont tu as confirmé avoir la boîte (stock de la base pas encore remis à jour)
+    for s in reglages.get("confirmes", []):
+        voulus.setdefault(str(s), 1)
+    # Boîtes comptées à l'inventaire (scan de l'appli) : stock sûr aussi
+    for x in base.lire("inventaire", "select=id_set,n&n=gt.0&limit=5000") or []:
+        if x.get("id_set"):
+            voulus.setdefault(str(x["id_set"]), int(x["n"]))
+    # Seulement les sets dont il reste au moins une boîte scellée, entière (pas en part-out),
+    # sans co-investisseur et reçue : jamais de boîte découpée ou partagée sur eBay
+    bons = set()
+    co = {a["id"] for a in base.lire("articles", "select=id&co_investisseur=not.is.null&limit=5000") or []}
+    for a in base.lire("stock", "select=id,id_set,strategie,details_etat,livre,categorie,emplacement"
+                       "&reste=gt.0&categorie=eq.SET&livre=eq.true&limit=5000") or []:
+        if str(a.get("emplacement") or "") in INACCESSIBLES:
+            continue  # chez un proche : impossible à expédier rapidement
+        if (a.get("strategie") or "ENTIER") == "ENTIER" and a["id"] not in co \
+                and str(a.get("details_etat") or "").upper().startswith("SCELL"):
+            bons.add(str(a["id_set"]))
+    voulus = {s: q for s, q in voulus.items() if s in bons}
+    annonces = base.doc("ebay/annonces") or {}
+    prix_ebay = base.doc("ebay/prix") or {}
+    en_ligne = {s for s, a in annonces.items() if not a.get("retire")}
+    retirees = {s for s, a in annonces.items() if a.get("retire")}
+    valides = set(reglages.get("valides", [])) | en_ligne
+    out, sans, chez_lego, propositions, maj = {}, [], [], [], []
+    for s, q in voulus.items():
+        v, b = ap.get(s) or {}, bs.get(s) or {}
+        if s in retirees or s in reglages.get("exclus", []):
+            continue  # retirée par toi (ou par une règle) : on ne la remet pas d'office
+        if not v.get("prix") or not b:
+            sans.append(s)
+            continue
+        en, fr = b.get("name") or "", (noms.get(s) or {}).get("nom") or ""
+        t = f"LEGO {s} {en}" + (f" / {fr}" if fr and fr.lower() != en.lower() else "") + " - Neuf scellé"
+        if len(t) > 80:
+            t = f"LEGO {b.get('theme') or ''} {s} {en} - Neuf scellé".replace("  ", " ")
+        if len(t) > 80:
+            t = f"LEGO {s} {en} - Neuf scellé"[:80]
+        p = port.port(s, b.get("pieces"))
+        if not p or not p["fr"] or not p["ue"] or p["hors_norme"]:
+            sans.append(s)
+            continue
+        # Encore vendu par LEGO : jamais plus cher que chez LEGO (prix + port France), sinon on attend le retrait
+        pp = v.get("pp")
+        calcule = regles.prix_ebay(v["prix"])
+        # Croisement marché / marge : port compris, pas plus cher que la médiane des annonces eBay
+        # (au moins 3), mais jamais sous le plancher de marge (coût × marge brute minimale).
+        eb = prix_ebay.get(s) or {}
+        plancher = max(float(v.get("plancher") or 0), regles.PRIX_MIN)
+        if not v.get("cout"):
+            # Set offert (coût 0) : sans ce plancher le mode vente le bradait au prix minimum
+            # (40913 parti à 16 € le 27/10 au lieu de 30-35 €)
+            plancher = max(plancher, 0.9 * float(v.get("estime") or regles.GWP_DEFAUT))
+        marche = eb["med"] - p["fr"] if (eb.get("n") or 0) >= 3 and eb.get("med") else None
+        sous_plancher = bool(marche and marche < plancher)
+        if marche:
+            # Bien moins cher que tout eBay : on remonte juste sous l'annonce la moins chère
+            if eb.get("bas") and calcule < eb["bas"] - p["fr"] - 1:
+                calcule = round(eb["bas"] - p["fr"] - 1)
+            calcule = float(max(min(calcule, round(marche)), math.ceil(plancher)))
+        # Mode vente (26/10 : récupérer du cash en gardant la marge) :
+        # le moins cher d'eBay, port compris, dès que le plancher le permet
+        # sans baisser de plus de 15 % d'un coup : les offres acceptées seules font le reste
+        if reglages.get("vente_rapide") and eb.get("bas"):
+            calcule = float(max(min(calcule, round(eb["bas"] - p["fr"] - 1)), round(calcule * 0.85), math.ceil(plancher)))
+        fixe = reglages.get("prix", {}).get(s)
+        if v.get("st") == "en vente" and pp and float(fixe or calcule) + p["fr"] > pp:
+            if s in en_ligne:
+                chez_lego.append(s)
+            continue
+        # Une seule boîte par annonce (choix du vendeur 01/11 : « dernier exemplaire » pousse à acheter) ;
+        # la suivante est remise en vente après la vente (ebay_annonces.vendue_et_reste)
+        q = min(1, int(reglages.get("qte", {}).get(s, q) or 1))
+        p = {**p, "add": PORT_SET_EN_PLUS, "groupe": 1}   # « groupe » : envoi groupé (remise du compte eBay)
+        # Prix validé (à la main) sinon : en ligne = le prix actuel, nouveau = le prix calculé
+        prix = float(fixe or (annonces[s]["prix"] if s in en_ligne else calcule))
+        if reglages.get("vente_rapide"):
+            prix = max(min(prix, calcule), float(math.ceil(plancher)))   # en mode vente, on ne fait que baisser, jamais sous le plancher
+        fiche = {"titre": t, "description": description(s, en, fr, b, reglages.get("notes", {}).get(s, "")), "prix": prix,
+                 "qte": q or 1, "port": {k: p[k] for k in ("fr", "ue", "uk", "kg", "add", "groupe")}, "images": photos_set(b),
+                 "ean": (b.get("barcode") or {}).get("EAN"), "gamme": b.get("theme"), "pieces": b.get("pieces"),
+                 "annee": b.get("year"), "nom": en,
+                 "plancher": math.ceil(plancher)}   # offres auto (acceptées ~93 %, refusées sous le plancher), mode vente ou non
+        info = {"set": s, "nom": en, "fr": fr, "prix": calcule, "port": p["fr"], "qte": q or 1, "cout": v.get("cout"),
+                "estime": v.get("estime"), "st": v.get("st"), "retrait": v.get("retrait"),
+                "ebay_bas": eb.get("bas"), "ebay_med": eb.get("med"), "ebay_n": eb.get("n"),
+                "net": round(calcule * (1 - regles.PRELEVEMENTS) - float(v.get("cout") or 0), 2), "sous_plancher": sous_plancher}
+        if s in valides:
+            out[s] = fiche
+            if s in en_ligne and not fixe and abs(calcule - prix) >= 1:
+                maj.append({**info, "ancien": prix})
+        else:  # même en pause (stock pas remis à jour), la liste reste proposée : ton OK vaut accord
+            propositions.append(info)
+    # Les meilleurs d'abord : retirés (ça monte), puis moins chers que le moins cher d'eBay, puis le plus gros prix
+    moins_cher = lambda i: not i["ebay_bas"] or i["prix"] + i["port"] <= i["ebay_bas"]
+    propositions.sort(key=lambda i: (i["st"] != "retiré", not moins_cher(i), -i["prix"]))
+    # Places limitées (150 annonces gratuites) : les sets au plus gros prix passent en premier
+    for r, s in enumerate(sorted(out, key=lambda s: -out[s]["prix"])):
+        out[s]["ordre"] = 1000 + r
+    # Figurines validées (liste ordonnée « figurines » des réglages) : avant les sets, dans l'ordre choisi
+    figs = {}
+    restants = ebay_ventes.stock_figs()
+    for i, f in enumerate(reglages.get("figurines", [])):
+        k = f"fig-{f['code']}"
+        if k not in retirees and not f.get("vendue"):
+            figs[k] = {**fiche_figurine(f, noms), "ordre": i}
+            n = restants.get(ebay_ventes.cle(f["code"]))
+            if n and n[1] > 0:   # jamais plus d'exemplaires en ligne qu'il n'en reste (ventes ailleurs)
+                figs[k]["qte"] = min(figs[k]["qte"], n[1])
+    out = {**figs, **out}
+    base.doc_ecrire("ebay/a_retirer", sorted(chez_lego + reglages.get("exclus", [])))
+    if not base.doc_ecrire("ebay/a_publier", out):
+        sys.exit("écriture refusée")
+    base.doc_ecrire("ebay/propositions", {"le": date.today().isoformat(), "nouvelles": propositions[:NOUVELLES_PAR_JOUR],
+                                         "toutes": propositions, "reserve": len(propositions), "maj": maj})
+    print(f"{len(out)} annonces dans la file, {len(propositions)} sets proposables, {len(maj)} changements de prix, "
+          f"{len(chez_lego)} à retirer (moins chers chez LEGO), {len(sans)} sans prix ou port")
+
+
+def valider(sets: list[str]):
+    """Ton OK : nouvelle annonce → dans la file ; annonce en ligne → le nouveau prix proposé est retenu."""
+    reglages = base.doc("ebay/reglages") or {}
+    prop = base.doc("ebay/propositions") or {}
+    maj = {i["set"]: i["prix"] for i in prop.get("maj", [])}
+    for s in sets:
+        if s in maj:
+            reglages.setdefault("prix", {})[s] = maj[s]
+        elif s not in reglages.setdefault("valides", []):
+            reglages["valides"].append(s)
+    base.doc_ecrire("ebay/reglages", reglages)
+    main()
+
+
+def liste(n: int = NOUVELLES_PAR_JOUR):
+    """Les n prochaines nouveautés (5 par jour) et les changements de prix des annonces en ligne."""
+    prop = base.doc("ebay/propositions") or {}
+    e = lambda x: f"{x:.0f} €" if x else "?"
+    # Marge comptée en brut (prix de vente / coût), comme sa règle des +40 %
+    net = lambda i: (f"marge brute +{(i['prix'] / i['cout'] - 1) * 100:.0f} %"
+                     + (" (sous +40 %, compensé par l'achat)" if i["prix"] < i["cout"] * regles.MARGE_BRUTE_PLANCHER - 0.5 else "")) \
+        if i.get("cout") else "cadeau"
+    for k, i in enumerate((prop.get("toutes") or prop.get("nouvelles", []))[:n]):
+        print(f"J+{k // NOUVELLES_PAR_JOUR} NOUVEAU {i['set']} {i['nom']} | {e(i['prix'])} + port {e(i['port'])} | coût {e(i['cout'])} | {net(i)} | "
+              f"{i['st']} {i.get('retrait') or ''} | eBay dès {e(i['ebay_bas'])}, médiane {e(i.get('ebay_med'))} ({i['ebay_n'] or 0})"
+              + (" | ⚠ marché sous ton plancher" if i.get("sous_plancher") else ""))
+    for i in prop.get("maj", []):
+        print(f"PRIX {i['set']} {i['nom']} | {e(i['ancien'])} → {e(i['prix'])} | coût {e(i['cout'])} | {net(i)} | "
+              f"eBay dès {e(i['ebay_bas'])}, médiane {e(i.get('ebay_med'))}" + (" | ⚠ marché sous ton plancher" if i.get("sous_plancher") else ""))
+    print(f"réserve : {prop.get('reserve')} sets proposables")
+
+
+if __name__ == "__main__":
+    if sys.argv[1:2] == ["valider"]:
+        valider(sys.argv[2:])
+    elif sys.argv[1:2] == ["liste"]:
+        liste(int(sys.argv[2]) if sys.argv[2:] else NOUVELLES_PAR_JOUR)
+    else:
+        main()
+        # Prix délégués (01/11) : les changements de prix calculés par les règles sont appliqués
+        # d'office (le vendeur est informé après coup) ; les nouvelles annonces restent à choisir
+        if (base.doc("ebay/reglages") or {}).get("auto_prix"):
+            a_jour = [i["set"] for i in (base.doc("ebay/propositions") or {}).get("maj", [])]
+            if a_jour:
+                print(f"prix appliqués d'office : {len(a_jour)}")
+                valider(a_jour)

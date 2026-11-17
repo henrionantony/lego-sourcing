@@ -47,6 +47,35 @@ def ajouter(entree: dict):
     return True
 
 
+def remplacer(entree: dict) -> bool:
+    """Remplace l'entrée déjà notée pour ce mail (ex. un favori Vinted noté « ignore » avant le 03/11)."""
+    t = tout()
+    for i, x in enumerate(t):
+        if x.get("mail") == entree.get("mail"):
+            t[i] = entree
+            base.json_partage_ecrire("commandes", FICHIER, t)
+            return True
+    return ajouter(entree)
+
+
+def signaux(jours: int = 30) -> dict[str, dict]:
+    """{set: {"favoris": n, "contacts_lbc": n}} sur les `jours` derniers jours (mails de favori Vinted et de contact Leboncoin)."""
+    debut = (dt.date.today() - dt.timedelta(days=jours)).isoformat()
+    r: dict[str, dict] = {}
+    for x in tout():
+        if not x.get("set") or (x.get("d") or "") < debut:
+            continue
+        cle = "favoris" if x.get("vinted") == "favori" else "contacts_lbc" if x.get("lbc") == "contact" else None
+        if cle:
+            k = str(x["set"])
+            if not k.isdigit():  # référence de figurine : njo0822 = njo822
+                from figs_sets import cle as cle_fig
+                k = cle_fig(k)
+            s = r.setdefault(k, {"favoris": 0, "contacts_lbc": 0})
+            s[cle] += 1
+    return r
+
+
 def controle() -> dict:
     """{"achats": {achat_id: {"ok", "msg", "num"}}, "sans_achat": [commandes du mail absentes de la base]}"""
     cmds = commandes()
@@ -95,6 +124,20 @@ def controle() -> dict:
 ORDRE_COLIS = {"expedie": 1, "a_retirer": 2, "livre": 3}
 
 
+def expeditions() -> dict[int, str]:
+    """Date du premier mail « expédié » de chaque commande reconnue (numéro, achat choisi ou suivi)."""
+    entrees, nums = tout(), controle()["nums"]
+    par_suivi = {c["suivi"]: c.get("achat_id") or nums.get(c.get("num")) for c in entrees
+                 if c.get("suivi") and (c.get("achat_id") or nums.get(c.get("num")))}
+    res: dict[int, str] = {}
+    for c in entrees:
+        if c.get("colis") == "expedie" and c.get("d") and not c.get("ecarte"):
+            aid = c.get("achat_id") or nums.get(c.get("num")) or par_suivi.get(c.get("suivi"))
+            if aid and (aid not in res or c["d"] < res[aid]):
+                res[aid] = c["d"]
+    return res
+
+
 def colis(ouverts: dict[int, dict]) -> dict[int, dict]:
     """Dernier état connu du colis de chaque commande en cours de livraison.
 
@@ -107,6 +150,7 @@ def colis(ouverts: dict[int, dict]) -> dict[int, dict]:
     nums = controle()["nums"]
     res: dict[int, dict] = {}
     orphelins: list[dict] = []
+    a_purger: list[str] = []
     # Numéro de suivi déjà relié à une commande par un autre mail (ex. « expédié » du
     # marchand, puis « arrivé en relais » du transporteur sans numéro de commande)
     par_suivi = {c["suivi"]: c.get("achat_id") or nums.get(c.get("num")) for c in entrees
@@ -119,6 +163,8 @@ def colis(ouverts: dict[int, dict]) -> dict[int, dict]:
             cands = [a for a, o in ouverts.items() if _cle(o["lieu"]) == _cle(c["magasin"])]
             aid = cands[0] if len(cands) == 1 else None
         if aid not in ouverts:
+            if aid and (c.get("pass") or c.get("code")):
+                a_purger.append(c["mail"])   # commande reçue : le code de retrait ne sert plus
             if c["colis"] == "a_retirer" and not aid:
                 orphelins.append({**c, "candidats": [a for a, o in ouverts.items() if not c.get("magasin")
                                                      or _cle(o["lieu"]) == _cle(c["magasin"])] or list(ouverts)})
@@ -129,14 +175,29 @@ def colis(ouverts: dict[int, dict]) -> dict[int, dict]:
         av = res.get(aid, {})
         if ORDRE_COLIS.get(c["colis"], 0) >= ORDRE_COLIS.get(av.get("colis"), 0):
             av = {**av, "colis": c["colis"], "d": c.get("d")}
-        for k in ("lieu", "jusqu", "suivi", "transporteur"):
+        for k in ("lieu", "jusqu", "suivi", "transporteur", "pass", "code"):
             # le dernier mail « à retirer » fait foi pour le relais (colis redirigé)
-            if c.get(k) and (not av.get(k) or (c["colis"] == "a_retirer" and k in ("lieu", "jusqu"))):
+            if c.get(k) and (not av.get(k) or (c["colis"] == "a_retirer" and k in ("lieu", "jusqu", "pass", "code"))):
                 av[k] = c[k]
         res[aid] = av
+    # Codes de retrait vieux de 3 semaines (colis jamais relié) : purgés aussi
+    vieux = (dt.date.today() - dt.timedelta(days=21)).isoformat()
+    a_purger += [c["mail"] for c in entrees if (c.get("pass") or c.get("code")) and (c.get("d") or "") < vieux]
+    if a_purger:
+        purger_retraits(set(a_purger))
     if orphelins:
         res[0] = {"orphelins": orphelins}   # colis prêts qu'on n'a pas su rattacher à une commande
     return res
+
+
+def purger_retraits(ids: set[str]):
+    """Efface QR et code de retrait des mails donnés (colis retiré ou trop vieux)."""
+    t = tout()
+    for x in t:
+        if x.get("mail") in ids:
+            x.pop("pass", None)
+            x.pop("code", None)
+    base.json_partage_ecrire("commandes", FICHIER, t)
 
 
 if __name__ == "__main__":
@@ -144,6 +205,21 @@ if __name__ == "__main__":
     import sys
     if sys.argv[1:2] == ["ids"]:
         print(" ".join(str(x.get("mail")) for x in tout()))
+    elif sys.argv[1:2] == ["retrait"]:
+        # python3 mails.py retrait <fichier> : QR et code de retrait d'un mail Pickup
+        # (fichier = résultat JSON de get_message FULL_CONTENT, ou HTML brut), à ajouter à l'entrée
+        import mails_regles
+        brut = Path(sys.argv[2]).read_text()
+        try:
+            brut = json.loads(brut).get("htmlBody") or brut
+        except ValueError:
+            pass
+        print(json.dumps(mails_regles.retrait(brut, mails_regles.texte(brut))))
+    elif sys.argv[1:2] == ["remplacer"]:
+        print("remplacé" if remplacer(json.loads(sys.argv[2])) else "?")
+    elif sys.argv[1:2] == ["signaux"]:
+        for k, v in sorted(signaux(int(sys.argv[2]) if len(sys.argv) > 2 else 30).items(), key=lambda kv: -kv[1]["favoris"]):
+            print(k, v)
     elif sys.argv[1:2] == ["ajouter"]:
         print("ajouté" if ajouter(json.loads(sys.argv[2])) else "déjà noté")
     else:

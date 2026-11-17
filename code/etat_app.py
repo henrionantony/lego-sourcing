@@ -11,11 +11,13 @@ import json
 import re
 import os
 import ssl
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import base
+import dus_perso
 import mails
 from regles import PRELEVEMENTS
 
@@ -70,6 +72,13 @@ def _lundi():
                     prix[m.group(1)] = float(r["Nouveau prix"])
             out["baisses"] = {"liste": f.stem[-10:], "prix": prix}
             break
+    # Annonces au plancher depuis 30 jours : à supprimer puis reposter au prix de départ (liste du lundi la plus récente)
+    try:
+        df = pd.read_excel(fichiers[-1], sheet_name="Republier")
+        out["republier"] = {"liste": fichiers[-1].stem[-10:], "prix": {
+            m.group(1): float(r["Prix de départ"]) for _, r in df.iterrows() if (m := re.search(r"/items/(\d+)", str(r["Lien"])))}}
+    except Exception:
+        out["republier"] = {}
     return out
 
 
@@ -128,16 +137,17 @@ def automatisations() -> list[dict]:
     ex = base.lire("executions", "select=tache,debut,fin,ok,resume,erreur&order=debut.desc&limit=50")
     noms = {"application": "App refresh (GitHub)", "alertes": "Latest Dealabs check", "actions_semaine": "Monday action list", "collecte": "Daily data refresh"}
     for tache, nom in noms.items():
-        e = next((x for x in ex if x["tache"] == tache), None)
+        # Le rafraîchissement de l'appli tourne pendant ce calcul : on montre son dernier passage terminé
+        e = next((x for x in ex if x["tache"] == tache and (x["fin"] or tache != "application")), None)
         if not e:
             continue
         etat = "ok" if e["ok"] else ("erreur" if e["fin"] else "attention")
         detail = e["resume"] or e["erreur"] or ""
         for fr, en in [("nouveaux deals", "new deals"), ("achète", "buy"), ("à regarder", "take a look"), (" non", " skip")]:
             detail = detail.replace(fr, en)
-        detail = detail.replace(" geste(s) appliqué(s)", " button action(s) applied").replace(" geste", " button action").replace("en erreur", "failed")
+        detail = detail.replace("0 geste", "no button tapped").replace(" geste(s) appliqué(s)", " button action(s) applied").replace("en erreur", "failed")
         if tache == "application":
-            detail = "Every 5 min and on each new deal · " + detail
+            detail = "Every 5 min, and right away on a new deal or a button tap" + (" · " + detail if detail else "")
         out.append({"nom": nom, "etat": etat, "detail": detail.rstrip(" :"), "quand": e["fin"] or e["debut"]})
     if "actions_semaine" not in {x["tache"] for x in ex}:
         d = lundi().get("date")
@@ -158,16 +168,112 @@ def automatisations() -> list[dict]:
 
 
 def objectifs() -> dict:
-    annee = base.lire("ventes", f"select=date_vente,prix_vente&date_vente=gte.{DEBUT_ANNEE}&limit=10000")
+    annee = base.lire("ventes", f"select=date_vente,prix_vente,revenu_net,article_id,produit&date_vente=gte.{DEBUT_ANNEE}&limit=10000")
     ca = sum(float(v["prix_vente"] or 0) for v in annee)
     d = base.lire("ventes", "select=date_vente&date_vente=not.is.null&order=date_vente.desc&limit=1")
     derniere = d[0]["date_vente"] if d else None
     mois = {}
     for v in annee:
         mois[v["date_vente"][:7]] = mois.get(v["date_vente"][:7], 0) + float(v["prix_vente"] or 0)
+    net, estime = gain_net(annee)
+    # Mêmes mois de l'année d'avant, pour comparer mois par mois
+    debut_avant = DEBUT_ANNEE.replace(year=DEBUT_ANNEE.year - 1)
+    avant = {}
+    for v in base.lire("ventes", f"select=date_vente,prix_vente&date_vente=gte.{debut_avant}&date_vente=lt.{DEBUT_ANNEE}&limit=10000"):
+        k = f"{int(v['date_vente'][:4]) + 1}{v['date_vente'][4:7]}"   # rangé sous le mois de cette année
+        avant[k] = round(avant.get(k, 0) + float(v["prix_vente"] or 0), 2)
+    # Jour par jour sur le mois en cours, et les mêmes jours du même mois l'an dernier
+    cle = maintenant().strftime("%Y-%m")
+    jours, jours_avant = {}, {}
+    for v in annee:
+        if v["date_vente"][:7] == cle:
+            j = v["date_vente"][8:10]
+            jours[j] = round(jours.get(j, 0) + float(v["prix_vente"] or 0), 2)
+    a, m = int(cle[:4]) - 1, int(cle[5:7])
+    fin = f"{a + 1}-01-01" if m == 12 else f"{a}-{m + 1:02d}-01"
+    for v in base.lire("ventes", f"select=date_vente,prix_vente&date_vente=gte.{a}-{m:02d}-01&date_vente=lt.{fin}&limit=1000"):
+        j = v["date_vente"][8:10]
+        jours_avant[j] = round(jours_avant.get(j, 0) + float(v["prix_vente"] or 0), 2)
+    # Tous les mois depuis le début de l'activité (lus par pages : la base rend 1000 lignes au plus)
+    histo, jours_annees, off = {}, {}, 0
+    while True:
+        lot = base.lire("ventes", f"select=date_vente,prix_vente&date_vente=not.is.null&order=id&limit=1000&offset={off}")
+        for v in lot:
+            histo[v["date_vente"][:7]] = round(histo.get(v["date_vente"][:7], 0) + float(v["prix_vente"] or 0), 2)
+            if v["date_vente"][5:7] == cle[5:7]:   # ce mois-ci, chaque année : jour par jour
+                jj = jours_annees.setdefault(v["date_vente"][:4], {})
+                jj[v["date_vente"][8:10]] = round(jj.get(v["date_vente"][8:10], 0) + float(v["prix_vente"] or 0), 2)
+        if len(lot) < 1000:
+            break
+        off += 1000
+    prelev = sum(float(v["prix_vente"] or 0) - encaisse(v) for v in annee)
     return {"debut": DEBUT_ANNEE.isoformat(), "ca": round(ca, 2), "cible_ca": CIBLE_CA, "cible_net": CIBLE_NET,
-            "net_frais": round(ca * (1 - PRELEVEMENTS), 2), "ventes": len(annee), "derniere_vente": derniere,
-            "mois": mois}
+            "net_frais": round(ca * (1 - PRELEVEMENTS), 2), "net": round(net, 2), "net_estime": round(estime, 2),
+            "prelev": round(prelev, 2), "couts": round(ca - prelev - net, 2), "ventes": len(annee), "derniere_vente": derniere,
+            "mois": mois, "cible_mois": _OBJ.get("mois", {}), "an_passe": avant,
+            "jours": jours, "jours_an_passe": jours_avant, "historique": histo, "jours_annees": jours_annees}
+
+
+def encaisse(v: dict) -> float:
+    """Ce qui reste de la vente après prélèvements et frais d'envoi (revenu_net, sinon prix × (1 − prélèvements))."""
+    if v.get("revenu_net") is not None:
+        return float(v["revenu_net"])
+    return float(v.get("prix_vente") or 0) * (1 - PRELEVEMENTS)
+
+
+def gain_net(ventes: list) -> tuple[float, float]:
+    """Gain net des ventes : prix × (1 − prélèvements) − ce que l'article a coûté.
+    Set entier : son coût. Morceau d'un set découpé (figurine, build) : une part du coût au prorata
+    de son prix sur l'objectif du set (prix LEGO × 1,4), sans dépasser le coût total.
+    Origine inconnue : coût estimé au plancher de marge (prix ÷ 1,4) ; renvoie aussi la part estimée."""
+    import csv
+    from regles import MARGE_BRUTE_PLANCHER as M
+    ids = sorted({int(v["article_id"]) for v in ventes if v.get("article_id")})
+    arts = {a["id"]: a for a in base.lire("articles", "select=id,id_set,prix_achat,quantite,offert,achat_plaisir&id=in.("
+                                          + ",".join(map(str, ids)) + ")&limit=10000")} if ids else {}
+    with open(ICI.parent / "data" / "referentiel.csv", newline="") as f:
+        pp = {r["base"]: float(r["prix_public"]) for r in csv.DictReader(f) if r.get("prix_public")}
+    net = estime = 0.0
+    deja: dict = {}
+    # Ventes plus anciennes des mêmes articles (lot ou set découpé vendu en plusieurs fois) : elles ont déjà
+    # consommé une part du coût, sinon un lot remboursé depuis longtemps compterait tout son prix une 2e fois (17/11).
+    vus = {v.get("id") for v in ventes}
+    anciennes = [dict(w, _avant=True) for w in (base.lire("ventes", "select=id,date_vente,prix_vente,revenu_net,article_id,produit"
+                 "&article_id=in.(" + ",".join(map(str, ids)) + ")&limit=10000") if ids else []) if w["id"] not in vus]
+    for v in sorted(list(ventes) + anciennes, key=lambda v: str(v["date_vente"] or "")):
+        prix = float(v["prix_vente"] or 0)
+        a = arts.get(v.get("article_id"))
+        if a and a.get("achat_plaisir") and prix == 0:
+            continue   # set perso offert (sorti du stock à 0 €) : hors calcul, régularisation plus tard (14/11)
+        if not a:
+            cout = prix / M
+            estime += encaisse(v) - cout
+        else:
+            unit = 0.0 if a.get("offert") else float(a.get("prix_achat") or 0) / max(1, int(a.get("quantite") or 1))
+            if v.get("produit") == "SET" and a.get("id_set"):
+                cout = unit
+            else:
+                s = str(a.get("id_set") or "").split("-")[0].removesuffix(".0")
+                cible = pp.get(s, 0) * M or unit * M or prix
+                cout = min(unit * prix / cible, unit - deja.get(a["id"], 0)) if cible else 0
+                deja[a["id"]] = deja.get(a["id"], 0) + cout
+        if v.get("_avant"):
+            continue
+        net += encaisse(v) - cout
+    return net, estime
+
+
+def choix_colis(c: dict, aid: int, a: dict, lignes: list, expedie: str | None) -> dict:
+    """Une commande proposée pour un colis sans numéro : contenu, dates, et impossible si elle a été
+    passée ou expédiée après l'arrivée du colis (le colis ne peut pas être elle)."""
+    arrive, cmd = str(c.get("d") or "")[:10], str(a.get("date_achat") or "")[:10]
+    raison = ("ordered after this parcel arrived" if cmd and arrive and cmd > arrive
+              else "shipped after this parcel arrived" if expedie and arrive and expedie > arrive else None)
+    return {"label": f"{magasin(a.get('lieu'))} · ordered {jour(cmd)[:5]}" + (f" · shipped {jour(expedie)[:5]}" if expedie else ""),
+            "articles": [f"{int(float(x['quantite'] or 1))} × {nom_set(x)}" for x in lignes],
+            "sets": [str(x.get("id_set") or "").split("-")[0].removesuffix(".0") for x in lignes if x.get("id_set")],
+            **({"impossible": raison} if raison else {}),
+            "action": {"type": "colis_lien", "mail": c["mail"], "achat_id": aid}}
 
 
 def jour(iso) -> str:
@@ -213,7 +319,15 @@ def virements_dus() -> dict[int, list]:
     cag = base.lire("articles", "select=achat_id,cagnotte,designation,id_set&cagnotte=gt.0&cree_le=gte.2026-10-19&limit=1000")
     if not cag:
         return {}
-    faits = {m["achat_id"] for m in base.lire("tresorerie", "select=achat_id&libelle=like.Cagnotte*&limit=10000")}
+    # Déjà reversé par achat (un achat peut être remboursé en plusieurs fois, ex. part avancée par le perso)
+    verse: dict[int, float] = {}
+    for m in base.lire("tresorerie", "select=achat_id,montant&libelle=like.Cagnotte*&limit=10000"):
+        if m.get("achat_id"):
+            verse[m["achat_id"]] = verse.get(m["achat_id"], 0) + float(m["montant"] or 0)
+    total = {}
+    for x in cag:
+        total[x["achat_id"]] = total.get(x["achat_id"], 0) + float(x["cagnotte"] or 0)
+    faits = {a for a, m in total.items() if verse.get(a, 0) >= m - 0.01}
     # Achats de rattrapage (datés d'avant la trésorerie de départ) : rien à reverser
     ids = ",".join(str(i) for i in {x["achat_id"] for x in cag})
     # sauf ceux marqués « cagnotte à reverser » (pas encore remboursée à l'époque)
@@ -223,14 +337,123 @@ def virements_dus() -> dict[int, list]:
     dus: dict[int, list] = {}
     for x in cag:
         if x["achat_id"] not in faits:
-            dus.setdefault(x["achat_id"], []).append(x)
+            dus.setdefault(x["achat_id"], []).append({**x, "_verse": round(verse.get(x["achat_id"], 0), 2)})
     return dus
+
+
+def compenser_virements(out: list) -> None:
+    """Une seule carte « Money to move » dans les deux sens : ce que le perso doit au
+    compte LEGO (cagnottes, vitrines) moins ce que le compte LEGO doit au perso
+    (dus_perso), pour ne faire qu'un virement du montant net."""
+    try:
+        dus = dus_perso.ouverts()
+    except Exception:
+        dus = []
+    vir = next((c for c in out if c["id"] == "virements"), None)
+    if not dus and not vir:
+        return
+    if not vir:
+        vir = {"id": "virements", "type": "transfert", "lignes": []}
+        out.append(vir)
+    vers_pro = round(sum(float(l["action"].get("montant") or 0) for l in vir["lignes"]), 2)
+    for l in vir["lignes"]:
+        l["sous"] = "personal → LEGO account" + (f" · {l['sous']}" if l.get("sous") else "")
+    for d in sorted(dus, key=lambda x: str(x.get("d")), reverse=True):
+        vir["lignes"].append({"id": d["id"], "d": d.get("d"), "titre": f"{eur(d['montant'])} · {d['titre']}",
+                              "sous": "LEGO account → personal" + (f" · {d['sous']}" if d.get("sous") else ""),
+                              "action": {"type": "du_perso_regle", "du": d["id"], "montant": d["montant"], "label": "Transferred"}})
+    vers_perso = round(sum(float(d["montant"]) for d in dus), 2)
+    net = round(vers_pro - vers_perso, 2)
+    if net > 0:
+        vir["titre"] = f"Move {eur(net)} from your personal account to the LEGO account"
+    elif net < 0:
+        vir["titre"] = f"Move {eur(-net)} from the LEGO account to your personal account"
+    else:
+        vir["titre"] = "Your two accounts are even: nothing to move"
+    if vers_pro and vers_perso:
+        vir["detail"] = (f"Your personal account owes the LEGO account {eur(vers_pro)}, and the LEGO account owes "
+                         f"your personal account {eur(vers_perso)}. One transfer of {eur(abs(net))} settles everything.")
+        # Un seul bouton pour tout solder : les lignes ne servent plus qu'au détail
+        vir["action"] = {"type": "solde_virements", "montant": net, "label": f"Done: {eur(abs(net))} moved" if net else "Mark as settled",
+                         "lignes": [{k: v for k, v in l["action"].items() if k != "label"} | {"id": l["id"]} for l in vir["lignes"]]}
+        for l in vir["lignes"]:
+            l.pop("action", None)
+        # Nouvel id si les lignes changent : un ancien « Done » ne masque pas la nouvelle carte
+        vir["id"] = "virements-" + "-".join(sorted(str(l["id"]) for l in vir["lignes"]))[:120]
+    elif vers_perso:
+        vir["detail"] = ("The LEGO account owes your personal account this money (already counted in the cash). "
+                         "Tap Transferred for each line once the money is moved.")
+
+
+# Commandes sans nouvelles depuis trop longtemps (remplie par a_regulariser, envoyée sur Telegram par main)
+RETARDS: list[dict] = []
+# Jours sans nouvelles avant d'alerter, selon la dernière étape connue
+DELAI_RETARD = {"commande": 5, "expedie": 6, "a_retirer": 5, "livre": 2}
+
+
+def retard(achat: dict, sv: dict | None) -> str | None:
+    """Phrase d'alerte si une commande pas encore reçue traîne : pas d'expédition, colis
+    parti mais jamais arrivé, colis à retirer bientôt renvoyé, ou « livré » mais pas reçu
+    (cas Fnac : contester tout de suite)."""
+    if not achat.get("date_achat"):
+        return None
+    auj = dt.date.today()
+    etape = sv["colis"] if sv else "commande"
+    depuis = dt.date.fromisoformat(str((sv or {}).get("d") or achat["date_achat"])[:10])
+    n = (auj - depuis).days
+    if etape == "a_retirer" and sv.get("jusqu"):
+        reste = (dt.date.fromisoformat(sv["jusqu"][:10]) - auj).days
+        return f"Pick up before {jour(sv['jusqu'])}, or it goes back to the shop" if reste <= 2 else None
+    if n < DELAI_RETARD[etape]:
+        return None
+    return {"commande": f"No shipping email {n} days after ordering: check the order on the shop's site",
+            "expedie": f"Shipped {n} days ago and still not arrived: check the tracking",
+            "a_retirer": f"Waiting at the pickup point for {n} days: pick it up soon",
+            "livre": f"Marked delivered {n} days ago: if you don't have it, contact the shop now"}[etape]
+
+
+def prevenir_retards():
+    """Un message Telegram par commande et par étape en retard (une seule fois)."""
+    if not RETARDS:
+        return
+    lu = base.doc("cache/retards_alertes")
+    if lu is None:   # base illisible : on ne renvoie pas tout
+        return
+    deja = set(lu.get("cles") or [])
+    nouveaux = [r for r in RETARDS if f"{r['achat_id']}-{r['etape']}" not in deja]
+    if not nouveaux:
+        return
+    import alertes
+    texte = "⏰ Commande à vérifier\n\n" + "\n\n".join(
+        f"{r['titre']} : {', '.join(r['articles'][:3])}\n{r['alerte']}" for r in nouveaux)
+    try:
+        alertes.telegram(texte, True, False)
+        base.doc_ecrire("cache/retards_alertes", {"cles": sorted(deja | {f"{r['achat_id']}-{r['etape']}" for r in nouveaux})})
+    except Exception as e:
+        print(f"Telegram retards : {e}")
+
+
+def _exemplaires(lignes: list[dict], achat: dict) -> dict:
+    """Lignes d'une commande en livraison → {set: [[article, coût unitaire, date, magasin, qté, "", "", lieu, stratégie]]}."""
+    out: dict[str, list] = {}
+    for l in lignes:
+        if not l.get("id_set") or str(l.get("categorie") or "").upper() != "SET":
+            continue
+        s = str(l["id_set"]).split("-")[0].removesuffix(".0")
+        q = max(1, int(float(l.get("quantite") or 1)))
+        part = float(l.get("quote_part") or 1) or 1
+        cout = 0.0 if l.get("offert") else float(l.get("prix_achat") or 0) / part / q
+        out.setdefault(s, []).append([l["id"], round(cout, 2), achat.get("date_achat") or "", achat.get("lieu") or "", q, "", "",
+                                      l.get("emplacement") or "", {"LOT/DETAILS": "P", "ENTIER": "E"}.get(str(l.get("strategie") or "").strip().upper(), "")])
+    return out
 
 
 def a_regulariser(obj: dict) -> list[dict]:
     out = []
+    RETARDS.clear()
     # Commandes en cours de livraison : à confirmer à la réception
-    arts = base.lire("articles", "select=id,achat_id,id_set,designation,quantite,notes&notes=ilike.*livraison*&limit=1000")
+    arts = base.lire("articles", "select=id,achat_id,id_set,designation,quantite,notes,prix_achat,quote_part,offert,categorie,strategie,emplacement"
+                      "&notes=ilike.*livraison*&limit=1000")
     achats = {a["id"]: a for a in base.lire("achats", "select=*&cashback=gt.0&limit=10000")}
     for aid in {a["achat_id"] for a in arts} - set(achats):
         achats.update({x["id"]: x for x in base.lire("achats", f"select=*&id=eq.{aid}")})
@@ -258,34 +481,53 @@ def a_regulariser(obj: dict) -> list[dict]:
             suivi_url = (f"https://www.chronopost.fr/tracking-no-cms/suivi-page?listeNumerosLT={sv['suivi']}"
                          if "chrono" in (sv.get("transporteur") or "").lower()
                          else f"https://www.laposte.fr/outils/suivre-vos-envois?code={sv['suivi']}")
-        livs.append({"id": f"recu-{aid}", "d": a.get("date_achat"), "titre": f"{magasin(a.get('lieu'))} · {jour(a.get('date_achat'))}",
+        alerte = retard(a, sv)
+        if alerte:
+            RETARDS.append({"achat_id": aid, "etape": sv["colis"] if sv else "commande", "titre": f"{magasin(a.get('lieu'))} · {jour(a.get('date_achat'))}",
+                            "articles": [nom_set(x) for x in lignes], "alerte": alerte})
+        livs.append({"id": f"recu-{aid}", "d": a.get("date_achat"), "alerte": alerte, "titre": f"{magasin(a.get('lieu'))} · {jour(a.get('date_achat'))}",
                      "sous": f"{n} item{'s' if n > 1 else ''}{etat}", "pret": bool(sv and sv["colis"] == "a_retirer"),
                      "etape": min(etape, 2), "arrivee": "Pick up" if sv and sv["colis"] == "a_retirer" else "Delivered" if etape == 3 else "Arrived",
                      "suivi": sv.get("suivi") if sv else None, "suivi_url": suivi_url,
+                     # QR et code à montrer au relais (base privée, seulement tant que le colis attend)
+                     **({"qr": f"https://avisageng-colis-webexternal.pickup-services.com/api/barcode/AztecCode?d={urllib.parse.quote(sv['pass'], safe=':;')}"
+                         # le pass cite le n° de colis : jamais montré sur une autre commande
+                         if sv.get("pass") and sv.get("suivi") in sv["pass"].split(";") else None, "code": sv.get("code"), "relais": sv.get("lieu"),
+                         "jusqu": jour(sv["jusqu"]) if sv.get("jusqu") else None}
+                        if sv and sv["colis"] == "a_retirer" and (sv.get("pass") or sv.get("code")) else {}),
                      "articles": [f"{int(float(x['quantite'] or 1))} × {nom_set(x)}" for x in lignes],
                      # Pour le scan à la réception : quantités attendues par numéro de set
                      "sets": {k: v for k, v in _compter(lignes).items()},
+                     # Exemplaires que la réception ajoute au stock (même format que a_publier) : l'appli
+                     # les montre tout de suite au Scan, sans attendre le passage suivant
+                     "ex": _exemplaires(lignes, achats.get(aid, {})),
                      "action": {"type": "recu", "achat_id": aid, "label": "Received"}})
     # Colis prêts qu'aucun numéro ne relie à une commande : carte rouge à part, en tête
     if orph:
         lignes = []
+        expe = mails.expeditions()
         for c in orph:
             info = [x for x in (c.get("transporteur"), c.get("suivi") and f"tracking {c['suivi']}",
                                 c.get("jusqu") and f"pick up before {jour(c['jusqu'])}", c.get("sujet")) if x]
             lignes.append({"id": f"colis-{c['mail']}", "d": c.get("d"),
                            "titre": f"{c.get('lieu') or 'Pickup point ?'} · email of {jour(c.get('d'))}",
                            "sous": " · ".join(info), "url": c.get("url"),
-                           "choix": [{"label": f"{magasin(achats.get(a, {}).get('lieu'))} {jour(achats.get(a, {}).get('date_achat'))[:5]} · "
-                                               + ", ".join(nom_set(x).split(" · ")[-1] for x in par_achat.get(a, [])),
-                                      "action": {"type": "colis_lien", "mail": c["mail"], "achat_id": a}} for a in c["candidats"]]
-                                    + [{"label": "Not mine / ignore", "action": {"type": "colis_lien", "mail": c["mail"], "achat_id": 0}}]})
+                           # code de retrait montré même si la commande n'est pas encore reconnue
+                           **({"code": c.get("code"), "relais": c.get("lieu"), "jusqu": jour(c["jusqu"]) if c.get("jusqu") else None}
+                              if c.get("code") else {}),
+                           "choix": sorted((choix_colis(c, a, achats.get(a, {}), par_achat.get(a, []), expe.get(a)) for a in c["candidats"]),
+                                           key=lambda x: bool(x.get("impossible")))
+                                    + [{"label": "Not mine / already received", "action": {"type": "colis_lien", "mail": c["mail"], "achat_id": 0}}]})
+            if all(x.get("impossible") for x in lignes[-1]["choix"][:-1]):
+                lignes[-1]["sous"] = "None of your open orders fits this parcel: probably an order you already marked received. " + lignes[-1]["sous"]
         out.append({"id": "colis-inconnus", "type": "ecart", "titre": f"📦 {len(lignes)} parcel{'s' if len(lignes) > 1 else ''} to pick up, order unknown",
                     "detail": "A carrier says a parcel is waiting but doesn't give the order number. Open the email, then tap the order it belongs to.",
                     "lignes": lignes})
     if livs:
         prets = sum(l["pret"] for l in livs)
+        lents = sum(bool(l["alerte"]) for l in livs)
         out.append({"id": "livraisons", "type": "livraison", "titre": f"{len(livs)} order{'s' if len(livs) > 1 else ''} on the way"
-                    + (f" · {prets} ready to pick up" if prets else ""),
+                    + (f" · {prets} ready to pick up" if prets else "") + (f" · ⚠️ {lents} to check" if lents else ""),
                     "detail": "Ready to pick up first, then oldest first. Open an order to check each quantity, then tap Received when everything is there.",
                     "lignes": livs})
     # Cashback : à confirmer (rien reçu d'iGraal) → en attente (iGraal l'a enregistré) → payé.
@@ -309,10 +551,13 @@ def a_regulariser(obj: dict) -> list[dict]:
     # Cagnottes à reverser du compte perso vers le compte pro (achats saisis depuis l'application)
     vir = []
     for aid, lignes in virements_dus().items():
-        m = round(sum(float(x["cagnotte"]) for x in lignes), 2)
+        credit = round(sum(float(x["cagnotte"]) for x in lignes), 2)
+        deja = lignes[0].get("_verse") or 0
+        m = round(credit - deja, 2)   # reste à virer
         a = achats.get(aid) or (base.lire("achats", f"select=*&id=eq.{aid}") or [{}])[0]
         vir.append({"id": f"vire-{aid}", "d": a.get("date_achat"), "titre": f"{eur(m)} · {magasin(a.get('lieu'))} · {jour(a.get('date_achat'))}",
-                    "sous": "loyalty credit", "articles": [nom_set(x) for x in lignes],
+                    "sous": f"loyalty credit {eur(credit)}" + (f" · {eur(deja)} already moved · {eur(m)} left" if deja else ""),
+                    "articles": [nom_set(x) for x in lignes],
                     "action": {"type": "vire", "achat_id": aid, "montant": m, "label": "Transferred"}})
     if vir:
         vir.sort(key=lambda v: (str(v["d"]), v["id"]), reverse=True)  # le plus récent en haut
@@ -354,7 +599,84 @@ def a_regulariser(obj: dict) -> list[dict]:
         out.append({"id": "tresorerie", "type": "reglage", "titre": "Set up the cash balance",
                     "detail": "Paste the treasury SQL in Supabase and confirm your starting cash, so alerts know how much you can spend."})
     out += partage("rappels", lambda: json.loads(RAPPELS.read_text())) or []
+    out += vitrines()
+    # Une seule carte « Money to move » : la vitrine Vinted rejoint les cagnottes à reverser
+    vit = next((c for c in out if c["id"] == "vitrines"), None)
+    vir = next((c for c in out if c["id"] == "virements"), None)
+    if vit and vir:
+        vir["lignes"] += vit["lignes"]
+        tot = sum(float(l["action"].get("montant") or 0) for l in vir["lignes"])
+        vir["titre"] = f"Move {eur(tot)} from your personal account to the LEGO account"
+        vir["detail"] += " Vinted boosts paid by the Vinted balance are listed here too."
+        out.remove(vit)
+    elif vit:
+        vit["id"] = "virements"
+    compenser_virements(out)
+    u = urssaf()
+    if u:
+        out.insert(0, u)   # au premier plan
     return out
+
+
+def vitrines() -> list:
+    """Vitrines Vinted : à rembourser par le perso, et effet sur les ventes Vinted
+    (ventes par jour pendant la vitrine, la semaine d'avant et la semaine d'après)."""
+    tout = base.json_partage("vitrines", STOCK / "vitrines.json", [])
+    if not tout:
+        return []
+    out = []
+    dus = [v for v in tout if not v.get("rembourse_le")]
+    if dus:
+        out.append({"id": "vitrines", "type": "transfert",
+                    "titre": f"Move {eur(sum(v['montant'] for v in dus))} from your personal account to the LEGO account (Vinted boost)",
+                    "detail": "The Vinted balance paid the boost; your personal account pays it back. Tap Transferred once done.",
+                    "lignes": [{"id": v["id"], "titre": f"{eur(v['montant'])} · boost {jour(v['debut'])} to {jour(v['fin'])}",
+                                "action": {"type": "vitrine_rembourse", "vitrine": v["id"], "montant": v["montant"], "label": "Transferred"}} for v in dus]})
+    auj = dt.date.today()
+    lignes = []
+    for v in sorted(tout, key=lambda v: v["debut"], reverse=True)[:6]:
+        d, f = dt.date.fromisoformat(v["debut"]), dt.date.fromisoformat(v["fin"])
+        n = (f - d).days + 1
+        def par_jour(a, b):
+            b = min(b, auj)
+            if b < a:
+                return None
+            vs = [x for x in base.lire("ventes", f"select=prix_vente,plateforme&date_vente=gte.{a}&date_vente=lte.{b}&limit=1000")
+                  if "VINTED" in str(x.get("plateforme") or "").upper()]
+            j = (b - a).days + 1
+            return len(vs) / j, sum(float(x["prix_vente"] or 0) for x in vs) / j
+        p = [par_jour(d - dt.timedelta(days=n), d - dt.timedelta(days=1)), par_jour(d, f),
+             par_jour(f + dt.timedelta(days=1), f + dt.timedelta(days=n))]
+        txt = lambda r: f"{r[0]:.1f} sales/day ({eur(r[1])})" if r else "not yet"
+        lignes.append({"id": v["id"] + "-m", "titre": f"Boost {jour(v['debut'])} to {jour(v['fin'])} · {eur(v['montant'])}",
+                       "sous": f"before {txt(p[0])} · during {txt(p[1])} · after {txt(p[2])}"})
+    out.append({"id": "vitrines-effet", "type": "ventes", "calme": True,
+                "titre": "Vinted boost: effect on sales",
+                "detail": "Vinted sales per day in the week before, during and after each boost. Only logged sales count.",
+                "lignes": lignes})
+    return out
+
+
+def urssaf() -> dict | None:
+    """Prochaine déclaration URSSAF trimestrielle (micro-entreprise) : 31/01, 30/04, 31/07, 31/10.
+    Carte calme jusqu'à 14 jours avant, puis en haut de la liste et comptée dans le badge.
+    Disparaît quand « Paid » est touché (fichier partagé « urssaf »)."""
+    payes = base.json_partage("urssaf", STOCK / "urssaf.json", {})
+    auj = dt.date.today()
+    for an in (auj.year - 1, auj.year, auj.year + 1):
+        for mois, jourm, trim in ((1, 31, 4), (4, 30, 1), (7, 31, 2), (10, 31, 3)):
+            d = dt.date(an, mois, jourm)
+            if str(d) in payes or d < auj - dt.timedelta(days=30):
+                continue
+            n = (d - auj).days
+            q = f"Q{trim} {an - 1 if trim == 4 else an}"
+            quand = "today" if n == 0 else "tomorrow" if n == 1 else f"in {n} days" if n > 0 else f"{-n} days late"
+            return {"id": f"urssaf-{d}", "type": "impots", "calme": n > 14,
+                    "titre": f"Pay URSSAF for {q} before {d.strftime('%d/%m')} ({quand})",
+                    "detail": "Declare the turnover of the quarter and pay on autoentrepreneur.urssaf.fr. "
+                              "Pay a day or two early: the deadline is the last day. Tap Paid once done.",
+                    "action": {"type": "urssaf_paye", "echeance": str(d), "label": "Paid"}}
+    return None
 
 
 def explication_note(nt: dict) -> str:
@@ -433,7 +755,7 @@ def deals() -> list[dict]:
             v = juger_set(d["id_set"], float(d["prix"]), ref)
             nt = {}
             det = alertes.details(d["id_set"], float(d["prix"]), ref, tresor, stock.get(d["id_set"], 0), part_out, nt, engage)
-            d.update(verdict="à regarder" if nt.get("assez") and v.decision == "achète" else v.decision, prix_max=round(v.prix_max, 2) if v.prix_max else None, raison=v.raison, **nt,
+            d.update(verdict="à regarder" if nt.get("assez") and v.decision == "achète" else v.decision, prix_max=round(v.prix_max, 2) if v.prix_max else None, raison=v.raison, **{k: w for k, w in nt.items() if k != "_court"},
                      # Lignes déjà montrées autrement sur la carte : stratégie, prix public, retrait
                      details=[l for l in det if not l.startswith(("👉", "Prix public", "🔚", "✋", "Quantité conseillée"))]
                      , memo=memo_note(nt) if nt.get("lettre") else None, img=vignette(d["id_set"]),
@@ -449,6 +771,14 @@ def deals() -> list[dict]:
                 elif rt:
                     d["retrait"] = {"etat": "bientôt" if dt.date.fromisoformat(rt) <= dt.date.today() + dt.timedelta(days=183) else "plus tard",
                                     "date": rt, "sur": str(x.get("niveau_retrait") or "") if x.get("niveau_retrait") == x.get("niveau_retrait") else ""}
+            try:  # prix situé dans l'historique Dealabs du set (demande du 02/11)
+                import historique_prix
+                pp = float(x["prix_public"]) if len(x) and x.get("prix_public") == x.get("prix_public") else None
+                d["hp"] = historique_prix.verdict(str(d["id_set"]), float(d["prix"]), d["id"], d.get("titre") or "",
+                                                  jour=str(d.get("vu_le") or "")[:10] or None, prix_public=pp,
+                                                  gamme=x.get("theme_bs") if len(x) else None, en=True)
+            except Exception as e:
+                print("historique :", e)
         out.append({k: v for k, v in d.items() if v is not None})
     return out
 
@@ -499,20 +829,20 @@ def historique(n_achats: int = 120, n_ventes: int = 250) -> dict:
         if a["id"] in dus:
             ha[-1]["rg"] = "Loyalty credit not moved to the LEGO account yet"
     ventes = base.lire("ventes", f"select=id,article_id,date_vente,plateforme,produit,nom_article,quantite,prix_vente,"
-                                 f"co_investisseur&order=date_vente.desc.nullslast,id.desc&limit={n_ventes}")
+                                 f"co_investisseur,commande_id&order=date_vente.desc.nullslast,id.desc&limit={n_ventes}")
     ids = ",".join({str(v["article_id"]) for v in ventes if v.get("article_id")}) or "0"
-    sets = {x["id"]: x for x in base.lire("articles", f"select=id,id_set,designation&id=in.({ids})&limit=10000")}
+    sets = {x["id"]: x for x in base.lire("articles", f"select=id,id_set,designation,achat_id&id=in.({ids})&limit=10000")}
     hv = []
     for v in ventes:
         x = sets.get(v.get("article_id"))
-        if v.get("produit") == "SET" and x:
+        if v.get("produit") == "SET" and x and x.get("id_set"):   # un lot d'achat (sans n° de set) : nom de la vente
             nom = nom_set(x)
         else:
             nom = str(v.get("nom_article") or "?").removeprefix("LEGO ").capitalize()
         hv.append({"id": v["id"], "d": v["date_vente"], "p": str(v.get("plateforme") or "").title(),
                    "k": str(v.get("produit") or "").lower(), "n": nom, "q": v.get("quantite") or 1,
                    "px": v.get("prix_vente"), "co": 1 if v.get("co_investisseur") else 0,
-                   "a": v.get("article_id")})
+                   "a": v.get("article_id"), "cm": v.get("commande_id"), "la": (x or {}).get("achat_id")})
     return {"maj": maintenant().isoformat(timespec="seconds"), "achats": ha, "ventes": hv, "depenses": depenses()}
 
 
@@ -543,13 +873,14 @@ def main():
     obj = objectifs()
     etat = {"maj": maintenant().isoformat(timespec="seconds"), "automatisations": automatisations(),
             "tresorerie": base.tresorerie(), "objectifs": obj, "a_faire": a_regulariser(obj), "deals": deals(),
-            "origines": origines(), "baisses": baisses(), "seuils_gain": seuils()}
+            "origines": origines(), "baisses": baisses(), "republier": lundi().get("republier") or {}, "seuils_gain": seuils()}
     # Le document de l'application est limité à 256 Kio : on retire les vignettes
     # des deals les plus anciens tant qu'il dépasse 230 Ko.
     for d in reversed(etat["deals"]):
         if len(json.dumps(etat, ensure_ascii=False, default=str).encode()) <= 230_000:
             break
         d["img"] = None
+    prevenir_retards()
     SORTIE.parent.mkdir(parents=True, exist_ok=True)
     SORTIE.write_text(json.dumps(etat, ensure_ascii=False, default=str))
     print(f"{SORTIE} : {len(etat['automatisations'])} automatisations, {len(etat['a_faire'])} à régulariser, "
@@ -560,6 +891,8 @@ def main():
     import a_publier
     a_publier.main()
     h["ex"] = json.loads(a_publier.EXEMPLAIRES.read_text())
+    # Prix d'annonce à jour (un colis reçu fait entrer un set en stock) sans republier l'appli
+    h["apub"] = json.loads(a_publier.SORTIE.read_text())
     # Lecture de la base ratée (0 achat ou stock vide) : on garde le fichier précédent
     # plutôt que de montrer un stock à zéro dans l'inventaire.
     if not h.get("achats") or not h.get("ex"):

@@ -107,11 +107,134 @@ def risque(fiabilite: str, chaleur) -> str:
     return "moyen" if froid else "sûr"
 
 
+# Set encore au catalogue : l'acheteur Vinted compare au prix LEGO. Prix affiché
+# + protection acheteur (fixe + % du prix) + port doit rester sous le prix public,
+# sinon l'annonce ne part pas.
+PROTECTION_FIXE, PROTECTION_PCT, PORT_ACHETEUR = 0.70, 0.05, 4.0
+
+
+# Port payé par l'acheteur Vinted selon le poids du colis (point relais, ordre de grandeur) :
+# un gros carton coûte bien plus que 4 €, ce qui baisse le prix d'annonce maximum.
+PORT_ACHETEUR_KG = [(1, 4.0), (2, 5.5), (5, 7.5), (10, 10.0)]
+# Encore en vente chez LEGO : l'acheteur doit payer au moins 10 % de moins que chez LEGO
+# (port compris), sinon il achète neuf là-bas (promos, points Insiders).
+REMISE_CATALOGUE = 0.90
+# Prix d'annonce maximum d'un set au catalogue = prix LEGO × ça (13/11 : marge de négo, toujours sous le prix LEGO).
+ANNONCE_CATALOGUE = 0.88
+
+
+def port_acheteur(set_num=None) -> float:
+    """Port que l'acheteur ajoute au prix (PORT_ACHETEUR si le poids est inconnu)."""
+    if not set_num:
+        return PORT_ACHETEUR
+    try:
+        import port
+        c = port.colis(str(set_num).split("-")[0])
+    except Exception:
+        c = None
+    if not c:
+        return PORT_ACHETEUR
+    return next((p for m, p in PORT_ACHETEUR_KG if c["kg"] <= m), PORT_ACHETEUR_KG[-1][1] + 3)
+
+
+def plafond_catalogue(prix_public, set_num=None) -> float | None:
+    """Prix d'annonce maximum (à l'euro inférieur) d'un set encore au catalogue :
+    prix + frais acheteur + port (selon le poids du set) reste 10 % sous le prix LEGO."""
+    if not prix_public or prix_public != prix_public:
+        return None
+    return float(max(0, int((float(prix_public) * REMISE_CATALOGUE - PROTECTION_FIXE - port_acheteur(set_num)) / (1 + PROTECTION_PCT))))
+
+
+# eBay.fr depuis le 1/09/2026, vendeur particulier de l'EEE : aucun frais de vente (commission 0).
+# L'acheteur paie à eBay des frais de protection : 0,10 € + 7 % jusqu'à 20 € + 4 % de 20 à 300 €
+# + 2 % de 300 à 4 000 € (port non compté). Frais vendeur réglables si le compte passe pro,
+# ou si on dépasse 150 annonces par mois (0,35 € l'annonce en plus).
+EBAY_FRAIS_PCT, EBAY_FRAIS_FIXE = 0.0, 0.0
+
+
+def protection_ebay(p: float) -> float:
+    return 0.10 + 0.07 * min(p, 20) + 0.04 * max(0, min(p, 300) - 20) + 0.02 * max(0, min(p, 4000) - 300)
+
+
+def protection_vinted(p: float) -> float:
+    return PROTECTION_FIXE + PROTECTION_PCT * p
+
+
+def prix_ebay(prix_vinted: float) -> float:
+    """Prix d'annonce eBay équivalent à un prix Vinted : jamais moins de net pour toi
+    (frais vendeur eBay ajoutés), et autant que possible tant que l'acheteur eBay ne paie
+    pas plus que l'acheteur Vinted (frais de protection eBay plus bas au-delà de ~14 €)."""
+    import math
+    net_egal = (prix_vinted + EBAY_FRAIS_FIXE) / (1 - EBAY_FRAIS_PCT)
+    cible = prix_vinted + protection_vinted(prix_vinted)       # total payé par l'acheteur Vinted, hors port
+    bas, haut = 0.0, cible
+    for _ in range(40):                                         # prix eBay dont total acheteur = cible
+        m = (bas + haut) / 2
+        bas, haut = (m, haut) if m + protection_ebay(m) <= cible else (bas, m)
+    return float(max(math.ceil(net_egal), math.floor(bas)))
+
+
+def estime_revente(r) -> float:
+    """Prix de revente attendu d'un set (ligne du référentiel, dict ou pandas) : revente rapide si
+    encore au catalogue, sinon l'estimation ; retiré : la valeur après retrait si elle est plus haute."""
+    f = lambda k: float(r.get(k)) if r.get(k) not in (None, "") and r.get(k) == r.get(k) else 0.0
+    e = f("pv_rapide") or f("prix_vente_estime")
+    return max(e, f("pv_garde")) if r.get("statut") == "retiré" else e
+
+
+def prix_annonce(estime: float, cout: float, prix_public=None, au_catalogue: bool = False, plancher=None,
+                 set_num=None) -> dict:
+    """LE prix d'annonce d'un set, le même partout (alerte Telegram, appli, liste du lundi).
+    Départ = estimation de revente × PRIX_DEPART (marge pour les offres et la baisse de 5 %/30 j),
+    jamais sous le plancher (coût × MARGE_BRUTE_PLANCHER) ; encore au catalogue : plafonné
+    pour que prix + frais acheteur + port reste sous le prix LEGO, sans passer sous le plancher.
+    plancher : celui calculé sur l'achat entier (transaction.py), sinon coût × MARGE_BRUTE_PLANCHER."""
+    import math
+    arr = lambda p: float(math.ceil(p / 5) * 5) if p >= 30 else float(math.ceil(p))
+    plancher = cout * MARGE_BRUTE_PLANCHER if plancher is None else plancher
+    depart = estime * PRIX_DEPART
+    prix = max(depart, plancher, PRIX_MIN, GWP_DEFAUT if cout == 0 and not estime else 0)
+    prix = arr(prix) if prix else None
+    # Mini de négociation : coût × MARGE_BRUTE_PLANCHER, jamais relâché par le reste de l'achat
+    # (13/11 : on vise le meilleur net par vente).
+    mini = float(math.ceil(cout * MARGE_BRUTE_PLANCHER)) if cout else None
+    if mini and prix and prix < mini:
+        prix = arr(mini)
+    cap = plafond_annonce(prix_public) if au_catalogue else None
+    plafonne = bool(prix and cap and prix > cap)
+    if cap and prix and cap >= (mini or 0):
+        prix = cap          # au catalogue : on vise le haut de la fourchette, la négo descend vers le mini
+    garder = False
+    if plafonne:
+        # Encore au catalogue : annonce sous le prix LEGO avec de la place pour négocier ;
+        # si même là on passe sous le mini, on garde le set jusqu'à son retrait.
+        garder = bool(mini and cap < mini)
+        prix = max(cap, mini or 0)
+    return {"prix": prix, "depart": round(depart, 2), "plancher": round(plancher, 2), "mini": mini,
+            "cap": cap, "plafonne": plafonne, "garder": garder}
+
+
+def plafond_annonce(prix_public) -> float | None:
+    """Prix d'annonce maximum d'un set encore au catalogue : prix LEGO × ANNONCE_CATALOGUE,
+    au 5 € du dessous dès 30 € (prix ronds), à l'euro en dessous. L'écart avec le mini sert à négocier."""
+    import math
+    if not prix_public or prix_public != prix_public:
+        return None
+    p = float(prix_public) * ANNONCE_CATALOGUE
+    return float(math.floor(p / 5) * 5) if p >= 30 else float(math.floor(p))
+
+
 # Trésorerie disponible quand la base ne la donne pas (table « tresorerie »).
 BUDGET = 1000.0
 # Valeurs tirées des ventes réelles : neutres ici, les vraies sont dans le fichier privé.
 GWP_DEFAUT = 25.0                 # revente d'un cadeau Lego.com non chiffré
+PRIX_MIN = 5.0                    # prix d'annonce minimal (polybags…), vraie valeur dans le fichier privé
 MARGE_BRUTE_PLANCHER = 1.30       # prix plancher d'annonce tant que le lot n'est pas remboursé
+# Points Insiders : 750 points = 5 € de bon. Une boîte payée en points doit rapporter
+# au moins FACTEUR_POINTS fois la valeur des points dépensés (vraie valeur dans le fichier privé).
+POINTS_PAR_EURO = 150.0
+FACTEUR_POINTS = 1.4   # 14/11 : 100 € de points doivent rapporter 140 €, comme de l’argent
+PRIX_DEPART = 1.15                # prix de départ d'une nouvelle annonce = estimation × ça, puis −5 % / 30 j jusqu'au plancher
 TELEGRAM_CHAT_ID = None           # destinataire des alertes (privé)
 # Part de la trésorerie qu'un deal peut engager : PART_MAX_DEAL pour un deal
 # risqué, plus quand la revente est sûre, et encore plus pour une vraie
@@ -176,20 +299,47 @@ BONUS_GAMME_PHARE = 1.15
 # Set retiré proposé à −30 % ou plus sous son prix public : alerte « rare » qui sonne.
 SEUIL_RARE = 0.70
 
-DATE_APPORT = "2026-11-20"  # semaine du Black Friday
+DATE_APPORT = "2026-11-03"  # débloqué le 03/11 : les meilleurs prix des enseignes tombent avant le Black Friday
 
 
 def caisse_utilisable(tresor: dict, garde: bool, opportunite: bool) -> float:
-    """Cash qu'un achat peut engager sans entamer la réserve. Un achat à garder
-    n'utilise jamais l'apport à rendre et laisse au moins la moitié du capital."""
+    """Cash qu'un achat peut engager sans entamer la réserve. Avant DATE_APPORT, un
+    achat à garder n'utilise pas l'apport à rendre et laisse au moins la moitié du
+    capital propre. Depuis DATE_APPORT (Black Friday hors LEGO.com, 04/11), l'apport
+    sert à tous les achats, à garder compris, avec la même réserve."""
     capital = tresor.get("capital") or tresor["solde"]
-    if garde:
+    apport_ouvert = dt.date.today() >= dt.date.fromisoformat(DATE_APPORT)
+    if garde and not apport_ouvert:
         propre = tresor.get("capital_propre") or capital
         return max(0.0, tresor["solde"] - tresor.get("a_rendre", 0) - SEUIL_GARDE * propre)
     # L'apport à rendre est gardé pour le Black Friday : avant DATE_APPORT, seule
     # une vraie opportunité peut y toucher.
-    bloque = 0.0 if opportunite or dt.date.today() >= dt.date.fromisoformat(DATE_APPORT) else tresor.get("a_rendre", 0)
+    bloque = 0.0 if opportunite or apport_ouvert else tresor.get("a_rendre", 0)
     return max(0.0, tresor["solde"] - bloque - (RESERVE_OPPORTUNITE if opportunite else RESERVE) * (capital - bloque))
+
+
+# Points Insiders sur LEGO.com (14/11) : on ne les déduit jamais du prix d'achat, mais
+# quand ils sont multipliés (×2, ×4), un set un peu sous le plancher reste intéressant.
+# 7,5 points par euro, 750 points = 5 € : 5 % du prix en points normaux. On compte
+# 40 % des points EN PLUS du normal (prudence : il faut les dépenser ensuite).
+POINTS_PART_PRIX = 7.5 * 5 / 750
+POINTS_PART_COMPTEE = 0.4
+# Périodes de points multipliés connues (du, au, multiplicateur), à tenir à jour
+POINTS_X = [("2026-11-21", "2026-11-22", 2)]
+
+
+def points_x(jour=None) -> int:
+    j = str(jour or dt.date.today())[:10]
+    return max([x for du, au, x in POINTS_X if du <= j <= au] or [1])
+
+
+def plancher(lego_com: bool = False, jour=None, x: int | None = None) -> float:
+    """Marge brute plancher (prix de vente / prix d'achat), abaissée sur LEGO.com
+    quand les points Insiders sont multipliés : ×2 → ~+37 %, ×4 → ~+32 %."""
+    if not lego_com:
+        return MARGE_BRUTE_PLANCHER
+    x = x or points_x(jour)
+    return MARGE_BRUTE_PLANCHER * (1 - POINTS_PART_COMPTEE * POINTS_PART_PRIX * (x - 1))
 
 
 def _charger_parametres():

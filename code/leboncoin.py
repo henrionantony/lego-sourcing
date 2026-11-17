@@ -24,15 +24,24 @@ def titre(texte: str) -> str:
     return (texte[:fin] if fin > 0 else texte.split(" Prix:")[0]).strip()
 
 
-def lire(chemin: Path) -> list[dict]:
+def lire(chemin: Path, inactives: bool = False) -> list[dict]:
     lignes = []
     with open(chemin, encoding="utf-8-sig") as f:
         for r in csv.DictReader(f, delimiter=";"):
-            t = titre(r.get("texte") or r["titre"])
-            prix = re.search(r"(?:Prix:|^)\s*([\d\s ]+(?:,\d+)?)\s*€", (r.get("texte") or "").replace(t, "").strip())
-            lignes.append({"id": r["id"], "t": t, "u": r["url"],
-                           "p": float(prix.group(1).replace(" ", "").replace(" ", "").replace(",", ".")) if prix else None,
-                           "sets": NUM.findall(t)})
+            # export fait connecté (« Mes annonces ») : les annonces désactivées portent « Réactiver l'annonce »
+            if not inactives and "Réactiver l" in (r.get("texte") or ""):
+                continue
+            if r.get("titre") and r.get("prix"):          # extension ≥ 1.6 : titre et prix propres
+                t, p = r["titre"].strip(), float(r["prix"].replace(",", "."))
+                # l'extension colle parfois le n° de set final du titre au prix (« 10280 » + « 60 » → 1028060)
+                m = re.search(re.escape(t) + r"\s+([\d\s\u202f]+(?:,\d+)?)\s*€", r.get("texte") or "")
+                if m:
+                    p = float(re.sub(r"\s", "", m.group(1)).replace(",", "."))
+            else:
+                t = titre(r.get("texte") or r["titre"])
+                prix = re.search(r"(?:Prix:|^)\s*([\d\s ]+(?:,\d+)?)\s*€", (r.get("texte") or "").replace(t, "").strip())
+                p = float(prix.group(1).replace(" ", "").replace(" ", "").replace(",", ".")) if prix else None
+            lignes.append({"id": r["id"], "t": t, "u": r["url"], "p": p, "sets": NUM.findall(t)})
     return lignes
 
 
@@ -89,8 +98,14 @@ def main():
     export = max((RACINE / "stock" / "vinted").glob("vinted_annonces_*.csv"))
     with open(export, encoding="utf-8-sig") as f:
         vendus = {n for r in csv.DictReader(f, delimiter=";") if r["statut"] == "vendu" for n in NUM.findall(r["titre"])}
+    # … mais seulement s'il ne t'en reste plus aucun dans la base : sinon l'annonce Leboncoin vend un autre exemplaire
+    try:
+        ex = json.loads((APP / "exemplaires.json").read_text())
+    except (OSError, ValueError):
+        ex = {}
+    reste = lambda s: sum(c[4] for c in (ex.get(s) or {}).get("c", []))
     for l in seules:
-        l["vendu"] = bool(set(l["sets"]) & vendus)
+        l["vendu"] = any(s in vendus and not reste(s) for s in l["sets"])
     (APP / "leboncoin.json").write_text(json.dumps({
         "export": chemin.name, "date": (re.search(r"\d{4}-\d{2}-\d{2}", chemin.name) or [""])[0], "lien": {v: next(l["u"] for l in lbc if l["id"] == i) for v, i in lien.items()},
         "seules": [{k: l[k] for k in ("id", "t", "p", "u", "vendu")} for l in seules]}, ensure_ascii=False))

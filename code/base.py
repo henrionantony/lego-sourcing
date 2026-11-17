@@ -4,10 +4,16 @@ Sans SUPABASE_URL / SUPABASE_SERVICE_KEY (par exemple sur GitHub sans ces
 secrets), ou si une table n'existe pas encore, tout devient sans effet : les
 scripts tournent comme avant.
 """
+import re
 import datetime as dt
 import json
 import os
 import urllib.request
+
+
+# Octets reçus de la base par ce processus (07/11 : quota de 5 Go/mois dépassé) ; noté dans
+# executions.octets pour suivre la consommation de chaque tâche
+OCTETS = 0
 
 
 def _config():
@@ -32,6 +38,8 @@ def _appel(methode: str, chemin: str, corps=None, prefer: str = ""):
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
             txt = r.read()
+            global OCTETS
+            OCTETS += len(txt) + 500  # + en-têtes
             return json.loads(txt) if txt else []
     except Exception as e:  # base injoignable ou table absente : on n'arrête pas le script
         print(f"base : {methode} {chemin.split('?')[0]} impossible ({e})")
@@ -57,13 +65,13 @@ def debut_execution(tache: str):
 def fin_execution(id_exec, ok: bool, resume: str = "", erreur: str = ""):
     if id_exec:
         _appel("PATCH", f"executions?id=eq.{id_exec}",
-               {"fin": dt.datetime.now(dt.timezone.utc).isoformat(), "ok": ok, "resume": resume[:500], "erreur": erreur[:2000] or None})
+               {"fin": dt.datetime.now(dt.timezone.utc).isoformat(), "ok": ok, "resume": (resume[:480] + f" · base {OCTETS // 1024} Ko"), "erreur": erreur[:2000] or None})
 
 
 def stock_par_set() -> dict[str, int]:
     """Exemplaires encore en stock par numéro de set (vue « stock »)."""
     out: dict[str, int] = {}
-    for l in lire("stock", "select=id_set,reste&reste=gt.0&id_set=not.is.null&limit=10000"):
+    for l in lire("stock", "select=id_set,reste&reste=gt.0&id_set=not.is.null&statut=neq.termin%C3%A9&limit=10000"):
         s = str(l["id_set"]).split("-")[0].removesuffix(".0")
         out[s] = out.get(s, 0) + int(l["reste"] or 0)
     return out
@@ -85,14 +93,46 @@ def engage_par_gamme(jours: int = 90) -> dict[str, float]:
 def tresorerie():
     """Trésorerie disponible (somme des mouvements de la table « tresorerie »)
     et montant des apports encore à rendre ; None si la table est vide ou absente."""
-    lignes = lire("tresorerie", "select=montant,type&limit=100000")
+    lignes = lire("tresorerie", "select=montant,type,libelle,le,vente_id&limit=100000")
     if not lignes:
         return None
     solde = sum(float(l["montant"]) for l in lignes)
+    # Les ventes entrent nettes des 21 % de prélèvements, mais l'argent reste sur les
+    # comptes jusqu'à l'échéance URSSAF / impôts : on le compte dans le cash, et
+    # « impots » dit combien garder ; un paiement (type urssaf ou impots) le fait sortir.
+    from regles import PRELEVEMENTS
+    TAUX_URSSAF = 0.125
+    k = PRELEVEMENTS / (1 - PRELEVEMENTS)
+    ids = [str(l["vente_id"]) for l in lignes if l["type"] == "vente" and l.get("vente_id")]
+    frais = {}
+    for i in range(0, len(ids), 200):
+        for v in lire("ventes", f"select=id,frais_envoi&frais_envoi=not.is.null&id=in.({','.join(ids[i:i + 200])})") or []:
+            frais[str(v["id"])] = float(v["frais_envoi"] or 0)
+    preleve = sum((float(l["montant"]) + frais.get(str(l.get("vente_id")), 0.0)) * k
+                  for l in lignes if l["type"] == "vente")
+    # Part URSSAF : taux micro-entreprise vente de biens (12,5 % constaté),
+    # le reste des 21 % est l'impôt sur le revenu, payé l'année suivante.
+    urssaf = preleve * TAUX_URSSAF / PRELEVEMENTS
+    paye_u = -sum(float(l["montant"]) for l in lignes if l["type"] == "urssaf" and str(l.get("le") or "") > "2026-10-31")
+    paye_i = -sum(float(l["montant"]) for l in lignes if l["type"] == "impots" and str(l.get("le") or "") > "2026-10-31")
+    solde = round(solde + preleve, 2)
+    import datetime as _dt
+    auj = _dt.date.today()
+    echeance = min(d for d in (_dt.date(a, m, j) for a in (auj.year, auj.year + 1)
+                               for m, j in ((1, 31), (4, 30), (7, 31), (10, 31))) if d >= auj)
     a_rendre = sum(float(l["montant"]) for l in lignes if l["type"] in ("apport", "remboursement"))
     capital = sum(float(l["montant"]) for l in lignes if l["type"] in ("départ", "apport"))
     propre = sum(float(l["montant"]) for l in lignes if l["type"] == "départ")
-    return {"solde": solde, "a_rendre": max(a_rendre, 0.0), "capital": capital, "capital_propre": propre}
+    # Parts des associés encaissées avec les ventes faites ensemble (type « associe »,
+    # libellé « À rendre à X : … », un remboursement « Rendu à X : … » en négatif)
+    dus: dict[str, float] = {}
+    for l in lignes:
+        if l["type"] == "associe":
+            m = re.match(r"\s*(?:À rendre|Rendu) à ([^:]+?)\s*:", str(l.get("libelle") or ""))
+            nom = m.group(1) if m else "?"
+            dus[nom] = round(dus.get(nom, 0.0) + float(l["montant"]), 2)
+    return {"solde": solde, "urssaf": round(max(urssaf - paye_u, 0.0), 2), "impots": round(max(preleve - urssaf - paye_i, 0.0), 2), "impots_le": echeance.isoformat(), "a_rendre": max(a_rendre, 0.0), "capital": capital, "capital_propre": propre,
+            "dus": {k: v for k, v in dus.items() if abs(v) >= 0.01}}
 
 
 def part_out_par_gamme() -> dict[str, tuple[int, int]]:
@@ -120,8 +160,51 @@ def docs(prefixe: str):
     """Documents dont le chemin commence par le préfixe (ex. « actions/ ») ;
     None si la table n'existe pas encore."""
     import urllib.parse
-    return _appel("GET", "app_docs?select=chemin,data,maj&limit=10000&chemin=like."
-                  + urllib.parse.quote(prefixe + "*", safe="/*"))
+    filtre = "chemin=like." + urllib.parse.quote(prefixe + "*", safe="/*")
+    # 07/11 (quota) : on ne lit d'abord que chemin + date de mise à jour, et le contenu seulement
+    # des documents changés depuis la copie gardée sur le disque (même machine, passages suivants)
+    tetes = _appel("GET", "app_docs?select=chemin,maj&limit=10000&" + filtre)
+    if tetes is None:
+        return None
+    out, manquants = [], []
+    for t in tetes:
+        c = _cache_lire(t["chemin"])
+        if c and c.get("maj") == t["maj"]:
+            out.append({"chemin": t["chemin"], "data": c["data"], "maj": t["maj"]})
+        else:
+            manquants.append(t["chemin"])
+    for i in range(0, len(manquants), 40):
+        lot = manquants[i:i + 40]
+        liste = ",".join('"' + c.replace('"', '\\"') + '"' for c in lot)
+        r = _appel("GET", "app_docs?select=chemin,data,maj&limit=10000&chemin=in.(" + urllib.parse.quote(liste, safe=",") + ")")
+        if r is None:
+            return None
+        for x in r:
+            _cache_ecrire(x["chemin"], x)
+            out.append(x)
+    return out
+
+
+def _cache_fichier(chemin: str):
+    import hashlib
+    from pathlib import Path
+    return Path.home() / ".cache" / "lhq_docs" / (hashlib.sha256(chemin.encode()).hexdigest()[:24] + ".json")
+
+
+def _cache_lire(chemin: str):
+    try:
+        return json.loads(_cache_fichier(chemin).read_text())
+    except (OSError, ValueError):
+        return None
+
+
+def _cache_ecrire(chemin: str, x: dict):
+    try:
+        f = _cache_fichier(chemin)
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(json.dumps({"maj": x.get("maj"), "data": x.get("data")}, ensure_ascii=False))
+    except OSError:
+        pass
 
 
 def doc(chemin: str):
@@ -177,7 +260,10 @@ def _stockage(methode: str, chemin: str, contenu: bytes | None = None, type_: st
     req = urllib.request.Request(racine + ("" if methode == "POST" else "authenticated/") + "app/" + chemin,
                                  data=contenu, headers=entetes, method=methode)
     with urllib.request.urlopen(req, timeout=60) as r:
-        return r.read()
+        b = r.read()
+        global OCTETS
+        OCTETS += len(b) + 500
+        return b
 
 
 def fichier_prive_lire(chemin: str) -> bytes:

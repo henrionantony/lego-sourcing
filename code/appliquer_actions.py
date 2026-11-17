@@ -12,7 +12,9 @@ import sys
 from pathlib import Path
 
 import base
+import figs_sets
 from regles import PRELEVEMENTS
+from ventes_net import net
 
 
 REVERSEE = "Cagnotte reversée perso → pro"
@@ -189,6 +191,13 @@ def enregistrer_achat(a, id_set, designation, prix_unite, lieu, note, categorie=
 
 def vire(a):
     """Cagnotte reversée du compte perso vers le compte pro."""
+    # Déjà reversée en entier (bouton rejoué) : ne rien compter deux fois
+    deja = sum(float(m["montant"] or 0) for m in base.lire(
+        "tresorerie", f"select=montant&libelle=like.Cagnotte*&achat_id=eq.{int(a['achat_id'])}&limit=1000"))
+    du = sum(float(x["cagnotte"] or 0) for x in base.lire(
+        "articles", f"select=cagnotte&cagnotte=gt.0&achat_id=eq.{int(a['achat_id'])}&limit=1000"))
+    if du and deja >= du - 0.01:
+        return
     caisse(a.get("le", dt.date.today().isoformat()), float(a["montant"]), REVERSEE + f" (commande {int(a['achat_id'])})",
            achat_id=int(a["achat_id"]))
 
@@ -277,26 +286,91 @@ def vente_lot(a):
     if n > 1:
         der = base.lire("ventes", "select=commande_id&commande_id=not.is.null&order=commande_id.desc&limit=1")
         cmd = int(der[0]["commande_id"]) + 1 if der else 1
-    base.ajouter("ventes", [{"article_id": int(l["article_id"]) if l.get("article_id") else None, "date_vente": d,
+    faites = base._appel("POST", "ventes", [{"article_id": int(l["article_id"]) if l.get("article_id") else None, "date_vente": d,
                              "plateforme": str(a.get("plateforme") or "").upper()[:40],
                              "produit": "FIGURINE" if (figs or l.get("fig")) else "SET", "id_minifig": l.get("fig") or None,
                              "nom_article": str(l.get("titre") or l.get("set") or l.get("fig") or "")[:300], "quantite": 1,
                              "prix_vente": round(float(l["prix"]), 2),
+                             "revenu_net": net(l["prix"]),
                              "commande_id": cmd,
-                             "notes": note + ("" if l.get("article_id") else " (origine inconnue)")} for l in lignes])
+                             "notes": note + ("" if l.get("article_id") else " (origine inconnue)")} for l in lignes],
+                         "return=representation") or []
+    for v in faites:
+        figurine_vendue(v)
     caisse(d, total * (1 - PRELEVEMENTS), f"Vente lot ({n}) : " + ", ".join(str(l.get("set") or l.get("fig") or l.get("titre")) for l in lignes))
+
+
+def figurine_vendue(v: dict):
+    """Figurine vendue : la ligne de la table figurines (set découpé, lot) est cochée ;
+    sans origine connue, la vente est rattachée à l'achat de cette figurine."""
+    if not v.get("id_minifig"):
+        return
+    art = figs_sets.vendre(v["id"], v["id_minifig"], v.get("article_id"))
+    if art and not v.get("article_id"):
+        base.modifier("ventes", f"id=eq.{v['id']}", {"article_id": art, "notes": str(v.get("notes") or "").replace(" (origine inconnue)", "")})
+
+
+def horizon(a):
+    """Mission « derniers achats » : poster tout de suite (Rotation) ou garder jusqu'à la retraite (Retirement)."""
+    h = a.get("horizon")
+    if h not in ("Rotation", "Retirement"):
+        raise ValueError("horizon inconnu")
+    ids = ",".join(str(int(i)) for i in a.get("article_ids") or [])
+    if not ids:
+        return
+    vise = str(a.get("vise_le") or "")[:10] if h == "Retirement" else None
+    if vise and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", vise):
+        vise = None
+    base.modifier("articles", f"id=in.({ids})", {"horizon": h, "vise_le": vise})
+
+
+def figs_lier(a):
+    """« I have them all » de l'onglet Part-out : figurines rattachées à l'article."""
+    figs_sets.lier(int(a["article_id"]), a.get("figs") or [])
+
+
+def figs_ajouter(a):
+    """Inventaire des minifigs (Scan › Minifigures) avec « From which purchase? » :
+    les figurines comptées sont AJOUTÉES à l'article (une ligne par figurine, rien
+    n'est remplacé : un lot peut se compter en plusieurs fois). Pour un set découpé,
+    seules les figurines au-delà de celles déjà rattachées sont ajoutées."""
+    art_id = int(a["article_id"])
+    art = base.lire("articles", f"select=id,categorie&id=eq.{art_id}")
+    if not art:
+        raise ValueError("article inconnu")
+    deja = {}
+    if (art[0].get("categorie") or "").upper() == "SET":
+        for f in base.lire("figurines", f"select=ref&article_id=eq.{art_id}&vente_id=is.null") or []:
+            deja[f["ref"]] = deja.get(f["ref"], 0) + 1
+    rows = []
+    for f in a.get("figs") or []:
+        ref = re.sub(r"[^a-z0-9-]", "", str(f.get("ref") or "").lower())[:30]
+        n = max(0, min(200, int(f.get("n") or 1)))
+        if not ref:
+            continue
+        pris = min(n, deja.get(ref, 0))
+        deja[ref] = deja.get(ref, 0) - pris
+        rows += [{"article_id": art_id, "ref": ref, "nom": str(f.get("nom") or "")[:200], "quantite": 1}] * (n - pris)
+    if rows:
+        base.ajouter("figurines", rows)
 
 
 def vente(a):
     art = article_de(a)
-    base.ajouter("ventes", [{"article_id": art, "date_vente": str(a.get("date") or a.get("le"))[:10],
-                             "plateforme": str(a.get("plateforme") or "").upper()[:40],
-                             "produit": "FIGURINE" if a.get("fig") else "SET",
-                             "nom_article": str(a.get("titre") or "")[:300], "quantite": 1,
-                             "prix_vente": float(a["prix"]), "id_minifig": a.get("fig") or None,
-                             "notes": "Saisie depuis l'application" + ("" if art else " (origine inconnue)")}])
+    v = base._appel("POST", "ventes", [{"article_id": art, "date_vente": str(a.get("date") or a.get("le"))[:10],
+                                        "plateforme": str(a.get("plateforme") or "").upper()[:40],
+                                        "produit": "FIGURINE" if a.get("fig") else "SET",
+                                        "nom_article": str(a.get("titre") or "")[:300], "quantite": 1,
+                                        "prix_vente": float(a["prix"]), "id_minifig": a.get("fig") or None,
+                                        "port_paye": float(a["port"]) if a.get("port") else None,
+                                        "revenu_net": net(a["prix"], a.get("port")),
+                                        "notes": "Saisie depuis l'application" + ("" if art else " (origine inconnue)")}],
+                    "return=representation")
+    if v:
+        figurine_vendue(v[0])
     # Encaissé net des prélèvements, mis de côté pour l'URSSAF
-    caisse(a.get("date") or a.get("le"), float(a["prix"]) * (1 - PRELEVEMENTS), f"Vente : {a.get('titre') or ''}")
+    caisse(a.get("date") or a.get("le"), float(a["prix"]) * (1 - PRELEVEMENTS), f"Vente : {a.get('titre') or ''}",
+           vente_id=v[0]["id"] if v else None)
 
 
 # Corrections faites depuis l'onglet History : seuls ces champs sont modifiables.
@@ -375,6 +449,57 @@ def perte(a):
                              "notes": "Perdu ou donné, constaté à l'inventaire" + ("" if art else " (origine inconnue)")}])
 
 
+def supprime(a):
+    """Commande annulée (achat ou vente), effacée depuis l'onglet History comme si elle
+    n'avait jamais eu lieu : avec tout ce qui en dépend (articles, cagnotte, cashback,
+    mouvements de trésorerie, figurines)."""
+    ident = int(a["id_ligne"])
+    if a["table"] == "achats":
+        achat = base.lire("achats", f"select=id,notes&id=eq.{ident}")
+        if not achat:
+            return  # déjà effacé
+        arts = base.lire("articles", f"select=id,id_set&achat_id=eq.{ident}")
+        ids = ",".join(str(x["id"]) for x in arts)
+        # Ventes déjà rattachées à ces exemplaires : rattachées à un autre exemplaire en stock
+        vendus = base.lire("ventes", f"select=id,article_id&article_id=in.({ids})") if ids else []
+        for t, f in (("tresorerie", f"achat_id=eq.{ident}"), ("articles", f"achat_id=eq.{ident}"), ("achats", f"id=eq.{ident}")):
+            if base._appel("DELETE", f"{t}?{f}", prefer="return=minimal") is None:
+                raise RuntimeError(f"{t} : suppression impossible")
+        for v in vendus:
+            num = next((str(x["id_set"] or "").split("-")[0].removesuffix(".0") for x in arts if x["id"] == v["article_id"]), "")
+            base.modifier("ventes", f"id=eq.{v['id']}", {"article_id": article_de({"set": num}) if num else None})
+        # Le deal Dealabs redevient « non acheté »
+        for d in re.findall(r"dealabs\.com/\S*?-(\d{6,})\b", str(achat[0].get("notes") or "")):
+            base.modifier("deals", f"id=eq.{d}", {"achete": False})
+        # Les mails de colis qui pointaient sur cette commande n'y sont plus rattachés
+        import mails
+        tout = mails.tout()
+        if any(c.get("achat_id") == ident for c in tout):
+            for c in tout:
+                if c.get("achat_id") == ident:
+                    c.pop("achat_id")
+            base.json_partage_ecrire("commandes", mails.FICHIER, tout)
+    elif a["table"] == "ventes":
+        v = base.lire("ventes", f"select=*&id=eq.{ident}")
+        if not v:
+            return
+        v = v[0]
+        mouv = base.lire("tresorerie", f"select=id&vente_id=eq.{ident}")
+        if not mouv and str(v.get("date_vente") or "") >= DEBUT_TRESO:
+            # Ventes saisies avant le lien vente_id : le mouvement du même jour, même libellé, même montant
+            net = round(float(v.get("prix_vente") or 0) * (1 - PRELEVEMENTS), 2)
+            mouv = [m for m in base.lire("tresorerie", f"select=id,libelle,montant&le=eq.{v['date_vente']}&type=eq.vente")
+                    if abs(float(m["montant"]) - net) < 0.02 and str(m["libelle"]).startswith("Vente : ")][:1]
+            if not mouv:  # vendu dans un lot : on retire seulement sa part
+                caisse(v["date_vente"], -net, f"Annulation vente {ident} : {v.get('nom_article') or ''}")
+        for m in mouv:
+            base._appel("DELETE", f"tresorerie?id=eq.{m['id']}", prefer="return=minimal")
+        if base._appel("DELETE", f"ventes?id=eq.{ident}", prefer="return=minimal") is None:
+            raise RuntimeError("vente : suppression impossible")
+    else:
+        raise ValueError("table inconnue")
+
+
 SCANS = Path(__file__).resolve().parent.parent / "stock" / "scans.json"
 
 
@@ -384,11 +509,124 @@ def noter_scan(a):
     tout = base.json_partage("scans", SCANS, [])
     if any(x.get("id") == a.get("id") for x in tout):
         return
-    tout.append({"id": a.get("id"), "type": a["type"], "le": a.get("le"), "sets": {str(k): int(v) for k, v in (a.get("sets") or {}).items()}})
+    tout.append({"id": a.get("id"), "type": a["type"], "le": a.get("le"), "sets": {str(k): int(v) for k, v in (a.get("sets") or {}).items()},
+                 **({"zone": zone_propre(a["zone"])} if a.get("zone") else {})})
     base.json_partage_ecrire("scans", SCANS, tout)
 
 
-GESTES = {"perte": perte, "stock_trouve": noter_scan, "expedition": noter_scan, "colis_lien": colis_lien, "recu": recu, "cashback_recu": cashback_recu, "cashback_confirme": cashback_confirme, "achete": achete, "achat_libre": achat_libre, "vente": vente, "vente_lot": vente_lot, "vire": vire, "corrige": corrige}
+def zone_propre(z) -> str:
+    """Code d'emplacement saisi dans l'appli (A2, L1…) : lettres, chiffres, tirets, 12 caractères."""
+    return re.sub(r"[^A-Z0-9 -]", "", str(z or "").upper()).strip()[:12]
+
+
+def emplacement(a):
+    """Inventaire avec une zone choisie : les boîtes scannées sont rangées à cet endroit dans la base
+    (articles.emplacement). Les exemplaires sans emplacement sont servis d'abord ; une ligne de
+    plusieurs boîtes rangées à deux endroits garde les deux (« A2, D1 »)."""
+    zone = zone_propre(a.get("zone"))
+    if not zone:
+        return
+    stock = base.lire("stock", "select=id,id_set,reste,emplacement&reste=gt.0&categorie=eq.SET&limit=10000") or []
+    for s, n in (a.get("sets") or {}).items():
+        s, n = str(s), int(n)
+        lignes = [l for l in stock if str(l.get("id_set") or "").split("-")[0].removesuffix(".0") == s]
+        # inventaire : les boîtes pas encore rangées d'abord ; déplacement : celles déjà rangées ailleurs d'abord
+        lignes.sort(key=lambda l: (bool(l.get("emplacement")) != bool(a.get("deplacer")), l["id"]))
+        for l in lignes:
+            if n <= 0:
+                break
+            avant = [x.strip() for x in str(l.get("emplacement") or "").split(",") if x.strip()]
+            if zone in avant:
+                n -= int(l.get("reste") or 1)
+                continue
+            # une boîte seule déménage ; une ligne de plusieurs boîtes garde aussi l'ancien endroit
+            neuf = [zone] if int(l.get("reste") or 1) <= n or not avant else (avant + [zone])
+            base.modifier("articles", f"id=eq.{int(l['id'])}", {"emplacement": ", ".join(neuf)[:60]})
+            n -= int(l.get("reste") or 1)
+    # Exemplaire désigné dans le scan (« This one ») quand un set vient de plusieurs achats
+    par_id = {str(int(l["id"])): l for l in stock}
+    for art, n in (a.get("articles") or {}).items():
+        l = par_id.get(str(int(art)))
+        if not l:
+            continue
+        avant = [x.strip() for x in str(l.get("emplacement") or "").split(",") if x.strip()]
+        if zone in avant:
+            continue
+        neuf = [zone] if int(l.get("reste") or 1) <= int(n) or not avant else (avant + [zone])
+        base.modifier("articles", f"id=eq.{int(l['id'])}", {"emplacement": ", ".join(neuf)[:60]})
+
+
+def strategie(a):
+    """Stratégie choisie au scan d'inventaire (Whole set / Part-out). « sets » : appliquée à toutes les
+    boîtes en stock de ce set (un seul exemplaire) ; « articles » : à un exemplaire précis (plusieurs achats).
+    Revenir dessus plus tard = rescanner et choisir l'autre."""
+    stock = base.lire("stock", "select=id,id_set&reste=gt.0&categorie=eq.SET&limit=10000") or []
+    for s, v in (a.get("sets") or {}).items():
+        if v not in ("ENTIER", "LOT/DETAILS"):
+            raise ValueError("stratégie inconnue")
+        ids = [str(int(l["id"])) for l in stock if str(l.get("id_set") or "").split("-")[0].removesuffix(".0") == str(s)]
+        if ids:
+            base.modifier("articles", f"id=in.({','.join(ids)})", {"strategie": v})
+    # Plusieurs exemplaires du même set venant d'achats différents : choix exemplaire par exemplaire
+    en_stock = {str(int(l["id"])) for l in stock}
+    for art, v in (a.get("articles") or {}).items():
+        if v not in ("ENTIER", "LOT/DETAILS"):
+            raise ValueError("stratégie inconnue")
+        art = str(int(art))
+        if art in en_stock:
+            base.modifier("articles", f"id=eq.{art}", {"strategie": v})
+
+
+def urssaf_paye(a):
+    """Déclaration URSSAF du trimestre payée : la carte de la to-do disparaît."""
+    payes = base.json_partage("urssaf", URSSAF, {})
+    payes[str(a["echeance"])[:10]] = str(a.get("le") or dt.date.today())[:10]
+    base.json_partage_ecrire("urssaf", URSSAF, payes)
+
+
+VITRINES = Path(__file__).resolve().parent.parent / "stock" / "vitrines.json"
+
+
+def vitrine(a):
+    """Profil Vinted mis en vitrine : payé par la cagnotte Vinted (compte pro),
+    remboursé ensuite par le compte perso (carte « Money to move » dans To do)."""
+    tout = base.json_partage("vitrines", VITRINES, [])
+    debut = dt.date.fromisoformat(str(a["debut"])[:10])
+    fin = debut + dt.timedelta(days=int(a.get("jours") or 7) - 1)
+    vid = f"vit-{debut}"
+    if any(v["id"] == vid for v in tout):
+        return
+    montant = round(float(a["montant"]), 2)
+    tout.append({"id": vid, "debut": str(debut), "fin": str(fin), "montant": montant, "rembourse_le": None})
+    base.json_partage_ecrire("vitrines", VITRINES, tout)
+    caisse(debut, -montant, f"Vitrine Vinted du {debut:%d/%m} au {fin:%d/%m} (payée par la cagnotte Vinted)")
+
+
+def vitrine_rembourse(a):
+    """Vitrine remboursée par le compte perso au compte pro."""
+    tout = base.json_partage("vitrines", VITRINES, [])
+    for v in tout:
+        if v["id"] == a["vitrine"] and not v.get("rembourse_le"):
+            v["rembourse_le"] = str(a.get("le") or dt.date.today())[:10]
+            base.json_partage_ecrire("vitrines", VITRINES, tout)
+            caisse(v["rembourse_le"], v["montant"], f"Vitrine Vinted remboursée perso → pro (du {v['debut'][8:10]}/{v['debut'][5:7]})")
+            return
+
+
+def du_perso_regle(a):
+    """Le compte LEGO a remboursé le perso (déjà compté dans la trésorerie)."""
+    import dus_perso
+    dus_perso.regler(a["du"], a.get("le"))
+
+
+def solde_virements(a):
+    """Un seul virement net solde toutes les lignes de la carte « Money to move »."""
+    for l in a.get("lignes") or []:
+        GESTES[l["type"]]({**l, "le": a.get("le")})
+
+
+URSSAF = Path(__file__).resolve().parent.parent / "stock" / "urssaf.json"
+GESTES = {"perte": perte, "stock_trouve": noter_scan, "expedition": noter_scan, "colis_lien": colis_lien, "recu": recu, "cashback_recu": cashback_recu, "cashback_confirme": cashback_confirme, "achete": achete, "achat_libre": achat_libre, "vente": vente, "vente_lot": vente_lot, "vire": vire, "corrige": corrige, "supprime": supprime, "figs_lier": figs_lier, "figs_ajouter": figs_ajouter, "horizon": horizon, "urssaf_paye": urssaf_paye, "vitrine": vitrine, "vitrine_rembourse": vitrine_rembourse, "du_perso_regle": du_perso_regle, "solde_virements": solde_virements, "emplacement": emplacement, "strategie": strategie}
 
 
 def appliquer(liste: list[dict]) -> dict:

@@ -8,7 +8,10 @@ Lit l'export des annonces Vinted (extension), la base et le référentiel.
 
 Usage : python3 actions_semaine.py [export_vinted.csv] [--essai]
 """
+import verif_prix
 import datetime as dt
+import json
+import math
 import re
 import sys
 from pathlib import Path
@@ -16,9 +19,10 @@ from pathlib import Path
 import pandas as pd
 
 import base
+import transaction
 from alertes import euros, telegram
 from referentiel import charger
-from regles import MARGE_BRUTE_PLANCHER, PRELEVEMENTS
+from regles import MARGE_BRUTE_PLANCHER, PRELEVEMENTS, plafond_catalogue
 
 STOCK = Path(__file__).resolve().parent.parent / "stock"
 PALIER, BAISSE = 30, 0.05       # −5 % tous les 30 jours sans vente
@@ -31,7 +35,9 @@ def numero(titre: str) -> str | None:
 
 
 def dernier_export() -> Path:
-    return sorted((STOCK / "clemz").glob("vinted_annonces_*.csv"))[-1]
+    # le plus récent des deux dossiers (extension : stock/vinted, ancien : stock/clemz)
+    fichiers = list((STOCK / "clemz").glob("vinted_annonces_*.csv")) + list((STOCK / "vinted").glob("vinted_annonces_*.csv"))
+    return max(fichiers, key=lambda f: f.name)
 
 
 def stock_detaille() -> pd.DataFrame:
@@ -42,12 +48,17 @@ def stock_detaille() -> pd.DataFrame:
         return st
     art = pd.DataFrame(base.lire("articles", "select=id,achat_id,prix_achat,quantite,quote_part&limit=10000"))
     ven = pd.DataFrame(base.lire("ventes", "select=article_id,prix_vente,quantite&limit=20000"))
-    cout = (art.prix_achat.fillna(0) * art.quantite.fillna(1)).groupby(art.achat_id).sum()
+    cout = art.prix_achat.fillna(0).groupby(art.achat_id).sum()  # prix_achat = ligne entière
     ven = ven.merge(art[["id", "achat_id"]], left_on="article_id", right_on="id")
     encaisse = (ven.prix_vente.fillna(0) * (1 - PRELEVEMENTS)).groupby(ven.achat_id).sum()
     st["rembourse"] = st.achat_id.map(encaisse).fillna(0) >= st.achat_id.map(cout).fillna(0)
     q = pd.to_numeric(st.id.map(art.set_index("id").quote_part), errors="coerce")
-    st["cout_set"] = st.prix_achat / q.where(q > 0, 1)
+    # prix_achat = prix de la ligne entière : ramené à un exemplaire
+    qte = pd.to_numeric(st.id.map(art.set_index("id").quantite), errors="coerce").fillna(1).clip(lower=1)
+    st["cout_set"] = st.prix_achat / q.where(q > 0, 1) / qte
+    # Plancher calculé sur l'achat entier (relâché quand le reste de l'achat compense)
+    tx = transaction.planchers()
+    st["plancher_tx"] = st.id.map(lambda i: (tx.get(i) or {}).get("plancher"))
     st["set"] = st.id_set.astype(str).str.split("-").str[0].str.removesuffix(".0")
     st["age"] = (pd.Timestamp.today() - pd.to_datetime(st.date_achat)).dt.days
     return st
@@ -78,14 +89,31 @@ def construire(export: Path):
     ann = pd.read_csv(export, sep=";", dtype=str, encoding="utf-8-sig")
     ann["prix"] = pd.to_numeric(ann.prix, errors="coerce")
     ann["favoris"] = pd.to_numeric(ann.favoris, errors="coerce").fillna(0).astype(int)
+    try:
+        import mails
+        signaux = mails.signaux(30)
+    except Exception:
+        signaux = {}
     ann["set"] = ann.titre.map(numero)
     ref = charger().drop_duplicates("base").set_index("base")
     st = stock_detaille()
     recents = deja_baisse()
 
     # 1. Baisses (annonces en ligne d'un set encore en stock)
-    baisses, gardes = [], []
-    par_set = st.groupby("set").agg(cout=("cout_set", "max"), age=("age", "max"), rembourse=("rembourse", "all")) \
+    baisses, gardes, republier = [], [], []
+    # Première fois qu'on a vu chaque annonce en ligne (l'export Vinted ne donne pas sa date de création)
+    premier_vu = {}
+    for f in sorted(list((STOCK / "clemz").glob("vinted_annonces_*.csv")) + list((STOCK / "vinted").glob("vinted_annonces_*.csv")), key=lambda f: f.name):
+        m = re.search(r"\d{4}-\d{2}-\d{2}", f.name)
+        if m:
+            for u in pd.read_csv(f, sep=";", dtype=str, encoding="utf-8-sig", usecols=["url"]).url.dropna():
+                premier_vu.setdefault(u, pd.Timestamp(m.group(0)))
+    try:  # prix de départ d'une nouvelle annonce (a_publier.py : estimation + 15 %, jamais sous le plancher)
+        depart = json.loads((STOCK / "app" / "a_publier.json").read_text())
+    except (OSError, ValueError):
+        depart = {}
+    par_set = st.groupby("set").agg(cout=("cout_set", "max"), age=("age", "max"), rembourse=("rembourse", "all"),
+                                      plancher_tx=("plancher_tx", "min")) \
         if not st.empty else pd.DataFrame()
     for a in ann[ann.statut == "en ligne"].itertuples():
         if a.set not in par_set.index or a.prix != a.prix:
@@ -99,20 +127,68 @@ def construire(export: Path):
             raison = raison or "acheté il y a moins de 3 mois"
         plancher = s.cout / (1 - PRELEVEMENTS)                      # jamais à perte
         if not s.rembourse and s.age < 365:
-            plancher = max(plancher, s.cout * MARGE_BRUTE_PLANCHER)  # plancher tant que le lot n'est pas remboursé
-        nouveau = round(a.prix * (1 - BAISSE))
+            # plancher tant que le lot n'est pas remboursé, calculé sur l'achat entier quand on le connaît
+            tx = s.plancher_tx if s.plancher_tx == s.plancher_tx else None
+            plancher = max(plancher, tx if tx is not None else s.cout * MARGE_BRUTE_PLANCHER)
+        # Prix ronds sur Vinted/Leboncoin (02/11) : multiple de 5, au moins 5 € de moins qu'avant
+        nouveau = min(5 * round(a.prix * (1 - BAISSE) / 5), 5 * math.floor((a.prix - 1) / 5))
         if not raison and nouveau < plancher:
-            raison = "au plancher"
+            haut = 5 * math.ceil(plancher / 5)
+            if haut < a.prix:
+                nouveau = haut
+            else:
+                raison = "au plancher"
+        # Déjà sous le prix du marché (prix eBay croisé, a_publier) : on ne baisse pas
+        cible = (depart.get(a.set) or {}).get("prix")
+        if not raison and cible and a.prix < cible * 0.95:
+            raison = f"déjà sous le marché ({cible:.0f} €)"
+        # Encore au catalogue et plus cher que chez LEGO une fois frais et port payés :
+        # on ramène au plafond tout de suite (pas d'attente d'âge ni de mois), sans passer sous le plancher
+        cap = plafond_catalogue(x.get("prix_public"), a.set) if x is not None and x.get("statut") == "en vente" else None
+        if cap and a.prix > cap and max(cap, math.ceil(plancher)) < a.prix:
+            c5 = 5 * math.floor(cap / 5)
+            n5 = c5 if c5 >= plancher else 5 * math.ceil(plancher / 5)
+            if n5 < a.prix:
+                nouveau, raison = n5, None
+        # Dernier contrôle avec TOUTES les règles (verif_prix) : prix décidé, ventes passées, eBay
+        if not raison:
+            v = verif_prix.verifier(a.set, nouveau)
+            if v["raisons"] and str(v["raisons"][0]).startswith("prix décidé"):
+                if v["prix"] < a.prix:
+                    nouveau = v["prix"]
+                else:
+                    raison = v["raisons"][0]
+            elif v["action"] == "vendre" and v["prix"] and v["prix"] > nouveau + 2:
+                raison = "contrôle : " + ", ".join(v["raisons"])
         ligne = {"Annonce": a.titre, "Set": a.set, "Prix actuel": a.prix, "Nouveau prix": nouveau,
-                 "Plancher": round(plancher, 2), "Favoris": a.favoris, "Âge du stock (j)": int(s.age),
+                 "Plancher": round(plancher, 2), "Favoris": a.favoris,
+                 # Intérêt récent (mails reçus) : beaucoup de favoris ou contacts sans vente = le prix bloque
+                 "Favoris 30 j": signaux.get(str(a.set), {}).get("favoris", 0),
+                 "Contacts LBC 30 j": signaux.get(str(a.set), {}).get("contacts_lbc", 0),
+                 "Âge du stock (j)": int(s.age),
                  "Lot remboursé": "oui" if s.rembourse else "non", "Lien": a.url}
         (gardes if raison else baisses).append({**ligne, "Pourquoi on garde": raison} if raison else ligne)
+        # Au plancher et pas bougée depuis 30 jours : on supprime et on reposte au prix de départ (annonce « neuve »)
+        dates = [d for d in (pd.to_datetime(getattr(a, "date_creation", None), errors="coerce"), premier_vu.get(a.url))
+                 if d is not None and d == d]
+        vu = min(dates) if dates else None
+        if raison == "au plancher" and a.url not in recents and vu is not None and (auj - vu.normalize()).days >= PALIER:
+            p0 = (depart.get(a.set) or {}).get("prix") or a.prix
+            republier.append({"Annonce": a.titre, "Set": a.set, "Prix actuel": a.prix,
+                              "Prix de départ": max(p0, a.prix), "Lien": a.url})
     baisses = pd.DataFrame(baisses)
     if not baisses.empty:
         baisses = baisses.sort_values(["Favoris", "Âge du stock (j)"], ascending=False)
 
     # 2. Annonces masquées à vérifier puis réafficher, les plus chères et les plus suivies d'abord
-    masq = ann[ann.statut == "masqué"].assign(score=lambda d: d.prix.fillna(0) * (1 + d.favoris / 5)) \
+    # Seulement les sets encore en stock (16/11 : les masquées déjà vendues ailleurs sortaient en tête)
+    # ni les sets en part-out, ni ceux qui ont déjà une annonce en ligne (16/11)
+    # ni ce que la base dit déjà inaccessible (chez mon père, chez Ghita), gardé jusqu'au retrait ou terminé (donné)
+    exclus = {a["id"] for a in base.lire("articles", "select=id,emplacement,horizon,statut&limit=10000")
+              if a.get("emplacement") in ("PE", "GH") or a.get("horizon") or a.get("statut") in ("terminé", "vendu")}
+    en_stock = set(st[(st.strategie != "LOT/DETAILS") & ~st.id.isin(exclus)].set) if not st.empty else set()
+    deja_en_ligne = set(ann[ann.statut == "en ligne"].set.dropna())
+    masq = ann[(ann.statut == "masqué") & ann.set.isin(en_stock - deja_en_ligne)].assign(score=lambda d: d.prix.fillna(0) * (1 + d.favoris / 5)) \
         .sort_values("score", ascending=False)[["titre", "prix", "favoris", "url"]]
     masq.columns = ["Annonce", "Prix", "Favoris", "Lien"]
 
@@ -131,7 +207,7 @@ def construire(export: Path):
     bf = pd.DataFrame({"Set": bf.base, "Nom": bf.name, "Prix public": bf.prix_public, "Achète jusqu'à": bf.prix_max,
                        "Remise nécessaire": bf["Remise nécessaire"].round(2), "Retrait": rt[bf.index].dt.strftime("%d/%m/%Y"),
                        "Exclusivité Lego": bf.exclusif})
-    return baisses, pd.DataFrame(gardes), masq, lbc, bf
+    return baisses, pd.DataFrame(gardes), masq, lbc, bf, pd.DataFrame(republier)
 
 
 def enregistrer(export: Path, baisses: pd.DataFrame):
@@ -174,12 +250,12 @@ def main():
     essai = "--essai" in sys.argv
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     export = Path(args[0]) if args else dernier_export()
-    baisses, gardes, masq, lbc, bf = construire(export)
+    baisses, gardes, masq, lbc, bf, republier = construire(export)
     sortie = STOCK / "actions" / f"actions_semaine_{dt.date.today():%Y-%m-%d}.xlsx"
     sortie.parent.mkdir(parents=True, exist_ok=True)
     with pd.ExcelWriter(sortie) as w:
         for nom, d in [("Réafficher", masq), ("Baisser de 5 %", baisses), ("Garder le prix", gardes),
-                       ("Leboncoin", lbc), ("Black Friday", bf)]:
+                       ("Leboncoin", lbc), ("Black Friday", bf), ("Republier", republier)]:
             d.to_excel(w, sheet_name=nom, index=False)
     if not essai:
         enregistrer(export, baisses)

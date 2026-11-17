@@ -33,6 +33,7 @@ CACHE = DATA / "cache"
 ANNEES_BRICKSET = range(2010, dt.date.today().year + 2)
 BE_QUOTA_JOUR = 100
 BE_RESERVE_FIGURINES = 60  # appels gardés chaque jour pour les cotes de figurines (décidé le 19/10)
+BE_RESERVE_ALERTES = 10    # appels gardés pour vérifier la cote d'un set qui arrive en deal (verif_be.py, 04/11)
 # Conversion approximative des prix publics quand le prix allemand manque.
 EUR_PAR_GBP, EUR_PAR_USD = 1.17, 0.93
 # Gamme retenue seulement si au moins ce nombre de ventes pour l'apprendre.
@@ -49,6 +50,17 @@ def _get(url: str, data: dict | None = None, headers: dict | None = None) -> byt
     req = urllib.request.Request(url, body, headers or {"User-Agent": "lego-sourcing/0.1"})
     with urllib.request.urlopen(req, timeout=60) as r:
         return r.read()
+
+
+def _momentum(m: dict | None) -> dict | None:
+    """Résumé du bloc « market_momentum » de BrickEconomy (sans appel en plus)."""
+    if not m:
+        return None
+    dem = next((b for b in m.get("boxes") or [] if b.get("key") == "demand"), {})
+    return {"lecture": m.get("reading"), "position": m.get("position"),
+            "haussier": (m.get("split_percent") or {}).get("bullish"),
+            "demande": dem.get("demand_level"), "demande_tendance": dem.get("trend"),
+            "demande_texte": dem.get("value"), "le": m.get("scored_date")}
 
 
 def numero_base(x) -> str:
@@ -146,16 +158,18 @@ class BrickEconomy:
         self.jour = dt.date.today().isoformat()
         self.appels = q.get("appels", 0) if q.get("jour") == self.jour else 0
 
-    def restant(self, figurines: bool = False) -> int:
-        """Appels encore permis aujourd'hui : les sets laissent la réserve aux figurines."""
-        plafond = BE_QUOTA_JOUR if figurines else BE_QUOTA_JOUR - BE_RESERVE_FIGURINES
+    def restant(self, figurines: bool = False, alerte: bool = False) -> int:
+        """Appels encore permis aujourd'hui : les sets laissent la réserve aux figurines,
+        et tous laissent la réserve des alertes (vérification d'un deal du jour)."""
+        plafond = (BE_QUOTA_JOUR if alerte else BE_QUOTA_JOUR - BE_RESERVE_ALERTES if figurines
+                   else BE_QUOTA_JOUR - BE_RESERVE_ALERTES - BE_RESERVE_FIGURINES)
         return max(0, plafond - self.appels) if self.cle else 0
 
-    def valeur(self, set_num: str, max_age_jours: int = 7) -> dict | None:
+    def valeur(self, set_num: str, max_age_jours: int = 7, alerte: bool = False) -> dict | None:
         c = self.cache.get(set_num)
         if c and (dt.date.today() - dt.date.fromisoformat(c["date"])).days <= max_age_jours:
             return c
-        if self.restant() <= 0:
+        if self.restant(alerte=alerte) <= 0:
             return c
         try:
             brut = json.loads(_get(self.URL.format(set_num) + "?currency=EUR",
@@ -177,6 +191,10 @@ class BrickEconomy:
              "valeur_neuf": d.get("current_value_new"),
              "valeur_occasion": d.get("current_value_used"),
              "prevision_2ans": d.get("forecast_value_new_2_years"),
+             "prevision_5ans": d.get("forecast_value_new_5_years"),
+             # « Market momentum » BrickEconomy (nouveau, nov. 2026) : lecture,
+             # part haussière et niveau de demande 1-5 avec sa tendance.
+             "momentum": _momentum(d.get("market_momentum")),
              "retire": d.get("retired"),
              "retrait": d.get("retired_date"),
              "prix_public_eu": d.get("retail_price_eu"),
@@ -192,24 +210,47 @@ class BrickEconomy:
         d'appels des figurines ; cache disque partagé avec alertes.py."""
         f = CACHE / "brickeconomy_figurines.json"
         figs = json.loads(f.read_text()) if f.exists() else {}
+        # Une seule clé par figurine : « njo0822 » et « njo822 » sont la même (BrickLink a ajouté un zéro sous 1000)
+        m = re.fullmatch(r"([a-z]+?)(o?)0*(\d+)([a-z]?)", re.sub(r"[^a-z0-9]", "", str(num).lower()))
+        appel = str(num).lower()  # code envoyé à BrickEconomy tel quel
+        num = (("njo" if m.group(1) + m.group(2) == "nj" else m.group(1) + m.group(2)) + str(int(m.group(3))) + m.group(4)) if m else appel
         c = figs.get(num)
         if c and (dt.date.today() - dt.date.fromisoformat(c["date"])).days <= max_age_jours:
             return c["valeur_neuf"]
         if self.restant(figurines=True) <= 0:
             return c and c["valeur_neuf"]
-        try:
-            brut = json.loads(_get(f"https://www.brickeconomy.com/api/v1/minifig/{num}?currency=EUR",
-                                   headers={"x-apikey": self.cle, "Accept": "application/json",
-                                            "User-Agent": "lego-sourcing/0.1"}))
-        except Exception as e:
-            print(f"BrickEconomy figurine {num} : {e}", file=sys.stderr)
-            if "400" in str(e):  # code inconnu de BrickEconomy : on ne le redemande pas avant 30 jours
-                figs[num] = {"date": self.jour, "valeur_neuf": None, "inconnue": True}
-                f.write_text(json.dumps(figs))
+        # BrickEconomy n'a migré qu'une partie des références sous 1000 vers le format à zéro :
+        # on essaie le code reçu, puis l'autre forme (njo822 <-> njo0822) si le premier est inconnu.
+        essais = [appel]
+        if m and int(m.group(3)) < 1000:
+            pre = "njo" if m.group(1) + m.group(2) == "nj" else m.group(1) + m.group(2)
+            for autre in (pre + m.group(3).lstrip("0").zfill(4) + m.group(4), num):
+                if autre not in essais:
+                    essais.append(autre)
+        brut, refus = None, 0
+        for code in essais[:2]:
+            if self.restant(figurines=True) <= 0:
+                break
+            try:
+                brut = json.loads(_get(f"https://www.brickeconomy.com/api/v1/minifig/{code}?currency=EUR",
+                                       headers={"x-apikey": self.cle, "Accept": "application/json",
+                                                "User-Agent": "lego-sourcing/0.1"}))
+                break
+            except Exception as e:
+                print(f"BrickEconomy figurine {code} : {e}", file=sys.stderr)
+                if "400" not in str(e):
+                    return c and c["valeur_neuf"]
+                refus += 1
+            finally:
+                self.appels += 1
+                self.f_quota.write_text(json.dumps({"jour": self.jour, "appels": self.appels}))
+        if brut is None:
+            if refus < min(2, len(essais)):  # plus d'appels aujourd'hui : on réessaiera
+                return c and c["valeur_neuf"]
+            # inconnu sous les deux formes : on ne le redemande pas avant 30 jours
+            figs[num] = {"date": self.jour, "valeur_neuf": None, "inconnue": True}
+            f.write_text(json.dumps(figs))
             return c and c["valeur_neuf"]
-        finally:
-            self.appels += 1
-            self.f_quota.write_text(json.dumps({"jour": self.jour, "appels": self.appels}))
         d = brut.get("data", brut)
         figs[num] = {"date": self.jour, "valeur_neuf": d.get("current_value_new"), "nom": d.get("name"),
                      "gamme": d.get("theme"), "sets": d.get("sets") or []}
@@ -299,7 +340,7 @@ def coefficients_scenarios(v: pd.DataFrame) -> dict:
     return out
 
 
-def scenarios(prix_public, gamme, retrait, cs: dict, aujourdhui=None) -> dict:
+def scenarios(prix_public, gamme, retrait, cs: dict, aujourdhui=None, set_num=None) -> dict:
     """{'rapide': (prix, jours), 'garde': (prix, jours)} pour un set au catalogue."""
     aujourdhui = aujourdhui or pd.Timestamp.today()
     out = {}
@@ -310,8 +351,43 @@ def scenarios(prix_public, gamme, retrait, cs: dict, aujourdhui=None) -> dict:
             if pd.isna(r):
                 continue  # date de retrait inconnue : on ne parie pas dessus
             delai = max((r - aujourdhui).days, 0) + (delai if delai == delai else JOURS_APRES_RETRAIT)
-        out[nom] = (prix_public * ratio, int(delai))
+        pv = prix_public * ratio
+        if nom == "rapide":  # revendu avant le retrait : sous le prix LEGO, frais compris
+            from regles import plafond_catalogue
+            pv = min(pv, plafond_catalogue(prix_public, set_num) or pv)
+        out[nom] = (pv, int(delai))
     return out
+
+
+# Prise de valeur après le retrait (règle : toujours lire une vente par rapport à la date de
+# retrait du set). Rapport vente / prix public des ventes faites APRÈS le retrait, selon l'âge de la
+# retraite le jour de la vente. Les ventes faites pendant que le set était au catalogue (sous le prix
+# LEGO) n'entrent pas dans la valeur d'un set retiré. La courbe ne redescend pas : les sets vendus
+# tard sont souvent ceux qui traînaient (biais), pas une baisse de la cote.
+TRANCHES_RETRAIT = (90, 180, 365, 730, 100000)
+PIVOT_JOURS = 730  # le pivot : ~2 ans après le retrait, le stock d'occasion s'épuise
+
+
+def courbe_retrait(v: pd.DataFrame) -> dict:
+    """{"courbe": [(jours max, rapport)], "gamme": {gamme: facteur relatif}} sur les ventes après retrait."""
+    v = v[(v.prix_public > 0) & (v.statut_vente == "retiré")].assign(
+        ratio=lambda d: d["Prix Vente"] / d.prix_public,
+        apres=lambda d: (pd.to_datetime(d["Date Vente"]) - pd.to_datetime(d.retrait, errors="coerce")).dt.days)
+    glob, courbe, mx, debut = v.ratio.median(), [], 0.0, -1
+    for fin in TRANCHES_RETRAIT:
+        g = v[(v.apres > debut) & (v.apres <= fin)]
+        r = g.ratio.median() if len(g) >= MIN_VENTES_SCENARIO else glob
+        mx = max(mx, r)
+        courbe.append((fin, mx))
+        debut = fin
+    par = v.groupby("Gamme").ratio.agg(["size", "median"])
+    par = par[par["size"] >= MIN_VENTES_SCENARIO]
+    return {"courbe": courbe, "gamme": {g: x / glob for g, x in par["median"].items()}}
+
+
+def rapport_retrait(cr: dict, gamme, jours: float) -> float:
+    r = next((x for fin, x in cr["courbe"] if jours <= fin), cr["courbe"][-1][1])
+    return r * cr["gamme"].get(gamme, 1.0)
 
 
 # Erreur médiane de chaque source sur les ventes passées (backtest_estime.py).
@@ -320,8 +396,19 @@ def scenarios(prix_public, gamme, retrait, cs: dict, aujourdhui=None) -> dict:
 ERREURS = {"BrickLink": 0.15, "gamme": 0.11, "global": 0.19, "BrickEconomy": 0.18}
 
 
+def cote_be(entree, ratio) -> tuple:
+    """(cote BrickEconomy × ratio France, variation de la cote sur 6 mois vs son plus haut) ; None si inconnue."""
+    v = (entree or {}).get("valeur_neuf")
+    if not v:
+        return None, None
+    debut = (pd.Timestamp.today() - pd.DateOffset(months=6)).strftime("%Y-%m-%d")
+    hist = [p for d, p in (entree.get("historique") or []) if d >= debut and p]
+    haut = max(hist + [v])
+    return round(v * (ratio or 1.0), 2), round(v / haut - 1, 3)
+
+
 def estimer(prix_public, statut: str, gamme, coef: dict, valeur_be=None, ratio_be=None,
-            valeur_bl=None, ratio_bl=None, erreurs: dict = ERREURS):
+            valeur_bl=None, ratio_bl=None, erreurs: dict = ERREURS, k_retrait=None):
     """Prix de vente attendu (avant commissions) et sa fiabilité.
     Sources : ventes conclues BrickLink en Europe, prix public × rapport
     appris par gamme, valeur BrickEconomy (surtout marché anglophone).
@@ -335,6 +422,8 @@ def estimer(prix_public, statut: str, gamme, coef: dict, valeur_be=None, ratio_b
         k = coef["gamme"].get((gamme, statut))
         f = "gamme" if k else "global"
         k = k or coef["global"].get(statut) or coef["global"].get("en vente")
+        if k_retrait:  # set retiré : rapport appris selon l'âge de sa retraite
+            k = k_retrait
         if k:
             sources[f] = prix_public * k
     if valeur_be and not pd.isna(valeur_be):
@@ -403,11 +492,19 @@ def construire(xlsx: str, rafraichir: bool = False) -> pd.DataFrame:
     # Sets à vérifier en premier (ex. candidats d'une promo Lego.com), un par ligne.
     prio = DATA / "brickeconomy_prioritaires.txt"
     prio = [l.strip() for l in prio.read_text().split()] if prio.exists() else []
-    ordre = prio + deja_vendus + sorted(set(recents.set_num) - set(deja_vendus), key=lambda s: -pp.get(s, 0))
+    # Puis ton stock (pour bien le prix de tes annonces), d'abord les sets jamais relevés
+    try:
+        stock = [s + "-1" for s in json.loads((DATA.parent / "stock" / "app" / "exemplaires.json").read_text())]
+    except (OSError, ValueError):
+        stock = []
+    stock = sorted(stock, key=lambda s: s in be.cache)
+    ordre = list(dict.fromkeys(prio + stock + deja_vendus
+                               + sorted(set(recents.set_num) - set(deja_vendus), key=lambda s: -pp.get(s, 0))))
+    # Rafraîchir une valeur au bout de 30 jours suffit : les appels servent à couvrir plus de sets
     for s in ordre:
         if be.restant() <= 0:
             break
-        be.valeur(s)
+        be.valeur(s, max_age_jours=7 if s in prio else 30)
 
     # Cotes des figurines des sets déjà relevés (scénario « découpe » des alertes),
     # dans le même ordre de priorité, sur la réserve d'appels des figurines.
@@ -417,8 +514,12 @@ def construire(xlsx: str, rafraichir: bool = False) -> pd.DataFrame:
 
     # Rapport ventes réelles / valeur BrickEconomy, quand on en a assez.
     v["valeur_be"] = v.set_num.map(lambda s: (be.cache.get(s) or {}).get("valeur_neuf"))
-    vb = v[v.valeur_be > 0]
+    # La valeur BrickEconomy est celle d'aujourd'hui : on la compare aux ventes des 18 derniers mois,
+    # séparément pour les sets vendus encore au catalogue (sous la cote) et après leur retrait.
+    vb = v[(v.valeur_be > 0) & (pd.to_datetime(v["Date Vente"]) > pd.Timestamp.today() - pd.DateOffset(months=18))]
     ratio_be = (vb["Prix Vente"] / vb.valeur_be).median() if len(vb) >= 20 else 1.0
+    ratios_be = {s: (g["Prix Vente"] / g.valeur_be).median() if len(g) >= 20 else ratio_be
+                 for s, g in vb.groupby("statut_vente")}
 
     # BrickLink : ventes conclues en Europe, mêmes priorités, 5 000 appels/jour.
     import bricklink
@@ -432,12 +533,37 @@ def construire(xlsx: str, rafraichir: bool = False) -> pd.DataFrame:
     vl = v[v.valeur_bl > 0]
     ratio_bl = (vl["Prix Vente"] / vl.valeur_bl).median() if len(vl) >= 20 else 1.0
 
+    cr = courbe_retrait(v)
+    age = (aujourdhui - pd.to_datetime(ref.retrait, errors="coerce")).dt.days
+    ref["jours_retrait"] = age.where(ref.statut == "retiré")
+    k_ret = [rapport_retrait(cr, gamme_par_theme.get(th), a) if st == "retiré" and a == a else None
+             for st, th, a in zip(ref.statut, ref.theme_rb, age)]
+    # 09/11 (Donkey Kong 72051 : cote 189 € pour 169,99 € au catalogue) : tant que le set est vendu par
+    # LEGO, sa cote BrickEconomy n'est pas un prix de revente. Au-dessus du prix LEGO elle est ramenée
+    # au prix LEGO (et signalée « cote_suspecte »), la revente au catalogue reste plafonnée sous ce prix.
+    def _be_val(s, st, pp):
+        v = (be.cache.get(s) or {}).get("valeur_neuf")
+        return min(v, pp) if v and st == "en vente" and pp == pp and pp else v
     est = [estimer(pp, st, gamme_par_theme.get(th), coef,
-                   (be.cache.get(s) or {}).get("valeur_neuf"), ratio_be, vbl, ratio_bl)
-           for pp, st, th, s, vbl in zip(ref.prix_public, ref.statut, ref.theme_rb, ref.set_num,
-                                         ref.valeur_bl)]
+                   _be_val(s, st, pp), ratios_be.get(st, ratio_be), vbl, ratio_bl, k_retrait=kr)
+           for pp, st, th, s, vbl, kr in zip(ref.prix_public, ref.statut, ref.theme_rb, ref.set_num,
+                                             ref.valeur_bl, k_ret)]
+    # Cote BrickEconomy ramenée au marché français (tes ventes / cote, selon le statut) et sa tendance :
+    # les alertes s'en servent comme garde-fou (03/11, Home One 75405 : estimation 64 € mais cote 53 € en baisse).
+    ref["be_fr"], ref["be_tendance"] = zip(*[cote_be(be.cache.get(s), ratios_be.get(st, ratio_be))
+                                             for s, st in zip(ref.set_num, ref.statut)])
+    ref["cote_suspecte"] = [bool(st == "en vente" and bf == bf and bf and pp == pp and pp and bf > pp)
+                            for st, bf, pp in zip(ref.statut, ref.be_fr, ref.prix_public)]
+    (CACHE / "ratios_be.json").write_text(json.dumps({"global": ratio_be, **ratios_be}))
+    # Prise de valeur attendue au pivot (2 ans après le retrait), pour les sets retirés ou à date de retrait connue
+    ref["pv_pivot"] = [round(pp * rapport_retrait(cr, gamme_par_theme.get(th), PIVOT_JOURS), 2)
+                       if pp == pp and pp and r == r else None
+                       for pp, th, r in zip(ref.prix_public, ref.theme_rb, pd.to_datetime(ref.retrait, errors="coerce"))]
+    ref["pivot_le"] = (pd.to_datetime(ref.retrait, errors="coerce") + pd.Timedelta(days=PIVOT_JOURS)).dt.strftime("%Y-%m-%d")
     ref["chaleur_dealabs"] = ref.theme_rb.map(chaleur_dealabs(ref))
-    froid = ref.chaleur_dealabs < SEUIL_FROID
+    # Seulement pour les sets encore au catalogue : une fois retiré, c'est la rareté qui fait le prix,
+    # plus la chaleur des promos Dealabs (qui ne parlent que des sets encore vendus).
+    froid = (ref.chaleur_dealabs < SEUIL_FROID) & (ref.statut != "retiré")
     ref["prix_vente_estime"] = [e[0] * (DEMANDE_FROIDE if fr else 1) if e[0] else None
                                 for e, fr in zip(est, froid)]
     ref["fiabilite"] = [e[1] for e in est]
@@ -457,8 +583,8 @@ def construire(xlsx: str, rafraichir: bool = False) -> pd.DataFrame:
     # plus cher, « garde » seulement si son rendement annuel suffit.
     cs = coefficients_scenarios(v)
     cols = {"pv_rapide": [], "j_rapide": [], "pv_garde": [], "j_garde": []}
-    for pp, st, g, rt, fr in zip(ref.prix_public, ref.statut, ref.gamme, ref.retrait, froid):
-        sc = scenarios(pp, g, rt, cs) if st == "en vente" and pp == pp and pp else {}
+    for pp, st, g, rt, fr, b in zip(ref.prix_public, ref.statut, ref.gamme, ref.retrait, froid, ref.base):
+        sc = scenarios(pp, g, rt, cs, set_num=b) if st == "en vente" and pp == pp and pp else {}
         k = DEMANDE_FROIDE if fr else 1
         for nom in ("rapide", "garde"):
             pv, j = sc.get(nom, (None, None))
@@ -494,7 +620,9 @@ def construire(xlsx: str, rafraichir: bool = False) -> pd.DataFrame:
           f"{ref.fiabilite.isin(['BrickEconomy', 'mixte']).sum()} avec valeur BrickEconomy, "
           f"{ref.valeur_bl.notna().sum()} avec ventes BrickLink Europe (correcteur ×{ratio_bl:.2f}), "
           f"{ref.prix_max.notna().sum()} avec prix max. Coefficients sur {coef['n']} ventes : "
-          + ", ".join(f"{k} ×{x:.2f}" for k, x in coef["global"].items()))
+          + ", ".join(f"{k} ×{x:.2f}" for k, x in coef["global"].items())
+          + ". Après retrait : " + ", ".join(f"≤{f} j ×{x:.2f}" for f, x in cr["courbe"])
+          + ". BrickEconomy : " + ", ".join(f"{k} ×{x:.2f}" for k, x in ratios_be.items()))
     return ref
 
 

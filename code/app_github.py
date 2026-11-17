@@ -11,7 +11,9 @@ from pathlib import Path
 import appliquer_actions
 import base
 import etat_app
+import figs_sets
 import inventaire
+import parts_associes
 
 
 def gestes() -> str:
@@ -42,13 +44,21 @@ def comptes():
 
 
 def main():
-    if base.docs("etat/") is None:
+    if base._appel("GET", "app_docs?select=chemin&limit=1") is None:
         print("table app_docs absente ou base injoignable : rien à faire")
         return
     ide = base.debut_execution("application")
     try:
         resume = gestes()
         comptes()
+        try:
+            parts_associes.main()
+        except Exception as e:  # la part à rendre sera ajoutée au passage suivant
+            print("parts associés :", type(e).__name__)
+        try:
+            figs_sets.main()
+        except Exception as e:  # la liste Part-out attendra le passage suivant
+            print("part-out :", type(e).__name__)
         etat_app.main()
         for nom in ("principal", "historique"):
             f = etat_app.SORTIE if nom == "principal" else etat_app.SORTIE.parent / "historique.json"
