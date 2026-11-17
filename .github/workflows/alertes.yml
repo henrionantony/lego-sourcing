@@ -15,6 +15,7 @@ concurrency:
 # Droits minimum : le passage lit le dépôt, il n'écrit rien dessus.
 permissions:
   contents: read
+  actions: write  # seulement pour relancer le passage suivant (fin du fichier)
 
 jobs:
   alertes:
@@ -83,3 +84,11 @@ jobs:
             data/cache/alertes_vus.json
             data/cache/vignettes
           key: vus-${{ github.run_id }}
+      # Relais (17/11) : GitHub saute souvent le déclenchement horaire (jusqu'à 3-4 h sans
+      # alertes). Le passage relance donc lui-même le suivant en finissant. Pas de relance
+      # s'il a été annulé exprès (nouvelle version publiée, qui lance son propre passage).
+      - name: Relancer le passage suivant
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run alertes.yml --ref main -R ${{ github.repository }}
