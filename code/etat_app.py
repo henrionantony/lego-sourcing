@@ -168,7 +168,7 @@ def automatisations() -> list[dict]:
 
 
 def objectifs() -> dict:
-    annee = base.lire("ventes", f"select=date_vente,prix_vente,revenu_net,article_id,produit&date_vente=gte.{DEBUT_ANNEE}&limit=10000")
+    annee = base.lire("ventes", f"select=date_vente,prix_vente,revenu_net,article_id,produit,plateforme&date_vente=gte.{DEBUT_ANNEE}&limit=10000")
     ca = sum(float(v["prix_vente"] or 0) for v in annee)
     d = base.lire("ventes", "select=date_vente&date_vente=not.is.null&order=date_vente.desc&limit=1")
     derniere = d[0]["date_vente"] if d else None
@@ -207,11 +207,40 @@ def objectifs() -> dict:
             break
         off += 1000
     prelev = sum(float(v["prix_vente"] or 0) - encaisse(v) for v in annee)
-    return {"debut": DEBUT_ANNEE.isoformat(), "ca": round(ca, 2), "cible_ca": CIBLE_CA, "cible_net": CIBLE_NET,
+    canaux = sum(float(v["prix_vente"] or 0) for v in annee if str(v.get("plateforme") or "").startswith(("EBAY", "BRICKLINK")))
+    return {"canaux": round(canaux, 2), "cible_canaux": _OBJ.get("canaux", 0), "dormant": stock_dormant(),
+            "debut": DEBUT_ANNEE.isoformat(), "ca": round(ca, 2), "cible_ca": CIBLE_CA, "cible_net": CIBLE_NET,
             "net_frais": round(ca * (1 - PRELEVEMENTS), 2), "net": round(net, 2), "net_estime": round(estime, 2),
             "prelev": round(prelev, 2), "couts": round(ca - prelev - net, 2), "ventes": len(annee), "derniere_vente": derniere,
             "mois": mois, "cible_mois": _OBJ.get("mois", {}), "an_passe": avant,
             "jours": jours, "jours_an_passe": jours_avant, "historique": histo, "jours_annees": jours_annees}
+
+
+def stock_dormant() -> dict:
+    """Objectif « stock qui dort » : sets entiers achetés plus d'un an avant le début de l'année d'activité
+    et encore en stock à cette date (hors sets gardés exprès, achats perso, stock inaccessible),
+    et combien en sont vendus depuis. La cible (part à vendre) est dans parametres.json."""
+    limite = DEBUT_ANNEE.replace(year=DEBUT_ANNEE.year - 1).isoformat()
+    dates = {a["id"]: a["date_achat"] for a in base.lire("achats", "select=id,date_achat&limit=10000")}
+    arts = base.lire("articles", "select=id,achat_id,quantite,strategie,horizon,achat_plaisir,livre,notes,emplacement"
+                     "&categorie=eq.SET&limit=10000")
+    avant, depuis = {}, {}
+    for v in base.lire("ventes", "select=article_id,date_vente&produit=eq.SET&article_id=not.is.null&limit=10000"):
+        if v["date_vente"]:
+            d = avant if v["date_vente"] < DEBUT_ANNEE.isoformat() else depuis
+            d[v["article_id"]] = d.get(v["article_id"], 0) + 1
+    total = vendus = 0
+    for a in arts:
+        d = dates.get(a["achat_id"])
+        if not d or d >= limite or a.get("strategie") != "ENTIER" or a.get("achat_plaisir") or a.get("livre") is False:
+            continue
+        if a.get("horizon") or "GARD" in str(a.get("notes") or "").upper() or a.get("emplacement") in ("PE", "GH"):
+            continue
+        reste = int(a.get("quantite") or 1) - avant.get(a["id"], 0)
+        if reste > 0:
+            total += reste
+            vendus += min(reste, depuis.get(a["id"], 0))
+    return {"total": total, "vendus": vendus, "cible": _OBJ.get("dormant", 0)}
 
 
 def encaisse(v: dict) -> float:
@@ -235,7 +264,12 @@ def gain_net(ventes: list) -> tuple[float, float]:
         pp = {r["base"]: float(r["prix_public"]) for r in csv.DictReader(f) if r.get("prix_public")}
     net = estime = 0.0
     deja: dict = {}
-    for v in sorted(ventes, key=lambda v: v["date_vente"]):
+    # Ventes plus anciennes des mêmes articles (lot ou set découpé vendu en plusieurs fois) : elles ont déjà
+    # consommé une part du coût, sinon un lot remboursé depuis longtemps compterait tout son prix une 2e fois (17/11).
+    vus = {v.get("id") for v in ventes}
+    anciennes = [dict(w, _avant=True) for w in (base.lire("ventes", "select=id,date_vente,prix_vente,revenu_net,article_id,produit"
+                 "&article_id=in.(" + ",".join(map(str, ids)) + ")&limit=10000") if ids else []) if w["id"] not in vus]
+    for v in sorted(list(ventes) + anciennes, key=lambda v: str(v["date_vente"] or "")):
         prix = float(v["prix_vente"] or 0)
         a = arts.get(v.get("article_id"))
         if a and a.get("achat_plaisir") and prix == 0:
@@ -245,13 +279,15 @@ def gain_net(ventes: list) -> tuple[float, float]:
             estime += encaisse(v) - cout
         else:
             unit = 0.0 if a.get("offert") else float(a.get("prix_achat") or 0) / max(1, int(a.get("quantite") or 1))
-            if v.get("produit") == "SET":
+            if v.get("produit") == "SET" and a.get("id_set"):
                 cout = unit
             else:
                 s = str(a.get("id_set") or "").split("-")[0].removesuffix(".0")
                 cible = pp.get(s, 0) * M or unit * M or prix
                 cout = min(unit * prix / cible, unit - deja.get(a["id"], 0)) if cible else 0
                 deja[a["id"]] = deja.get(a["id"], 0) + cout
+        if v.get("_avant"):
+            continue
         net += encaisse(v) - cout
     return net, estime
 
