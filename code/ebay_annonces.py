@@ -494,7 +494,9 @@ def vendue_et_reste(s: str, v: dict) -> bool:
     q = ((item.get("availability") or {}).get("shipToLocationAvailability") or {}).get("quantity")
     if q != 0:
         return False
-    stock = len(base.lire("articles", f"select=id&id_set=eq.{s}&statut=neq.vendu&livre=eq.true&co_investisseur=is.null") or [])
+    # Vue « stock » : achats moins ventes saisies (le statut des articles n'est pas tenu à jour,
+    # 18/11 : 76907 remis en vente alors que la dernière boîte était vendue)
+    stock = sum(int(x.get("reste") or 0) for x in base.lire("stock", f"select=reste&id_set=eq.{s}&livre=eq.true") or [])
     depuis = str(v.get("le") or "")[:10] or "2000-01-01"
     saisie = base.lire("ventes", f"select=id&plateforme=eq.EBAY&nom_article=ilike.*{s}*&date_vente=gte.{depuis}") or []
     return stock >= (1 if saisie else 2)
