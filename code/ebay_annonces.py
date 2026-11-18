@@ -142,7 +142,8 @@ def politiques() -> dict:
         # Figurine : lettre suivie, France seulement. « add » = port de chaque exemplaire en plus (même annonce)
         lettre, add = bool(p.get("lettre")), p.get("add")
         nom = (f"LegoHQ lettre FR {p['fr']:.2f}" if lettre else f"LegoHQ port FR {p['fr']:.2f} UE {p['ue']:.2f} RU {p['uk']:.2f}") \
-            + (f" +{add:.2f}" if add else "") + (" groupé" if remise else "")
+            + (f" +{add:.2f}" if add else "") + (" groupé" if remise else "") \
+            + (f" MR {p['mr']:.2f}" if p.get("mr") and services.get("mr") and not lettre else "")
         if nom in ful:
             return ful[nom]
         eur = lambda x: {"value": f"{x:.2f}", "currency": "EUR"}
@@ -151,6 +152,10 @@ def politiques() -> dict:
             fr = {"shippingServiceCode": services["lettre"] if lettre else services["fr"], "shippingCost": eur(p["fr"]),
                   "sortOrder": 1, **plus(p["fr"])}
             options = [{"optionType": "DOMESTIC", "costType": "FLAT_RATE", "shippingServices": [fr]}]
+            # Mondial Relay en option France, annonce par annonce (« mondial_relay » dans ebay/reglages, 18/11)
+            if p.get("mr") and services.get("mr") and not lettre:
+                options[0]["shippingServices"].append({"shippingServiceCode": services["mr"], "shippingCost": eur(p["mr"]),
+                                                       "sortOrder": 2, **plus(p["mr"])})
             if remise:
                 options[0]["shippingDiscountProfileId"] = remise
             if not lettre:
@@ -203,9 +208,11 @@ def services_port() -> dict:
     lettre = next((c for c, d in lettres if "suivi" in (c + d).lower()), None) or (lettres[0][0] if lettres else fr)
     JOURNAL.append(f"services : {fr} / {it} / lettre {lettre} parmi {len(liste)} ; colissimo et lettres : "
                    + ", ".join(f"{c}{'*' if i else ''}" for c, d, i in liste if "coli" in (c + d).lower() or "lettre" in (c + d).lower()))
+    mr = next((c for c, d, i in liste if not i and "mondial" in (c + d).lower()), None)
+    JOURNAL.append(f"Mondial Relay : {mr or 'introuvable'} ; " + ", ".join(f"{c} ({d})" for c, d, i in liste if not i and "relais" in (c + d).lower() or "relay" in (c + d).lower()))
     if not fr or not it:
         raise Erreur("services Colissimo introuvables")
-    return {"fr": fr, "int": it, "lettre": lettre}
+    return {"fr": fr, "int": it, "lettre": lettre, "mr": mr}
 
 
 DELAI = 3      # délai d'expédition en jours ouvrés (3 minimum, demandé le 27/10)
@@ -494,7 +501,9 @@ def vendue_et_reste(s: str, v: dict) -> bool:
     q = ((item.get("availability") or {}).get("shipToLocationAvailability") or {}).get("quantity")
     if q != 0:
         return False
-    stock = len(base.lire("articles", f"select=id&id_set=eq.{s}&statut=neq.vendu&livre=eq.true&co_investisseur=is.null") or [])
+    # Vue « stock » : achats moins ventes saisies (le statut des articles n'est pas tenu à jour,
+    # 18/11 : 76907 remis en vente alors que la dernière boîte était vendue)
+    stock = sum(int(x.get("reste") or 0) for x in base.lire("stock", f"select=reste&id_set=eq.{s}&livre=eq.true") or [])
     depuis = str(v.get("le") or "")[:10] or "2000-01-01"
     saisie = base.lire("ventes", f"select=id&plateforme=eq.EBAY&nom_article=ilike.*{s}*&date_vente=gte.{depuis}") or []
     return stock >= (1 if saisie else 2)
@@ -571,6 +580,15 @@ def main():
         print(f"{retirees} annonces retirées")
         return
     a_faire = {s: v for s, v in a_faire.items() if not (faites.get(s) or {}).get("retire")}
+    # Option Mondial Relay par annonce (18/11) : {"<set>": prix} dans ebay/reglages.mondial_relay
+    mrel = (base.doc("ebay/reglages") or {}).get("mondial_relay") or {}
+    for s, v in a_faire.items():
+        if mrel.get(s.split("-")[0]) and v.get("port"):
+            v["port"] = {**v["port"], "mr": float(mrel[s.split("-")[0]])}
+    # « --seul 10359 » : ne traiter que ces annonces (mise à jour ciblée en journée)
+    if "--seul" in sys.argv:
+        seuls = set(sys.argv[sys.argv.index("--seul") + 1].split(","))
+        a_faire = {s: v for s, v in a_faire.items() if s.split("-")[0] in seuls}
     # Annonces créées par l'outil (SKU LHQ-<set>) mais absentes de ebay/annonces : reprises en main,
     # sinon elles passent pour « faites à la main » et gardent leurs anciens prix et quantités
     deja = manuelles(faites)
