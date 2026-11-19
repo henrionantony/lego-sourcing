@@ -168,7 +168,7 @@ def automatisations() -> list[dict]:
 
 
 def objectifs() -> dict:
-    annee = base.lire("ventes", f"select=date_vente,prix_vente,revenu_net,article_id,produit,plateforme&date_vente=gte.{DEBUT_ANNEE}&limit=10000")
+    annee = base.lire("ventes", f"select=id,date_vente,prix_vente,revenu_net,article_id,produit,plateforme,nom_article,quantite&date_vente=gte.{DEBUT_ANNEE}&limit=10000")
     ca = sum(float(v["prix_vente"] or 0) for v in annee)
     d = base.lire("ventes", "select=date_vente&date_vente=not.is.null&order=date_vente.desc&limit=1")
     derniere = d[0]["date_vente"] if d else None
@@ -250,6 +250,19 @@ def encaisse(v: dict) -> float:
     return float(v.get("prix_vente") or 0) * (1 - PRELEVEMENTS)
 
 
+def carton(a: dict) -> bool:
+    """Article = carton de 36 sachets de minifigures à collectionner."""
+    t = f"{a.get('designation') or ''} {a.get('notes') or ''}".upper()
+    return bool(re.search(r"36 BOX|X36", t))
+
+
+def boites(v: dict) -> int:
+    """Sachets d'un carton partis dans cette vente : série complète = 12, sinon la quantité (1 par figurine)."""
+    if re.search(r"S[EÉ]RIE COMPL[EÈ]TE", str(v.get("nom_article") or "").upper()):
+        return 12
+    return max(1, int(v.get("quantite") or 1))
+
+
 def gain_net(ventes: list) -> tuple[float, float]:
     """Gain net des ventes : prix × (1 − prélèvements) − ce que l'article a coûté.
     Set entier : son coût. Morceau d'un set découpé (figurine, build) : une part du coût au prorata
@@ -258,7 +271,7 @@ def gain_net(ventes: list) -> tuple[float, float]:
     import csv
     from regles import MARGE_BRUTE_PLANCHER as M
     ids = sorted({int(v["article_id"]) for v in ventes if v.get("article_id")})
-    arts = {a["id"]: a for a in base.lire("articles", "select=id,id_set,prix_achat,quantite,offert,achat_plaisir&id=in.("
+    arts = {a["id"]: a for a in base.lire("articles", "select=id,id_set,prix_achat,quantite,offert,achat_plaisir,designation,notes&id=in.("
                                           + ",".join(map(str, ids)) + ")&limit=10000")} if ids else {}
     with open(ICI.parent / "data" / "referentiel.csv", newline="") as f:
         pp = {r["base"]: float(r["prix_public"]) for r in csv.DictReader(f) if r.get("prix_public")}
@@ -267,7 +280,7 @@ def gain_net(ventes: list) -> tuple[float, float]:
     # Ventes plus anciennes des mêmes articles (lot ou set découpé vendu en plusieurs fois) : elles ont déjà
     # consommé une part du coût, sinon un lot remboursé depuis longtemps compterait tout son prix une 2e fois (17/11).
     vus = {v.get("id") for v in ventes}
-    anciennes = [dict(w, _avant=True) for w in (base.lire("ventes", "select=id,date_vente,prix_vente,revenu_net,article_id,produit"
+    anciennes = [dict(w, _avant=True) for w in (base.lire("ventes", "select=id,date_vente,prix_vente,revenu_net,article_id,produit,nom_article,quantite"
                  "&article_id=in.(" + ",".join(map(str, ids)) + ")&limit=10000") if ids else []) if w["id"] not in vus]
     for v in sorted(list(ventes) + anciennes, key=lambda v: str(v["date_vente"] or "")):
         prix = float(v["prix_vente"] or 0)
@@ -279,7 +292,12 @@ def gain_net(ventes: list) -> tuple[float, float]:
             estime += encaisse(v) - cout
         else:
             unit = 0.0 if a.get("offert") else float(a.get("prix_achat") or 0) / max(1, int(a.get("quantite") or 1))
-            if v.get("produit") == "SET" and a.get("id_set"):
+            if carton(a):
+                # Carton de 36 sachets de minifigs : chaque vente consomme sa part du carton
+                # (série complète = 12 sachets, sinon 1 par figurine), pas le carton entier (19/11).
+                cout = min(unit * boites(v) / 36, unit - deja.get(a["id"], 0))
+                deja[a["id"]] = deja.get(a["id"], 0) + cout
+            elif v.get("produit") == "SET" and a.get("id_set"):
                 cout = unit
             else:
                 s = str(a.get("id_set") or "").split("-")[0].removesuffix(".0")
