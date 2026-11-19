@@ -121,6 +121,9 @@ PORT_ACHETEUR_KG = [(1, 4.0), (2, 5.5), (5, 7.5), (10, 10.0)]
 REMISE_CATALOGUE = 0.90
 # Prix d'annonce maximum d'un set au catalogue = prix LEGO × ça (13/11 : marge de négo, toujours sous le prix LEGO).
 ANNONCE_CATALOGUE = 0.88
+# Gardés jusqu'au retrait malgré tout (choix du vendeur 15/11 et 19/11) : petites F1 2024 retirées le 31/12/2026,
+# à 20-22 € l'acheteur paie le prix LEGO ; ~35 € attendus en janvier.
+GARDE_RETRAIT = {"77242", "77243", "77244", "77245", "77246", "77248", "77249", "77250", "77251", "77259"}
 
 
 def port_acheteur(set_num=None) -> float:
@@ -200,7 +203,7 @@ def prix_annonce(estime: float, cout: float, prix_public=None, au_catalogue: boo
     mini = float(math.ceil(cout * MARGE_BRUTE_PLANCHER)) if cout else None
     if mini and prix and prix < mini:
         prix = arr(mini)
-    cap = plafond_annonce(prix_public) if au_catalogue else None
+    cap = plafond_annonce(prix_public, set_num) if au_catalogue else None
     plafonne = bool(prix and cap and prix > cap)
     if cap and prix and cap >= (mini or 0):
         prix = cap          # au catalogue : on vise le haut de la fourchette, la négo descend vers le mini
@@ -208,19 +211,22 @@ def prix_annonce(estime: float, cout: float, prix_public=None, au_catalogue: boo
     if plafonne:
         # Encore au catalogue : annonce sous le prix LEGO avec de la place pour négocier ;
         # si même là on passe sous le mini, on garde le set jusqu'à son retrait.
-        garder = bool(mini and cap < mini)
-        prix = max(cap, mini or 0)
+        # 19/11 (choix du vendeur) : plafond 90 % sous le mini → on affiche quand même au mini (+40 %) ;
+        # si ça ne part pas avant le retrait, ça se vendra plus cher après. On ne garde plus d'office.
+        garder = str(set_num) in GARDE_RETRAIT
+        prix = arr(max(cap, mini or 0))
     return {"prix": prix, "depart": round(depart, 2), "plancher": round(plancher, 2), "mini": mini,
             "cap": cap, "plafonne": plafonne, "garder": garder}
 
 
-def plafond_annonce(prix_public) -> float | None:
-    """Prix d'annonce maximum d'un set encore au catalogue : prix LEGO × ANNONCE_CATALOGUE,
-    au 5 € du dessous dès 30 € (prix ronds), à l'euro en dessous. L'écart avec le mini sert à négocier."""
+def plafond_annonce(prix_public, set_num=None) -> float | None:
+    """Prix d'annonce maximum d'un set encore au catalogue (choix du vendeur 19/11) : ce que paie l'acheteur
+    (prix + frais acheteur + port) ≤ REMISE_CATALOGUE (90 %) du prix LEGO, sinon il achète chez LEGO.
+    Au 5 € du dessous dès 30 € (prix ronds), à l'euro en dessous."""
     import math
     if not prix_public or prix_public != prix_public:
         return None
-    p = float(prix_public) * ANNONCE_CATALOGUE
+    p = min(float(prix_public) * ANNONCE_CATALOGUE, plafond_catalogue(prix_public, set_num) or 0)
     return float(math.floor(p / 5) * 5) if p >= 30 else float(math.floor(p))
 
 

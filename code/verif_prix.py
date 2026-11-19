@@ -52,9 +52,10 @@ def rond(p: float) -> int:
     return int(p) if p < 30 else int(p // 5 * 5)
 
 
-def plafond_catalogue(pp: float) -> int:
-    port = 4 if pp < 40 else 6 if pp < 100 else 10
-    return rond(pp * 0.95 - 0.70 - port)
+def plafond_catalogue(pp: float, s: str | None = None) -> int:
+    """Encore au catalogue (choix du vendeur 19/11) : prix + frais acheteur + port ≤ 90 % du prix LEGO, au 5 € du dessous."""
+    import regles
+    return rond(regles.plafond_catalogue(pp, s) or 0)
 
 
 def verifier(s: str, prix: float | None = None, qte: int = 1) -> dict:
@@ -95,20 +96,19 @@ def verifier(s: str, prix: float | None = None, qte: int = 1) -> dict:
         raisons.append(f"déjà vendu {vmax:.0f} €")
     # 3. plafond catalogue
     if en_cat:
-        cap = max(plafond_catalogue(pp), int(vmax))
+        cap = plafond_catalogue(pp, s)   # 19/11 : même une vente passée plus haute ne relève pas ce plafond
         if p > cap:
             p = cap
             raisons.append(f"en catalogue à {pp} € : max {cap} €")
-        if cap < plancher - 1:
-            return {"action": "pas_le_moment", "prix": None,
-                    "raisons": raisons + [f"en catalogue, max {cap} € < plancher {plancher:.0f} €"]}
+        if cap < plancher - 1:   # 19/11 : on affiche au plancher (+40 %), même au-dessus du plafond 90 %
+            raisons.append(f"plafond 90 % ({cap} €) sous le plancher : affiché au plancher")
     # 4. plancher
     if p < plancher - 1:
         p = plancher
         raisons.append(f"plancher de la commande {plancher:.0f} €")
     if p == p0:
         return {"action": "vendre", "prix": int(round(p)), "raisons": raisons}
-    return {"action": "vendre", "prix": max(rond(p), int(plancher + 0.99)) if p >= 30 else int(round(p)), "raisons": raisons}
+    return {"action": "vendre", "prix": max(rond(p), int(-(-plancher // 5) * 5)) if p >= 30 else int(round(p)), "raisons": raisons}   # plancher arrondi au 5 € du DESSUS
 
 
 if __name__ == "__main__":
