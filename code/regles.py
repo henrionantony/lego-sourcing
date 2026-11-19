@@ -119,6 +119,19 @@ PORT_ACHETEUR_KG = [(1, 4.0), (2, 5.5), (5, 7.5), (10, 10.0)]
 # Encore en vente chez LEGO : l'acheteur doit payer au moins 10 % de moins que chez LEGO
 # (port compris), sinon il achète neuf là-bas (promos, points Insiders).
 REMISE_CATALOGUE = 0.90
+# Part du prix LEGO que l'acheteur paie au plus, selon la saison (choix du vendeur 19/11) :
+# fin novembre on monte un peu (65 € pour un set à 79,99 €), en décembre les stocks se vident
+# ailleurs donc encore un peu plus, et dès janvier les prix retombent.
+REMISE_SAISON = [("11-15", "11-30", 0.94), ("12-01", "12-24", 0.96)]
+
+
+def remise_catalogue(jour=None) -> float:
+    import datetime as _dt
+    md = (jour or _dt.date.today()).strftime("%m-%d")
+    for debut, fin, r in REMISE_SAISON:
+        if debut <= md <= fin:
+            return r
+    return REMISE_CATALOGUE
 # Prix d'annonce maximum d'un set au catalogue = prix LEGO × ça (13/11 : marge de négo, toujours sous le prix LEGO).
 ANNONCE_CATALOGUE = 0.88
 # Gardés jusqu'au retrait malgré tout (choix du vendeur 15/11 et 19/11) : petites F1 2024 retirées le 31/12/2026,
@@ -145,7 +158,7 @@ def plafond_catalogue(prix_public, set_num=None) -> float | None:
     prix + frais acheteur + port (selon le poids du set) reste 10 % sous le prix LEGO."""
     if not prix_public or prix_public != prix_public:
         return None
-    return float(max(0, int((float(prix_public) * REMISE_CATALOGUE - PROTECTION_FIXE - port_acheteur(set_num)) / (1 + PROTECTION_PCT))))
+    return float(max(0, int((float(prix_public) * remise_catalogue() - PROTECTION_FIXE - port_acheteur(set_num)) / (1 + PROTECTION_PCT))))
 
 
 # eBay.fr depuis le 1/09/2026, vendeur particulier de l'EEE : aucun frais de vente (commission 0).
@@ -221,7 +234,7 @@ def prix_annonce(estime: float, cout: float, prix_public=None, au_catalogue: boo
 
 def plafond_annonce(prix_public, set_num=None) -> float | None:
     """Prix d'annonce maximum d'un set encore au catalogue (choix du vendeur 19/11) : ce que paie l'acheteur
-    (prix + frais acheteur + port) ≤ REMISE_CATALOGUE (90 %) du prix LEGO, sinon il achète chez LEGO.
+    (prix + frais acheteur + port) ≤ remise_catalogue() (90 %, plus en fin d'année) du prix LEGO, sinon il achète chez LEGO.
     Au 5 € du dessous dès 30 € (prix ronds), à l'euro en dessous."""
     import math
     if not prix_public or prix_public != prix_public:
