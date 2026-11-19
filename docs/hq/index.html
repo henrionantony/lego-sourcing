@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="b7f8198dff"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="ae86b8705c"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -1033,7 +1033,7 @@ function moisHome(o){
   return `<h2 class="sec">This month · ${nom(cle)}</h2>
     <div class="panel">${c ? `<div class="lbl">Revenue this month</div><div class="big">${eur(f)} <small>/ ${eur(c)}</small></div>
       <div class="bar"><i style="width:${Math.min(100, c ? 100 * f / c : 0)}%"></i></div>
-      <div class="sub">${etatM} · ${a != null ? `same month last year: ${eur(a)}${f > a ? " (beaten ✓)" : ` (${eur(Math.round(a - f))} to beat it)`}` : ""}${reste > 0 ? ` · ${eur(Math.round(reste))} to go in ${jours} day${jours > 1 ? "s" : ""}` : ""}</div>` : ""}
+      <div class="sub">${etatM} · ${a != null ? `same month last year: ${eur(a)}${f > a ? " (beaten ✓)" : ` (${eur(Math.round(a - f))} to beat it)`}` : ""}${reste > 0 ? ` · ${eur(Math.round(reste))} to go in ${jours} day${jours > 1 ? "s" : ""} (<b>${eur(Math.ceil(reste / jours))}/day</b>)` : ""}</div>` : ""}
       <details style="margin-top:10px"${VUE_MOIS_OUVERT ? " open" : ""} ontoggle="VUE_MOIS_OUVERT = this.open"><summary class="lbl" style="cursor:pointer">${VUE_MOIS === "jours" ? "Day by day" : "Month by month"}</summary>
         <div class="seg" role="group" aria-label="View" style="margin-top:6px">
           <button type="button" aria-pressed="${VUE_MOIS !== "jours"}" onclick="choisirVueMois('mois')">Month by month</button>
