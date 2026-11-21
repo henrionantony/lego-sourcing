@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="ae86b8705c"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="35bbe9f441"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -2406,7 +2406,7 @@ function ouvrirNad(s){
   NLOT = null;
   const i = infoSet(s);
   NAD = { ...i, frSaisi: false, etat: APUB[s]?.etat && !/SCELL/i.test(APUB[s].etat) ? "occ-boite" : "neuf",
-    prix: APUB[s]?.prix || i.prix || "", stock: !!APUB[s] };
+    prix: APUB[s]?.prix || i.prix || "", stock: !!APUB[s], ph: annoncePhotos(s) };
   if (i.connu && !i.fr) demanderNom(s);
   rendreNad();
 }
@@ -2441,11 +2441,32 @@ function rendreNad(){
     ${o.etat.startsWith("occ") ? `<p class="sub">Check the condition lines (parts, minifigs, instructions) before posting: adjust them to the real set.</p>` : ""}
     ${blocNad("Vinted title", v.t, "vt")}${blocNad("Vinted text", v.d, "vd", true)}
     ${blocNad("Leboncoin title", lb.t, "lt")}${blocNad("Leboncoin text", lb.d, "ld", true)}
+    ${blocPhotos(o.ph)}
     <div class="adbtns"><button class="btn" type="button" data-n="prix">Copy price</button>
       <a class="btn" href="https://www.vinted.fr/items/new" target="_blank" rel="noopener">Open Vinted ↗</a>
       <a class="btn" href="https://www.leboncoin.fr/deposer-une-annonce" target="_blank" rel="noopener">Open Leboncoin ↗</a></div>
   </article>`;
   el._txt = { vt: v.t, vd: v.d, lt: lb.t, ld: lb.d };
+  if (o.ph) afficherPhotos(o.ph);
+}
+// 21/11 (le vendeur) : si la référence a déjà une annonce Vinted (en ligne, masquée ou vendue), ses photos à enregistrer
+function annoncePhotos(s){
+  if (!s) return null;
+  const k = String(s).toLowerCase(), set = /^\d+$/.test(k);
+  const m = k.match(/^([a-z]+)0*(\d+)([a-z]?)$/);
+  const re = set ? null : new RegExp("(^|[^a-z0-9])" + (m ? m[1] + "0*" + m[2] + m[3] : k.replace(/[^a-z0-9]/g, "")) + "([^a-z0-9]|$)", "i");
+  const l = ANNONCES.filter((a) => a.ph && a.ph.length && (set ? (String(a.n) === k || (a.ns || []).includes(k)) : re.test(a.t || "")));
+  const a = l.find((x) => x.s === "en ligne") || l[0];
+  if (a) return a;
+  const v = VENDUES[s];
+  return v && v.ph && v.ph.length ? { id: v.id, n: s, ph: v.ph, vendue: true } : null;
+}
+function blocPhotos(a){
+  if (!a) return `<p class="sub">No photos: none of your Vinted ads has this reference yet.</p>`;
+  const n = a.ph.length;
+  return `<div class="adf ad nad-ph" data-id="${esc(a.id)}"><div class="adl">Photos · ${n}${a.vendue ? " · from your sold ad" : a.s && a.s !== "en ligne" ? " · from your hidden ad" : " · from your Vinted ad"}</div>
+    <div class="adph">${a.ph.map((p, i) => `<button class="phb" type="button" data-n="ph" data-i="${i}" aria-label="Save photo ${i + 1}"><img alt="Photo ${i + 1}" data-i="${i}"></button>`).join("")}</div>
+    <div class="adbtns"><button class="btn yes" type="button" data-n="tout">Save all ${n} photos</button><button class="btn" type="button" data-n="zip">Download as ZIP</button></div></div>`;
 }
 function blocNad(lib, txt, k, pre){
   return `<div class="adf"><div class="adl">${lib}</div>${pre ? `<pre class="adv">${esc(txt)}</pre>` : `<div class="adv">${esc(txt)}</div>`}<button class="btn yes" type="button" data-n="${k}">Copy ${lib.split(" ")[1]}</button></div>`;
@@ -2470,7 +2491,7 @@ function ouvrirFig(code){
   const ans = (f ? f[3] : []).map((s) => CAT[s] ? CAT[s][2] : 0).filter((x) => x > 0);
   const annee = ans.length ? Math.min(...ans) : 0;
   NFIG = { ref, connu: !!f, nom: f ? f[0] : "", gamme: f ? f[1] : "", cote: f ? f[2] : 0, liste, prix: liste || (f ? grilleFig(f[2]) : ""), sets, set: sets[0] || "", inc: false,
-    annee, vieux: annee > 0 && new Date().getFullYear() - annee >= 10 };
+    annee, vieux: annee > 0 && new Date().getFullYear() - annee >= 10, ph: annoncePhotos(ref) };
   NAD = null; rendreFig();
 }
 function nomSetFr(s){ return (NOMSFR[s] && NOMSFR[s].nom) || (CAT[s] ? CAT[s][0] : ""); }
@@ -2506,11 +2527,13 @@ function rendreFig(){
     </div>
     ${blocNad("Vinted title", v.t, "vt")}${blocNad("Vinted text", v.d, "vd", true)}
     ${blocNad("Leboncoin title", lb.t, "lt")}${blocNad("Leboncoin text", lb.d, "ld", true)}
+    ${blocPhotos(o.ph)}
     <div class="adbtns"><button class="btn" type="button" data-n="prix">Copy price</button>
       <a class="btn" href="https://www.vinted.fr/items/new" target="_blank" rel="noopener">Open Vinted ↗</a>
       <a class="btn" href="https://www.leboncoin.fr/deposer-une-annonce" target="_blank" rel="noopener">Open Leboncoin ↗</a></div>
   </article>`;
   el._txt = { vt: v.t, vd: v.d, lt: lb.t, ld: lb.d };
+  if (o.ph) afficherPhotos(o.ph);
   if (!o.cote && db) db.doc("cotes_demandes/" + cleFig(o.ref)).set({ demande: true, le: new Date().toISOString() }).catch(() => {});
 }
 function majTextesFig(){
@@ -2622,6 +2645,11 @@ function majTextesNad(){
 $("#nad").addEventListener("click", async (e) => {
   const b = e.target.closest("[data-n]"); if (!b || (!NAD && !NFIG && !NLOT)) return;
   const k = b.dataset.n;
+  if (k === "ph" || k === "tout" || k === "zip"){
+    const a = (NFIG || NAD)?.ph; if (!a) return;
+    if (k === "zip") return enregistrerZip(a, b);
+    return partager(a, k === "ph" ? [+b.dataset.i] : a.ph.map((p, i) => i), b);
+  }
   if (NLOT){ if (k === "prix") return copier(String(NLOT.prix || "").replace(".", ","), b); return copier($("#nad")._txt[k], b); }
   if (NFIG){ if (k === "prix") return copier(String(NFIG.prix || "").replace(".", ","), b); return copier($("#nad")._txt[k], b); }
   if (k === "prix") return copier(String(NAD.prix || "").replace(".", ","), b);
