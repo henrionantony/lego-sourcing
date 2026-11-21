@@ -15,7 +15,6 @@ concurrency:
 # Droits minimum : le passage lit le dépôt, il n'écrit rien dessus.
 permissions:
   contents: read
-  actions: write  # seulement pour relancer le passage suivant (fin du fichier)
 
 jobs:
   alertes:
@@ -48,17 +47,10 @@ jobs:
       - name: Vérifier Dealabs toutes les 30 secondes et rafraîchir l'application
         working-directory: code
         run: |
-          # Application LEGO HQ (GitHub Pages) : recalculée dès qu'un deal arrive ou qu'un
-          # bouton est touché dans l'appli (vérifié toutes les 5 s), sinon toutes les 30 minutes (07/11 : quota de données Supabase).
-          # Une erreur de l'application ne bloque jamais les alertes.
-          appli() {
-            [ -e /tmp/appli.encours ] && return
-            touch /tmp/appli.encours
-            ( timeout 240 python3 app_github.py > /tmp/appli.log 2>&1 || { echo "application en erreur (détail dans la base)"; python3 prive.py journal application < /tmp/appli.log; }; rm -f /tmp/appli.encours ) &
-            prochaine=$(( $(date +%s) + 1800 ))
-          }
+          # Application LEGO HQ (GitHub Pages) : recalculée dès qu'un deal arrive,
+          # sinon toutes les 5 minutes. Une erreur de l'application ne bloque jamais les alertes.
           fin=$(( $(date +%s) + 20700 ))
-          prochaine=0
+          appli=0
           while [ "$(date +%s)" -lt "$fin" ]; do
             # Journal public réduit aux compteurs : le détail d'une erreur va dans la base privée
             if sortie=$(python3 alertes.py 2>&1); then
@@ -67,16 +59,14 @@ jobs:
               echo "passage en erreur (détail dans la base), on continue"
               echo "$sortie" | python3 prive.py journal alertes || true
             fi
-            if echo "$sortie" | grep -qE "^[1-9][0-9]* nouveaux deals" || [ "$(date +%s)" -ge "$prochaine" ]; then
-              appli
+            # En arrière-plan : le calcul de l'application ne retarde jamais la vérification suivante
+            if [ ! -e /tmp/appli.encours ] && { echo "$sortie" | grep -qE "^[1-9][0-9]* nouveaux deals" || [ "$(date +%s)" -ge "$appli" ]; }; then
+              touch /tmp/appli.encours
+              ( timeout 240 python3 app_github.py > /tmp/appli.log 2>&1 || { echo "application en erreur (détail dans la base)"; python3 prive.py journal application < /tmp/appli.log; }; rm -f /tmp/appli.encours ) &
+              appli=$(( $(date +%s) + 300 ))
             fi
-            for i in 1 2 3 4 5 6; do
-              sleep 5
-              if [ ! -e /tmp/appli.encours ] && python3 gestes_attente.py; then appli; fi
-            done
+            sleep 30
           done
-          # Fin normale du passage : ne pas finir sur le code du dernier test (affiché en erreur dans l'appli)
-          true
       - uses: actions/cache/save@v4
         if: always()
         with:
@@ -84,11 +74,3 @@ jobs:
             data/cache/alertes_vus.json
             data/cache/vignettes
           key: vus-${{ github.run_id }}
-      # Relais (17/11) : GitHub saute souvent le déclenchement horaire (jusqu'à 3-4 h sans
-      # alertes). Le passage relance donc lui-même le suivant en finissant. Pas de relance
-      # s'il a été annulé exprès (nouvelle version publiée, qui lance son propre passage).
-      - name: Relancer le passage suivant
-        if: ${{ !cancelled() }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow run alertes.yml --ref main -R ${{ github.repository }}
