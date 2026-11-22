@@ -20,6 +20,7 @@ from pathlib import Path
 import pandas as pd
 
 import base
+import regles
 import transaction
 from alertes import euros, telegram
 from referentiel import charger
@@ -52,7 +53,7 @@ def stock_detaille() -> pd.DataFrame:
                                          "&reste=gt.0&id_set=not.is.null&limit=10000"))
     if st.empty:
         return st
-    art = pd.DataFrame(base.lire("articles", "select=id,achat_id,prix_achat,quantite,quote_part&limit=10000"))
+    art = pd.DataFrame(base.lire("articles", "select=id,achat_id,prix_achat,quantite,quote_part,notes&limit=10000"))
     ven = pd.DataFrame(base.lire("ventes", "select=article_id,prix_vente,quantite&limit=20000"))
     cout = art.prix_achat.fillna(0).groupby(art.achat_id).sum()  # prix_achat = ligne entière
     ven = ven.merge(art[["id", "achat_id"]], left_on="article_id", right_on="id")
@@ -62,6 +63,12 @@ def stock_detaille() -> pd.DataFrame:
     # prix_achat = prix de la ligne entière : ramené à un exemplaire
     qte = pd.to_numeric(st.id.map(art.set_index("id").quantite), errors="coerce").fillna(1).clip(lower=1)
     st["cout_set"] = st.prix_achat / q.where(q > 0, 1) / qte
+    # 22/11 : set payé en points Insiders (« 1800 PTS = 12€ ») : les points doivent rapporter +40 % comme de l'argent,
+    # même vieux ou commande remboursée (avant : plancher 0 € sur ces sets)
+    def _pts(n):
+        m = re.search(r"PTS\s*=\s*([\d,\.]+)", str(n or "").upper())
+        return float(m.group(1).replace(",", ".")) if m else 0.0
+    st["plancher_pts"] = st.id.map(art.set_index("id").notes).map(_pts) / qte * regles.FACTEUR_POINTS
     # Plancher calculé sur l'achat entier (relâché quand le reste de l'achat compense)
     tx = transaction.planchers()
     st["plancher_tx"] = st.id.map(lambda i: (tx.get(i) or {}).get("plancher"))
@@ -119,7 +126,7 @@ def construire(export: Path):
     except (OSError, ValueError):
         depart = {}
     par_set = st.groupby("set").agg(cout=("cout_set", "max"), age=("age", "max"), rembourse=("rembourse", "all"),
-                                      plancher_tx=("plancher_tx", "min")) \
+                                      plancher_tx=("plancher_tx", "min"), plancher_pts=("plancher_pts", "max")) \
         if not st.empty else pd.DataFrame()
     for a in ann[ann.statut == "en ligne"].itertuples():
         if a.set not in par_set.index or a.prix != a.prix:
@@ -131,7 +138,7 @@ def construire(export: Path):
             raison = f"déjà baissée il y a moins de {PALIER} jours"
         if s.age < AGE_MIN_BAISSE:
             raison = raison or "acheté il y a moins de 3 mois"
-        plancher = s.cout / (1 - PRELEVEMENTS)                      # jamais à perte
+        plancher = max(s.cout / (1 - PRELEVEMENTS), s.plancher_pts or 0)   # jamais à perte, points compris
         if not s.rembourse and s.age < 365:
             # plancher tant que le lot n'est pas remboursé, calculé sur l'achat entier quand on le connaît
             tx = s.plancher_tx if s.plancher_tx == s.plancher_tx else None
