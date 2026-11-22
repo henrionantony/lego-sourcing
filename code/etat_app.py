@@ -175,7 +175,15 @@ def objectifs() -> dict:
     mois = {}
     for v in annee:
         mois[v["date_vente"][:7]] = mois.get(v["date_vente"][:7], 0) + float(v["prix_vente"] or 0)
-    net, estime = gain_net(annee)
+    pv = {}
+    net, estime = gain_net(annee, pv)
+    # 22/11 : bénéfice net mois par mois (un gros CA à marge nulle ne fait pas un bon mois)
+    net_mois = {}
+    for v in annee:
+        if v["id"] in pv:
+            e, c, _ = pv[v["id"]]
+            net_mois[v["date_vente"][:7]] = round(net_mois.get(v["date_vente"][:7], 0) + e - c, 2)
+    cible_net_mois = {k: round(CIBLE_NET * x / CIBLE_CA) for k, x in _OBJ.get("mois", {}).items()} if CIBLE_CA else {}
     # Mêmes mois de l'année d'avant, pour comparer mois par mois
     debut_avant = DEBUT_ANNEE.replace(year=DEBUT_ANNEE.year - 1)
     avant = {}
@@ -212,7 +220,7 @@ def objectifs() -> dict:
             "debut": DEBUT_ANNEE.isoformat(), "ca": round(ca, 2), "cible_ca": CIBLE_CA, "cible_net": CIBLE_NET,
             "net_frais": round(ca * (1 - PRELEVEMENTS), 2), "net": round(net, 2), "net_estime": round(estime, 2),
             "prelev": round(prelev, 2), "couts": round(ca - prelev - net, 2), "ventes": len(annee), "derniere_vente": derniere,
-            "mois": mois, "cible_mois": _OBJ.get("mois", {}), "an_passe": avant,
+            "mois": mois, "cible_mois": _OBJ.get("mois", {}), "an_passe": avant, "net_mois": net_mois, "cible_net_mois": cible_net_mois,
             "jours": jours, "jours_an_passe": jours_avant, "historique": histo, "jours_annees": jours_annees}
 
 
@@ -263,7 +271,7 @@ def boites(v: dict) -> int:
     return max(1, int(v.get("quantite") or 1))
 
 
-def gain_net(ventes: list) -> tuple[float, float]:
+def gain_net(ventes: list, par_vente: dict | None = None) -> tuple[float, float]:
     """Gain net des ventes : prix × (1 − prélèvements) − ce que l'article a coûté.
     Set entier : son coût. Morceau d'un set découpé (figurine, build) : une part du coût au prorata
     de son prix sur l'objectif du set (prix LEGO × 1,4), sans dépasser le coût total.
@@ -271,7 +279,7 @@ def gain_net(ventes: list) -> tuple[float, float]:
     import csv
     from regles import MARGE_BRUTE_PLANCHER as M
     ids = sorted({int(v["article_id"]) for v in ventes if v.get("article_id")})
-    arts = {a["id"]: a for a in base.lire("articles", "select=id,id_set,prix_achat,quantite,offert,achat_plaisir,designation,notes&id=in.("
+    arts = {a["id"]: a for a in base.lire("articles", "select=id,id_set,prix_achat,quantite,offert,achat_plaisir,designation,notes,co_investisseur&id=in.("
                                           + ",".join(map(str, ids)) + ")&limit=10000")} if ids else {}
     with open(ICI.parent / "data" / "referentiel.csv", newline="") as f:
         pp = {r["base"]: float(r["prix_public"]) for r in csv.DictReader(f) if r.get("prix_public")}
@@ -292,6 +300,8 @@ def gain_net(ventes: list) -> tuple[float, float]:
             estime += encaisse(v) - cout
         else:
             unit = 0.0 if a.get("offert") else float(a.get("prix_achat") or 0) / max(1, int(a.get("quantite") or 1))
+            if a.get("co_investisseur"):
+                unit /= 2   # achat à deux : la base garde le prix entier, les ventes seulement ma moitié (22/11)
             if carton(a):
                 # Carton de 36 sachets de minifigs : chaque vente consomme sa part du carton
                 # (série complète = 12 sachets, sinon 1 par figurine), pas le carton entier (19/11).
@@ -307,6 +317,8 @@ def gain_net(ventes: list) -> tuple[float, float]:
         if v.get("_avant"):
             continue
         net += encaisse(v) - cout
+        if par_vente is not None:
+            par_vente[v.get("id")] = (encaisse(v), cout, not a)
     return net, estime
 
 
@@ -921,6 +933,13 @@ def main():
     etat = {"maj": maintenant().isoformat(timespec="seconds"), "automatisations": automatisations(),
             "tresorerie": base.tresorerie(), "objectifs": obj, "a_faire": a_regulariser(obj), "deals": deals(),
             "origines": origines(), "baisses": baisses(), "republier": lundi().get("republier") or {}, "seuils_gain": seuils()}
+    try:   # page Dashboard (22/11) : une erreur ici ne doit pas bloquer le reste de l'appli
+        import dashboard
+        etat["dash"] = dashboard.calculer()
+    except Exception as e:
+        import traceback
+        print("dashboard :", e)
+        etat["dash_erreur"] = traceback.format_exc()[-1500:]
     # Le document de l'application est limité à 256 Kio : on retire les vignettes
     # des deals les plus anciens tant qu'il dépasse 230 Ko.
     for d in reversed(etat["deals"]):
