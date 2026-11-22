@@ -263,7 +263,7 @@ def boites(v: dict) -> int:
     return max(1, int(v.get("quantite") or 1))
 
 
-def gain_net(ventes: list) -> tuple[float, float]:
+def gain_net(ventes: list, par_vente: dict | None = None) -> tuple[float, float]:
     """Gain net des ventes : prix × (1 − prélèvements) − ce que l'article a coûté.
     Set entier : son coût. Morceau d'un set découpé (figurine, build) : une part du coût au prorata
     de son prix sur l'objectif du set (prix LEGO × 1,4), sans dépasser le coût total.
@@ -271,7 +271,7 @@ def gain_net(ventes: list) -> tuple[float, float]:
     import csv
     from regles import MARGE_BRUTE_PLANCHER as M
     ids = sorted({int(v["article_id"]) for v in ventes if v.get("article_id")})
-    arts = {a["id"]: a for a in base.lire("articles", "select=id,id_set,prix_achat,quantite,offert,achat_plaisir,designation,notes&id=in.("
+    arts = {a["id"]: a for a in base.lire("articles", "select=id,id_set,prix_achat,quantite,offert,achat_plaisir,designation,notes,co_investisseur&id=in.("
                                           + ",".join(map(str, ids)) + ")&limit=10000")} if ids else {}
     with open(ICI.parent / "data" / "referentiel.csv", newline="") as f:
         pp = {r["base"]: float(r["prix_public"]) for r in csv.DictReader(f) if r.get("prix_public")}
@@ -292,6 +292,8 @@ def gain_net(ventes: list) -> tuple[float, float]:
             estime += encaisse(v) - cout
         else:
             unit = 0.0 if a.get("offert") else float(a.get("prix_achat") or 0) / max(1, int(a.get("quantite") or 1))
+            if a.get("co_investisseur"):
+                unit /= 2   # achat à deux : la base garde le prix entier, les ventes seulement ma moitié (22/11)
             if carton(a):
                 # Carton de 36 sachets de minifigs : chaque vente consomme sa part du carton
                 # (série complète = 12 sachets, sinon 1 par figurine), pas le carton entier (19/11).
@@ -307,6 +309,8 @@ def gain_net(ventes: list) -> tuple[float, float]:
         if v.get("_avant"):
             continue
         net += encaisse(v) - cout
+        if par_vente is not None:
+            par_vente[v.get("id")] = (encaisse(v), cout, not a)
     return net, estime
 
 
@@ -921,6 +925,11 @@ def main():
     etat = {"maj": maintenant().isoformat(timespec="seconds"), "automatisations": automatisations(),
             "tresorerie": base.tresorerie(), "objectifs": obj, "a_faire": a_regulariser(obj), "deals": deals(),
             "origines": origines(), "baisses": baisses(), "republier": lundi().get("republier") or {}, "seuils_gain": seuils()}
+    try:   # page Dashboard (22/11) : une erreur ici ne doit pas bloquer le reste de l'appli
+        import dashboard
+        etat["dash"] = dashboard.calculer()
+    except Exception as e:
+        print("dashboard :", e)
     # Le document de l'application est limité à 256 Kio : on retire les vignettes
     # des deals les plus anciens tant qu'il dépasse 230 Ko.
     for d in reversed(etat["deals"]):
