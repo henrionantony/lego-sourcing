@@ -929,7 +929,9 @@ def main():
         import dashboard
         etat["dash"] = dashboard.calculer()
     except Exception as e:
+        import traceback
         print("dashboard :", e)
+        etat["dash_erreur"] = traceback.format_exc()[-1500:]
     # Le document de l'application est limité à 256 Kio : on retire les vignettes
     # des deals les plus anciens tant qu'il dépasse 230 Ko.
     for d in reversed(etat["deals"]):
