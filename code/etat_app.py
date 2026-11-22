@@ -175,7 +175,15 @@ def objectifs() -> dict:
     mois = {}
     for v in annee:
         mois[v["date_vente"][:7]] = mois.get(v["date_vente"][:7], 0) + float(v["prix_vente"] or 0)
-    net, estime = gain_net(annee)
+    pv = {}
+    net, estime = gain_net(annee, pv)
+    # 22/11 : bénéfice net mois par mois (un gros CA à marge nulle ne fait pas un bon mois)
+    net_mois = {}
+    for v in annee:
+        if v["id"] in pv:
+            e, c, _ = pv[v["id"]]
+            net_mois[v["date_vente"][:7]] = round(net_mois.get(v["date_vente"][:7], 0) + e - c, 2)
+    cible_net_mois = {k: round(CIBLE_NET * x / CIBLE_CA) for k, x in _OBJ.get("mois", {}).items()} if CIBLE_CA else {}
     # Mêmes mois de l'année d'avant, pour comparer mois par mois
     debut_avant = DEBUT_ANNEE.replace(year=DEBUT_ANNEE.year - 1)
     avant = {}
@@ -212,7 +220,7 @@ def objectifs() -> dict:
             "debut": DEBUT_ANNEE.isoformat(), "ca": round(ca, 2), "cible_ca": CIBLE_CA, "cible_net": CIBLE_NET,
             "net_frais": round(ca * (1 - PRELEVEMENTS), 2), "net": round(net, 2), "net_estime": round(estime, 2),
             "prelev": round(prelev, 2), "couts": round(ca - prelev - net, 2), "ventes": len(annee), "derniere_vente": derniere,
-            "mois": mois, "cible_mois": _OBJ.get("mois", {}), "an_passe": avant,
+            "mois": mois, "cible_mois": _OBJ.get("mois", {}), "an_passe": avant, "net_mois": net_mois, "cible_net_mois": cible_net_mois,
             "jours": jours, "jours_an_passe": jours_avant, "historique": histo, "jours_annees": jours_annees}
 
 
