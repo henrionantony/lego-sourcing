@@ -39,6 +39,9 @@ def _mois_suivant(k: str) -> str:
 
 def calculer() -> dict:
     import etat_app
+    if not APUB.exists():   # premier passage sur GitHub : prix d'annonce pas encore calculés
+        import a_publier
+        a_publier.main()
     ventes = _tout("ventes", "id,date_vente,prix_vente,revenu_net,article_id,produit,nom_article,quantite,plateforme",
                    "&date_vente=not.is.null")
     par_vente: dict = {}
