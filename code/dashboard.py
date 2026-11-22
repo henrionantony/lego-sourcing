@@ -44,6 +44,11 @@ def calculer() -> dict:
     par_vente: dict = {}
     etat_app.gain_net(ventes, par_vente)
     achats = {a["id"]: a for a in _tout("achats", "id,date_achat,financement")}
+    # Coût déjà « consommé » par les ventes de morceaux (figurines, builds, lots) : à retirer du stock restant
+    consomme = defaultdict(float)
+    for v in ventes:
+        if v.get("article_id") and v["id"] in par_vente:
+            consomme[int(v["article_id"])] += par_vente[v["id"]][1]
     arts = _tout("articles", "id,achat_id,prix_achat,offert,co_investisseur")
 
     m = defaultdict(lambda: defaultdict(float))
@@ -103,18 +108,29 @@ def calculer() -> dict:
     marge = g12 / c12 if c12 else 0
     tours = c12 / stock_moy if stock_moy else 0
     rendement = (1 + marge) ** tours - 1 if tours else 0
-    patrimoine = serie[-1]["apport"] + serie[-1]["gains"]
     t = base.tresorerie() or {}
+    st = stock_actuel(consomme)
+    # Patrimoine réel = stock au prix d'achat + cash − ce qui est dû (Livret A à te rendre, part des associés, URSSAF/impôts)
+    livret = float(t.get("a_rendre") or 0)
+    dette = livret + sum((t.get("dus") or {}).values()) + float(t.get("urssaf") or 0) + float(t.get("impots") or 0)
+    patrimoine = st["cout"] + float(t.get("solde") or 0) - dette
+    # L'avance du Livret A (depuis le 18/10/2026) est un prêt : on la sort de « ta poche » dans la courbe
+    avant = next((x["apport"] for x in reversed(serie) if x["k"] < "2026-10"), 0)
+    for x in serie:
+        if x["k"] >= "2026-10":
+            x["apport"] = round(x["apport"] - min(livret, max(0, x["apport"] - avant)))
+    # Dernier point calé sur le patrimoine réel : ta poche = patrimoine − gains
+    serie[-1]["apport"] = round(max(0, patrimoine - serie[-1]["gains"]))
 
     return {"maj": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), "serie": serie,
             "apport_total": round(total), "patrimoine": round(patrimoine), "poche": serie[-1]["apport"],
             "livret": round(float(t.get("a_rendre") or 0)), "cash": round(float(t.get("solde") or 0)),
             "moteur": {"marge": round(marge, 4), "tours": round(tours, 2), "rendement": round(rendement, 4),
                        "gain12": round(g12), "cogs12": round(c12), "stock_moy": round(stock_moy)},
-            "stock": stock_actuel(), "garder": garder_vendre(rendement)}
+            "stock": st, "dette": round(dette), "garder": garder_vendre(rendement)}
 
 
-def stock_actuel() -> dict:
+def stock_actuel(consomme: dict | None = None) -> dict:
     ap = json.loads(APUB.read_text())
     co = {a["id"] for a in _tout("articles", "id", "&co_investisseur=not.is.null")}
     lignes = _tout("stock", "id,id_set,categorie,gamme,prix_achat,quantite,reste,offert,date_achat,strategie", "&reste=gt.0")
@@ -127,6 +143,9 @@ def stock_actuel() -> dict:
         u = 0.0 if r.get("offert") else float(r.get("prix_achat") or 0) / max(1, int(r.get("quantite") or 1))
         q = float(r.get("reste") or 0)
         c = u * q * part
+        if (r.get("strategie") or "ENTIER") != "ENTIER" or r.get("categorie") != "SET":
+            # Lot ou set découpé : une partie de son coût est déjà partie avec les morceaux vendus
+            c = max(0.0, u * int(r.get("quantite") or 1) * part - (consomme or {}).get(r["id"], 0)) * q / max(1, int(r.get("quantite") or 1))
         tot["cout"] += c
         d = r.get("date_achat")
         if d:
