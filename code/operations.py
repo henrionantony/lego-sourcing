@@ -64,6 +64,10 @@ def sets_rentables(t: float, titre: str, ref, stock: dict, details, n: int = 8) 
             & ref.prix_max.notna() & (ref.year >= dt.date.today().year - 3)].drop_duplicates("base")
     if "(lego)" not in titre.lower():
         v = v[~v.exclusif.isin([True, "True"])]
+        # Exclusivités Lego que Brickset ne marque pas (signalées à la main)
+        f = __import__("pathlib").Path(__file__).resolve().parent.parent / "data" / "exclusifs_lego.txt"
+        if f.exists():
+            v = v[~v.base.isin(f.read_text().split())]
     # Gammes citées, hors exemple (« Ex : LEGO Star Wars … » n'est qu'un exemple de l'opération)
     tn = _sans_accent(re.split(r"\bex\b\s*:?", titre, flags=re.I)[0])
     gammes = {g for g in v.theme_rb.dropna().unique()
