@@ -56,6 +56,10 @@ def numero(titre: str) -> str:
     return n[-1] if n else ""
 
 
+# Numéro de l'annonce → numéro du set dans la base (sets promo LEGO vendus sous deux numéros)
+AUTRE_NUMERO = {"6533581": "5008897", "6607198": "5009806"}
+
+
 def construire() -> list[dict]:
     v = pd.read_csv(dernier("**/vinted_annonces_*.csv"), sep=";", dtype={"id": str}).fillna("")
     v = v[v.statut.isin(["en ligne", "masqué"])]
@@ -74,6 +78,8 @@ def construire() -> list[dict]:
         # nombre de 4 à 7 chiffres collé à aucune lettre ; jamais pour une figurine seule. Un lot garde tous ses numéros (ns)
         nums = numeros(r.titre)
         num = nums[-1] if nums else None
+        # Set promo vendu sous un autre numéro que celui de la base : l'annonce compte aussi pour le numéro de la base
+        nums = nums + [AUTRE_NUMERO[x] for x in nums if x in AUTRE_NUMERO]
         out.append({"id": r.id, "t": r.titre, "p": float(r.prix or 0), "s": r.statut, "u": r.url,
                     "n": num or "", **({"ns": sorted(set(nums))} if len(set(nums)) > 1 else {}), "d": desc, "g": gamme(r.titre),
                     "type": not (str(r.get("description") or "").strip() or r.id in textes),
