@@ -190,8 +190,21 @@ def objectifs() -> dict:
     for v in base.lire("ventes", f"select=date_vente,prix_vente&date_vente=gte.{debut_avant}&date_vente=lt.{DEBUT_ANNEE}&limit=10000"):
         k = f"{int(v['date_vente'][:4]) + 1}{v['date_vente'][4:7]}"   # rangé sous le mois de cette année
         avant[k] = round(avant.get(k, 0) + float(v["prix_vente"] or 0), 2)
-    # Jour par jour sur le mois en cours, et les mêmes jours du même mois l'an dernier
+    # 24/11 : bénéfice net des mêmes mois l'an dernier, et jour par jour pour le mois en cours
+    # (filtre « Year to date » de la carte This month : cette année contre la même période l'an dernier)
     cle = maintenant().strftime("%Y-%m")
+    an_avant = base.lire("ventes", "select=id,date_vente,prix_vente,revenu_net,article_id,produit,plateforme,nom_article,quantite"
+                         f"&date_vente=gte.{debut_avant}&date_vente=lt.{DEBUT_ANNEE}&limit=10000")
+    pv_avant, net_avant, net_jours_avant = {}, {}, {}
+    gain_net(an_avant, pv_avant)
+    for v in an_avant:
+        if v["id"] in pv_avant:
+            e, c, _ = pv_avant[v["id"]]
+            k = f"{int(v['date_vente'][:4]) + 1}{v['date_vente'][4:7]}"
+            net_avant[k] = round(net_avant.get(k, 0) + e - c, 2)
+            if k == cle:
+                net_jours_avant[v["date_vente"][8:10]] = round(net_jours_avant.get(v["date_vente"][8:10], 0) + e - c, 2)
+    # Jour par jour sur le mois en cours, et les mêmes jours du même mois l'an dernier
     jours, jours_avant = {}, {}
     for v in annee:
         if v["date_vente"][:7] == cle:
@@ -221,6 +234,7 @@ def objectifs() -> dict:
             "net_frais": round(ca * (1 - PRELEVEMENTS), 2), "net": round(net, 2), "net_estime": round(estime, 2),
             "prelev": round(prelev, 2), "couts": round(ca - prelev - net, 2), "ventes": len(annee), "derniere_vente": derniere,
             "mois": mois, "cible_mois": _OBJ.get("mois", {}), "an_passe": avant, "net_mois": net_mois, "cible_net_mois": cible_net_mois,
+            "net_an_passe": net_avant, "net_jours_an_passe": net_jours_avant,
             "jours": jours, "jours_an_passe": jours_avant, "historique": histo, "jours_annees": jours_annees}
 
 

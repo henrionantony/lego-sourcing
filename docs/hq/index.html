@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="c57aea2d84"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="4f46cd29c2"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -1045,6 +1045,11 @@ function moisHome(o){
   const finMois = new Date(ici.getFullYear(), ici.getMonth() + 1, 0).getDate(), jour = ici.getDate();
   const attendu = c * jour / finMois, reste = Math.max(0, c - f), jours = finMois - jour + 1;
   const etatM = f >= c ? `<b style="color:var(--ok)">Target reached</b>` : f >= attendu ? `<b style="color:var(--ok)">On track</b>` : `<b style="color:var(--gap)">Behind</b>`;
+  // 24/11 : filtre « This month / Year to date » dans la même carte (pas de carte en plus)
+  const seg = `<div class="seg" role="group" aria-label="Period" style="margin-bottom:10px">
+      <button type="button" aria-pressed="${PERIODE_HOME !== "annee"}" onclick="choisirPeriode('mois')">This month</button>
+      <button type="button" aria-pressed="${PERIODE_HOME === "annee"}" onclick="choisirPeriode('annee')">Year to date</button></div>`;
+  if (PERIODE_HOME === "annee") return cumulHome(o, cle, jour, finMois, seg);
   const lignes = cles.map((k) => {
     const v = fait[k], passe = k < cle, en = k === cle;
     const coul = v == null ? "" : v >= cm[k] ? "color:var(--ok)" : (passe ? "color:var(--gap)" : "");
@@ -1059,7 +1064,7 @@ function moisHome(o){
       <div class="sub">${etatN}${f ? ` · ${Math.round(100 * fn / f)} % of revenue kept as profit` : ""}${resteN > 0 ? ` · ${eur(Math.round(resteN))} to go (<b>${eur(Math.ceil(resteN / jours))}/day</b>)` : ""}</div>
       <div style="height:12px"></div>` : "";
   return `<h2 class="sec">This month · ${nom(cle)}</h2>
-    <div class="panel">${blocNet}${c ? `<div class="lbl">Revenue this month</div><div class="big">${eur(f)} <small>/ ${eur(c)}</small></div>
+    <div class="panel">${seg}${blocNet}${c ? `<div class="lbl">Revenue this month</div><div class="big">${eur(f)} <small>/ ${eur(c)}</small></div>
       <div class="bar"><i style="width:${Math.min(100, c ? 100 * f / c : 0)}%"></i></div>
       <div class="sub">${etatM} · ${a != null ? `same month last year: ${eur(a)}${f > a ? " (beaten ✓)" : ` (${eur(Math.round(a - f))} to beat it)`}` : ""}${reste > 0 ? ` · ${eur(Math.round(reste))} to go in ${jours} day${jours > 1 ? "s" : ""} (<b>${eur(Math.ceil(reste / jours))}/day</b>)` : ""}</div>` : ""}
       <details style="margin-top:10px"${VUE_MOIS_OUVERT ? " open" : ""} ontoggle="VUE_MOIS_OUVERT = this.open"><summary class="lbl" style="cursor:pointer">${VUE_MOIS === "jours" ? "Day by day" : "Month by month"}</summary>
@@ -1069,6 +1074,27 @@ function moisHome(o){
         ${VUE_MOIS === "jours" ? joursHome(o, c, cle, finMois, jour) : (o.historique ? anneesHome(o, cle) : `<div style="overflow-x:auto"><table class="mtab" style="width:100%;border-collapse:collapse;margin-top:6px;font-size:13px">
           <tr style="color:var(--muted)"><td></td><td class="num">Last year</td><td class="num">Target</td><td class="num">Done</td></tr>${lignes}</table></div>
         <div class="sub">Targets follow the shape of your past years and add up to the ${eur(o.cible_ca)} goal.</div>`)}</details></div>`;
+}
+// Depuis le 1er octobre : réalisé, objectif à date (mois en cours au prorata des jours) et même période l'an dernier
+function cumulHome(o, cle, jour, finMois, seg){
+  const cm = o.cible_mois || {}, ks = Object.keys(cm).filter((k) => k <= cle);
+  const somme = (obj, pro) => ks.reduce((s, k) => s + (k === cle && pro ? (obj[k] || 0) * jour / finMois : (k === cle && pro === false ? 0 : (obj[k] || 0))), 0);
+  const jusqua = (d) => Object.entries(d || {}).filter(([j]) => +j <= jour).reduce((s, [, v]) => s + v, 0);
+  const debut = new Date(o.debut + "T12:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  const bloc = (titre, fait, cible, an, total) => {
+    const ecart = fait - cible;
+    const etat = ecart >= 0 ? `<b style="color:var(--ok)">${eur(Math.round(ecart))} ahead of target</b>` : `<b style="color:var(--gap)">${eur(Math.round(-ecart))} behind target</b>`;
+    const comp = an > 0 ? ` · same period last year: ${eur(Math.round(an))}${fait > an ? ` (+${Math.round(100 * (fait / an - 1))} % ✓)` : ` (${eur(Math.round(an - fait))} to beat it)`}` : "";
+    return `<div class="lbl">${titre}</div><div class="big">${eur(Math.round(fait))} <small>/ ${eur(Math.round(cible))} expected by today</small></div>
+      <div class="bar"><i style="width:${Math.min(100, 100 * Math.max(0, fait) / total)}%"></i></div>
+      <div class="sub">${etat}${comp} · year goal ${eur(total)} (${Math.round(100 * Math.max(0, fait) / total)} % done)</div>`;
+  };
+  const netF = somme(o.net_mois || {}), netC = somme(o.cible_net_mois || {}, true), netA = somme(o.net_an_passe || {}, false) + jusqua(o.net_jours_an_passe);
+  const caF = somme(o.mois || {}), caC = somme(cm, true), caA = somme(o.an_passe || {}, false) + jusqua(o.jours_an_passe);
+  return `<h2 class="sec">Year to date · since ${debut}</h2>
+    <div class="panel">${seg}${o.cible_net ? bloc("Net profit since " + debut, netF, netC, netA, o.cible_net) + '<div style="height:12px"></div>' : ""}
+      ${o.cible_ca ? bloc("Revenue since " + debut, caF, caC, caA, o.cible_ca) : ""}
+      <div class="sub" style="margin-top:8px">The current month counts pro rata of the days passed. Last year = same dates, 1 year earlier.</div></div>`;
 }
 // Mois par mois, une colonne par année d'activité (1er octobre → 30 septembre) depuis le début.
 // Vert = mieux que le même mois de l'année d'avant (la première année sert de référence).
@@ -1103,6 +1129,9 @@ function anneesHome(o, cle){
     <div class="sub">One column per business year (October to September). Green = better than the same month the year before. ⭐ = best year for that month. Totals of past years are full years; this year is so far.</div>`;
 }
 // Vue jour par jour du mois en cours (choix gardé sur ce téléphone)
+let PERIODE_HOME = "mois";
+try { PERIODE_HOME = localStorage.getItem("periodehome") || "mois"; } catch (e) {}
+function choisirPeriode(v){ PERIODE_HOME = v; try { localStorage.setItem("periodehome", v); } catch (e) {} rendreHome(); }
 let VUE_MOIS = "mois", VUE_MOIS_OUVERT = false;
 try { VUE_MOIS = localStorage.getItem("vuemois") || "mois"; } catch (e) {}
 function choisirVueMois(v){ VUE_MOIS = v; VUE_MOIS_OUVERT = true; try { localStorage.setItem("vuemois", v); } catch (e) {} rendreHome(); }
