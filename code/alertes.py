@@ -804,7 +804,11 @@ def main(essai: bool):
         rare = bool(len(r) and r.statut.iloc[0] == "retiré" and d["prix"]
                     and r.prix_public.iloc[0] == r.prix_public.iloc[0]
                     and d["prix"] <= regles.SEUIL_RARE * float(r.prix_public.iloc[0]))
-        if v_dec != "non" or rare:
+        # 24/11 (après Van Gogh 21333 et Jardin botanique 21353 ratés) : set prioritaire
+        # à racheter (regles.PRIORITES, prix max privé) sous son max → toujours envoyé, sonne, achat immédiat
+        pmax = regles.PRIORITES.get(str(s)) if s and not cadeau else None
+        prio = bool(pmax and d["prix"] and d["prix"] <= pmax)
+        if v_dec != "non" or rare or prio:
             tete = "🟢 ACHÈTE" if v_dec == "achète" else "🟡 À regarder"
             corps = [tete, d["titre"]]
             nt = {}
@@ -859,6 +863,9 @@ def main(essai: bool):
             if rare:
                 corps[0] = (f"⚡ Set retiré à {d['prix'] / float(r.prix_public.iloc[0]) - 1:.0%} · " if nt.get("sans_cote")
                             else f"⚡ RARE, set retiré à {d['prix'] / float(r.prix_public.iloc[0]) - 1:.0%} · va vite · ") + corps[0]
+            if prio:
+                # Un seul verdict, pas de « n'en rachète pas » ni « pas un bon coup » en dessous
+                corps[0] = f"🎯 SET PRIORITAIRE sous ton max ({euros(pmax)}) · achète tout de suite"
             corps.append(f"Deal à {d['temperature']:.0f}° en ce moment · {d['lien']}")
             # Lien direct vers la page du marchand (redirection Dealabs), pour acheter vite
             corps.insert(pos, f"🛒 Acheter : https://www.dealabs.com/visit/threadmain/{d['id']}")
@@ -873,7 +880,10 @@ def main(essai: bool):
                         photo = f"https://cdn.rebrickable.com/media/sets/{str(nt['_court']['set_num']).lower()}.jpg"
                 except Exception as e:
                     print("message court :", e)
-            telegram(texte, gros or bool(rare), essai, photo)
+            if prio:
+                texte = "\n".join(l.replace("👎 Pas un bon coup :", "Pour info,") for l in texte.split("\n")
+                                   if not l.startswith("✋"))
+            telegram(texte, gros or bool(rare) or prio, essai, photo)
     if not essai:
         VUS.parent.mkdir(parents=True, exist_ok=True)
         VUS.write_text(json.dumps(sorted(vus)))

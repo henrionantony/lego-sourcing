@@ -317,6 +317,8 @@ BONUS_GAMME_PHARE = 1.15
 
 # Set retiré proposé à −30 % ou plus sous son prix public : alerte « rare » qui sonne.
 SEUIL_RARE = 0.70
+# Sets prioritaires à racheter {set: prix max} : valeurs réelles dans le fichier privé parametres.json
+PRIORITES: dict = {}
 
 DATE_APPORT = "2026-11-03"  # débloqué le 03/11 : les meilleurs prix des enseignes tombent avant le Black Friday
 
