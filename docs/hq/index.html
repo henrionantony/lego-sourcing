@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="4f46cd29c2"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="2106c4655b"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -1083,9 +1083,9 @@ function cumulHome(o, cle, jour, finMois, seg){
   const debut = new Date(o.debut + "T12:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
   const bloc = (titre, fait, cible, an, total) => {
     const ecart = fait - cible;
-    const etat = ecart >= 0 ? `<b style="color:var(--ok)">${eur(Math.round(ecart))} ahead of target</b>` : `<b style="color:var(--gap)">${eur(Math.round(-ecart))} behind target</b>`;
-    const comp = an > 0 ? ` · same period last year: ${eur(Math.round(an))}${fait > an ? ` (+${Math.round(100 * (fait / an - 1))} % ✓)` : ` (${eur(Math.round(an - fait))} to beat it)`}` : "";
-    return `<div class="lbl">${titre}</div><div class="big">${eur(Math.round(fait))} <small>/ ${eur(Math.round(cible))} expected by today</small></div>
+    const etat = ecart >= 0 ? `<b style="color:var(--ok)">${eur(ecart)} ahead of target</b>` : `<b style="color:var(--gap)">${eur(-ecart)} behind target</b>`;
+    const comp = an > 0 ? ` · same period last year: ${eur(an)}${fait > an ? ` (+${Math.round(100 * (fait / an - 1))} % ✓)` : ` (${eur(an - fait)} to beat it)`}` : "";
+    return `<div class="lbl">${titre}</div><div class="big">${eur(fait)} <small>/ ${eur(cible)} expected by today</small></div>
       <div class="bar"><i style="width:${Math.min(100, 100 * Math.max(0, fait) / total)}%"></i></div>
       <div class="sub">${etat}${comp} · year goal ${eur(total)} (${Math.round(100 * Math.max(0, fait) / total)} % done)</div>`;
   };
