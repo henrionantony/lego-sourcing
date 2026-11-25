@@ -49,16 +49,19 @@ jobs:
         working-directory: code
         run: |
           # Application LEGO HQ (GitHub Pages) : recalculée dès qu'un deal arrive ou qu'un
-          # bouton est touché dans l'appli (vérifié toutes les 5 s), sinon toutes les 30 minutes (07/11 : quota de données Supabase).
+          # bouton est touché dans l'appli (vérifié toutes les 5 s, immédiat). 25/11 (quota Supabase gratuit 5 Go/mois) :
+          # sinon toutes les heures de 8h à 23h (Paris), et un nouveau deal ne relance l'appli que 15 min après la dernière fois.
           # Une erreur de l'application ne bloque jamais les alertes.
           appli() {
             [ -e /tmp/appli.encours ] && return
             touch /tmp/appli.encours
             ( timeout 240 python3 app_github.py > /tmp/appli.log 2>&1 || { echo "application en erreur (détail dans la base)"; python3 prive.py journal application < /tmp/appli.log; }; rm -f /tmp/appli.encours ) &
-            prochaine=$(( $(date +%s) + 1800 ))
+            derniere=$(date +%s)
+            prochaine=$(( derniere + 3600 ))
           }
           fin=$(( $(date +%s) + 20700 ))
           prochaine=0
+          derniere=0
           while [ "$(date +%s)" -lt "$fin" ]; do
             # Journal public réduit aux compteurs : le détail d'une erreur va dans la base privée
             if sortie=$(python3 alertes.py 2>&1); then
@@ -67,8 +70,12 @@ jobs:
               echo "passage en erreur (détail dans la base), on continue"
               echo "$sortie" | python3 prive.py journal alertes || true
             fi
-            if echo "$sortie" | grep -qE "^[1-9][0-9]* nouveaux deals" || [ "$(date +%s)" -ge "$prochaine" ]; then
-              appli
+            heure=$(TZ=Europe/Paris date +%H)
+            if [ "$heure" -ge 8 ] && [ "$heure" -lt 23 ]; then
+              maintenant=$(date +%s)
+              if { echo "$sortie" | grep -qE "^[1-9][0-9]* nouveaux deals" && [ "$maintenant" -ge $(( derniere + 900 )) ]; } || [ "$maintenant" -ge "$prochaine" ]; then
+                appli
+              fi
             fi
             for i in 1 2 3 4 5 6; do
               sleep 5
