@@ -20,7 +20,8 @@ TOLERANCE = 0.05   # € d'écart toléré (arrondis de la cagnotte)
 
 
 def _cle(lieu) -> str:
-    return re.sub(r"[^A-Z0-9]", "", str(lieu).upper())
+    # 25/11 : « E.LECLERC ONLINE » (base) = « E.LECLERC » (mails)
+    return re.sub(r"[^A-Z0-9]", "", str(lieu).upper()).removesuffix("ONLINE")
 
 
 def _set(id_set) -> str:
@@ -109,9 +110,14 @@ def controle() -> dict:
         pris.add(aid)
         q_base: dict[str, int] = {}
         for x in lignes:
+            # 25/11 : cadeaux et lignes payées en points (0 €) ne sont pas sur le mail de commande
+            if not float(x["prix_achat"] or 0):
+                continue
             q_base[_set(x["id_set"])] = q_base.get(_set(x["id_set"]), 0) + int(float(x["quantite"] or 1))
         q_mail: dict[str, int] = {}
         for l in c["lignes"]:
+            if "pu" in l and not float(l["pu"] or 0):
+                continue   # cadeau à 0 € sur le mail : non comparé (comme côté base)
             q_mail[_set(l["set"])] = q_mail.get(_set(l["set"]), 0) + int(l["q"])
         pb = [f"{s}: {q_base.get(s, 0)} logged, {q_mail.get(s, 0)} on the email"
               for s in sorted(set(q_base) | set(q_mail)) if q_base.get(s, 0) != q_mail.get(s, 0)]
@@ -160,12 +166,16 @@ def colis(ouverts: dict[int, dict]) -> dict[int, dict]:
         if not aid and c.get("magasin"):
             # sans numéro : seulement s'il n'y a qu'une commande ouverte dans ce magasin,
             # sinon on ne devine pas (le colis est signalé à part)
-            cands = [a for a, o in ouverts.items() if _cle(o["lieu"]) == _cle(c["magasin"])]
+            # 25/11 : jamais une commande passée APRÈS le mail du colis
+            cands = [a for a, o in ouverts.items() if _cle(o["lieu"]) == _cle(c["magasin"])
+                     and str(o.get("d") or "") <= str(c.get("d") or "9999")]
             aid = cands[0] if len(cands) == 1 else None
         if aid not in ouverts:
             if aid and (c.get("pass") or c.get("code")):
                 a_purger.append(c["mail"])   # commande reçue : le code de retrait ne sert plus
-            if c["colis"] == "a_retirer" and not aid:
+            # 25/11 : colis dont la date limite est passée depuis plus de 2 jours = déjà retiré ou reparti, plus montré
+            perime = bool(c.get("jusqu")) and c["jusqu"] < (dt.date.today() - dt.timedelta(days=2)).isoformat()
+            if c["colis"] == "a_retirer" and not aid and not perime:
                 orphelins.append({**c, "candidats": [a for a, o in ouverts.items() if not c.get("magasin")
                                                      or _cle(o["lieu"]) == _cle(c["magasin"])] or list(ouverts)})
             continue
