@@ -1,4 +1,4 @@
-<!doctype html><html lang="en" data-v="2106c4655b"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
+<!doctype html><html lang="en" data-v="ae373c8232"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LEGO HQ"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style><title>LEGO HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -2550,8 +2550,13 @@ function nomFr(s){
   const v = nomsLive[s]?.nom ? nomsLive[s] : NOMSFR[s];
   return v && v.nom ? v : null;
 }
+// 25/11 : numéro imprimé sur la boîte des cadeaux (Insiders, promos) → numéro de la commande / base
+const BOITES = {"6487473": "5008074", "6435196": "5007489", "6535732": "5008945", "6671142": "5010880", "6533581": "5008897", "6607198": "5009806"};
+const CAT_DE = {"5007489": "55242", "5010880": "6671142"};  // numéros de base absents du catalogue
+const numBase = (s) => BOITES[s] || s;
+const catDe = (s) => CAT[s] || CAT[numBase(s)] || CAT[CAT_DE[numBase(s)]];
 function infoSet(s){
-  const c = CAT[s], f = nomFr(s);
+  const c = catDe(s), f = nomFr(s) || nomFr(numBase(s));
   return { s, en: f?.en || (c ? c[0] : ""), gamme: f?.gamme || (c ? c[1] : ""), an: c ? c[2] : 0, pieces: c ? c[3] : 0, nfig: c ? c[4] : 0, prix: c ? c[5] : 0,
     fr: f?.nom || "", source: f?.source || "", connu: !!(c || f) };
 }
@@ -2602,8 +2607,9 @@ async function demanderNom(s){
 function ouvrirNad(s){
   NLOT = null;
   const i = infoSet(s);
-  NAD = { ...i, frSaisi: false, etat: APUB[s]?.etat && !/SCELL/i.test(APUB[s].etat) ? "occ-boite" : "neuf",
-    prix: APUB[s]?.prix || i.prix || "", stock: !!APUB[s], ph: annoncePhotos(s) };
+  const P = APUB[s] || APUB[numBase(s)];
+  NAD = { ...i, frSaisi: false, etat: P?.etat && !/SCELL/i.test(P.etat) ? "occ-boite" : "neuf",
+    prix: P?.prix || i.prix || "", stock: !!P, ph: annoncePhotos(s) || annoncePhotos(numBase(s)) };
   if (i.connu && !i.fr) demanderNom(s);
   rendreNad();
 }
