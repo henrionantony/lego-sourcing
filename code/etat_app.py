@@ -479,6 +479,16 @@ def retard(achat: dict, sv: dict | None) -> str | None:
         return f"Pick up before {jour(sv['jusqu'])}, or it goes back to the shop" if reste <= 2 else None
     if n < DELAI_RETARD[etape]:
         return None
+    # 25/11 : date d'envoi annoncée par le magasin (« livraison prévue 15-31/12 ») : pas d'alerte avant
+    m = re.search(r"livraison (?:prévue|estimée)[^0-9]{0,15}(\d{1,2})(?:-\d{1,2})?/(\d{1,2})", str(achat.get("notes") or ""), re.I)
+    if etape == "commande" and m:
+        d0 = dt.date.fromisoformat(str(achat["date_achat"])[:10])
+        try:
+            prevu = dt.date(d0.year + (int(m.group(2)) < d0.month), int(m.group(2)), int(m.group(1)))
+            if auj <= prevu + dt.timedelta(days=DELAI_RETARD["commande"]):
+                return None
+        except ValueError:
+            pass
     return {"commande": f"No shipping email {n} days after ordering: check the order on the shop's site",
             "expedie": f"Shipped {n} days ago and still not arrived: check the tracking",
             "a_retirer": f"Waiting at the pickup point for {n} days: pick it up soon",
