@@ -261,13 +261,19 @@ def main():
         if reglages.get("vente_rapide") and eb.get("bas"):
             calcule = float(max(min(calcule, round(eb["bas"] - p["fr"] - 1)), round(calcule * 0.85), math.ceil(plancher)))
         fixe = reglages.get("prix", {}).get(s)
-        if v.get("st") == "en vente" and pp and float(fixe or calcule) + p["fr"] > pp:
+        # 24/11 : « Épuisé » sur LEGO.com = définitif, traité comme retiré (réglage « epuises ») :
+        # eBay d'abord, au prix plein, même au-dessus de l'ancien prix LEGO
+        epuise = s in reglages.get("epuises", [])
+        if v.get("st") == "en vente" and pp and not epuise and float(fixe or calcule) + p["fr"] > pp:
             if s in en_ligne:
                 chez_lego.append(s)
             continue
         # Une seule boîte par annonce (choix du vendeur 01/11 : « dernier exemplaire » pousse à acheter) ;
         # la suivante est remise en vente après la vente (ebay_annonces.vendue_et_reste)
-        q = min(1, int(reglages.get("qte", {}).get(s, q) or 1))
+        # 24/11 : sets listés dans « multi » = toutes les boîtes sur la même annonce,
+        # pour ne pas repayer une insertion (0,35 €) à chaque vente
+        q = int(reglages.get("qte", {}).get(s, q) or 1) if s in reglages.get("multi", []) \
+            else min(1, int(reglages.get("qte", {}).get(s, q) or 1))
         p = {**p, "add": PORT_SET_EN_PLUS, "groupe": 1}   # « groupe » : envoi groupé (remise du compte eBay)
         # Prix validé (à la main) sinon : en ligne = le prix actuel, nouveau = le prix calculé
         prix = float(fixe or (annonces[s]["prix"] if s in en_ligne else calcule))
