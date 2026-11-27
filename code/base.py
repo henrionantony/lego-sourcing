@@ -109,7 +109,10 @@ def tresorerie():
         for v in lire("ventes", f"select=id,frais_envoi&frais_envoi=not.is.null&id=in.({','.join(ids[i:i + 200])})") or []:
             frais[str(v["id"])] = float(v["frais_envoi"] or 0)
     preleve = sum((float(l["montant"]) + frais.get(str(l.get("vente_id")), 0.0)) * k
-                  for l in lignes if l["type"] == "vente")
+                  for l in lignes if l["type"] == "vente"
+                  # 26/11 : les cagnottes reversées et remboursements perso → pro sont typés « vente »
+                  # mais ce ne sont pas des ventes : pas de prélèvements à rajouter dessus
+                  and (l.get("vente_id") or str(l.get("libelle") or "").startswith("Vente")))
     # Part URSSAF : taux micro-entreprise vente de biens (12,5 % constaté),
     # le reste des 21 % est l'impôt sur le revenu, payé l'année suivante.
     urssaf = preleve * TAUX_URSSAF / PRELEVEMENTS
