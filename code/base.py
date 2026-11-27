@@ -68,10 +68,14 @@ def fin_execution(id_exec, ok: bool, resume: str = "", erreur: str = ""):
                {"fin": dt.datetime.now(dt.timezone.utc).isoformat(), "ok": ok, "resume": (resume[:480] + f" · base {OCTETS // 1024} Ko"), "erreur": erreur[:2000] or None})
 
 
-def stock_par_set() -> dict[str, int]:
-    """Exemplaires encore en stock par numéro de set (vue « stock »)."""
+def stock_par_set(partout: bool = False) -> dict[str, int]:
+    """Exemplaires ENTIERS encore en stock par numéro de set (vue « stock »).
+    Les exemplaires en part-out (strategie LOT/DETAILS) ne sont pas des boîtes
+    à vendre : exclus, sauf partout=True (27/11 : 71832 compté 3 au lieu de 1)."""
     out: dict[str, int] = {}
-    for l in lire("stock", "select=id_set,reste&reste=gt.0&id_set=not.is.null&statut=neq.termin%C3%A9&limit=10000"):
+    for l in lire("stock", "select=id_set,reste,strategie&reste=gt.0&id_set=not.is.null&statut=neq.termin%C3%A9&limit=10000"):
+        if not partout and str(l.get("strategie") or "").strip().upper() == "LOT/DETAILS":
+            continue
         s = str(l["id_set"]).split("-")[0].removesuffix(".0")
         out[s] = out.get(s, 0) + int(l["reste"] or 0)
     return out
