@@ -62,6 +62,9 @@ def main(essai=False):
                 continue
             if v.get("prix_max") and (d["prix"] is None or d["prix"] > v["prix_max"]):
                 continue
+            # prix_min : écarte les sachets vendus à l'unité quand on guette un carton (27/11)
+            if v.get("prix_min") and (d["prix"] is None or d["prix"] < v["prix_min"]):
+                continue
             prix = f"{d['prix']:.2f} €".replace(".", ",") if d["prix"] is not None else "prix ?"
             alertes.telegram(f"🖨️ VEILLE {v['nom']} : {d['titre']}\n{prix}\n{alertes.lien_dealabs(d['id'], d['slug'])}",
                              sonne=True, essai=essai)
