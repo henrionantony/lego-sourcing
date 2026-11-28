@@ -206,10 +206,10 @@ def construire(export: Path):
     # 2. Annonces masquées à vérifier puis réafficher, les plus chères et les plus suivies d'abord
     # Seulement les sets encore en stock (16/11 : les masquées déjà vendues ailleurs sortaient en tête)
     # ni les sets en part-out, ni ceux qui ont déjà une annonce en ligne (16/11)
-    # ni ce que la base dit déjà inaccessible (codes de lieu PE, GH), gardé jusqu'au retrait ou terminé (donné)
+    # ni ce que la base dit déjà inaccessible (code de lieu PE ; GH est disponible), gardé jusqu'au retrait ou terminé (donné)
     # 22/11 : et ce que les notes disent donné, vendu ailleurs ou à ne plus proposer (Stuntz, 31218 sortaient encore)
     exclus = {a["id"] for a in base.lire("articles", "select=id,emplacement,horizon,statut,notes&limit=10000")
-              if a.get("emplacement") in ("PE", "GH") or a.get("horizon") or a.get("statut") in ("terminé", "vendu")
+              if a.get("emplacement") == "PE" or a.get("horizon") or a.get("statut") in ("terminé", "vendu")
               or any(k in str(a.get("notes") or "").upper() for k in ("DONN", "VENDU", "NE PLUS"))}
     en_stock = set(st[(st.strategie != "LOT/DETAILS") & ~st.id.isin(exclus)].set) if not st.empty else set()
     deja_en_ligne = set(ann[ann.statut == "en ligne"].set.dropna())

@@ -32,7 +32,7 @@ import regles
 
 ICI = Path(__file__).resolve().parent
 APP = ICI.parent / "stock" / "app"
-INACCESSIBLES = {"GH", "PE"}  # lieux.json : boîtes gardées chez des proches
+INACCESSIBLES = {"PE"}  # lieux.json : seul PE est loin ; GH est à 5 min à pied, disponible (28/11)
 
 
 def brickset() -> dict:

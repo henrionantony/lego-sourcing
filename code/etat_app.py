@@ -256,7 +256,7 @@ def stock_dormant() -> dict:
         d = dates.get(a["achat_id"])
         if not d or d >= limite or a.get("strategie") != "ENTIER" or a.get("achat_plaisir") or a.get("livre") is False:
             continue
-        if a.get("horizon") or "GARD" in str(a.get("notes") or "").upper() or a.get("emplacement") in ("PE", "GH"):
+        if a.get("horizon") or "GARD" in str(a.get("notes") or "").upper() or a.get("emplacement") == "PE":
             continue
         reste = int(a.get("quantite") or 1) - avant.get(a["id"], 0)
         if reste > 0:
